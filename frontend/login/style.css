@@ -1,0 +1,248 @@
+/* ============================================
+   KAMUS KAWANUA – LOGIN STYLE (FINAL)
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* RESET */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #f7f5f0;
+  --card: #ffffff;
+  --ink: #1a1714;
+  --ink-muted: #7a736a;
+  --accent: #2c1f0e;
+  --accent-2: #c8a96e;
+  --input-bg: #f0ece5;
+  --input-border: #ddd7cc;
+  --input-focus: #c8a96e;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-full: 999px;
+  --shadow-card: 0 24px 64px rgba(44,31,14,0.12), 0 4px 16px rgba(44,31,14,0.06);
+  --transition: 0.22s cubic-bezier(.4,0,.2,1);
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--bg);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* WRAPPER */
+.login-wrapper {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* BACKGROUND */
+.bg-circle {
+  position: fixed;
+  border-radius: 50%;
+}
+
+.bg-circle--1 {
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, rgba(200,169,110,0.18), transparent);
+  top: -160px;
+  right: -120px;
+}
+
+.bg-circle--2 {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(44,31,14,0.08), transparent);
+  bottom: -100px;
+  left: -80px;
+}
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(44,31,14,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44,31,14,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* CARD */
+.login-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 50px 40px;
+  width: 100%;
+  max-width: 420px;
+  z-index: 2;
+}
+
+/* BRAND */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.brand__logo img {
+  width: 170px;
+  display: block;
+  margin: 0 auto;
+}
+
+.brand__name {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.brand__name--accent {
+  color: var(--accent-2);
+}
+
+/* DIVIDER */
+.divider {
+  text-align: center;
+  margin-bottom: 25px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+/* FORM */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* FIELD */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.field__input-wrap {
+  position: relative;
+}
+
+.field__input {
+  width: 100%;
+  padding: 12px 15px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  font-size: 14px;
+  outline: none;
+}
+
+.field__input:focus {
+  border-color: var(--input-focus);
+  background: #fff;
+}
+
+/* BUTTON */
+.btn-masuk {
+  margin-top: 10px;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-masuk:hover {
+  background: #3a2a12;
+}
+
+/* MESSAGE */
+.login-msg {
+  margin-top: 10px;
+  text-align: center;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.login-msg--error {
+  background: #fef2f2;
+  color: red;
+}
+
+.login-msg--success {
+  background: #f0fdf4;
+  color: green;
+}
+
+/* FOOTER */
+.login-footer {
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 20px;
+}
+
+.field__input-wrap {
+  position: relative;
+}
+
+.field__icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.field__toggle {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.field__input {
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+.back-btn {
+  display: block;
+  text-align: center;
+  margin-top: 5px;
+  font-size: 13px;
+  text-decoration: none;
+  color: #7a736a;
+}
+
+.back-btn:hover {
+  color: #2c1f0e;
+}
+
+.field__icon svg,
+.field__toggle svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  stroke-width: 1.8;
+}

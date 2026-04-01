@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="login-wrapper">
+
+  <div class="bg-circle bg-circle--1"></div>
+  <div class="bg-circle bg-circle--2"></div>
+  <div class="bg-grid"></div>
+
+  <div class="login-card">
+
+    <!-- LOGO -->
+    <div class="brand">
+      <div class="brand__logo">
+        <img src="../assets/images/logo.png" alt="logo">
+      </div>
+    </div>
+
+    <form class="login-form" id="loginForm">
+
+      <!-- USERNAME -->
+      <div class="field">
+        <label class="field__label">Username</label>
+        <div class="field__input-wrap">
+
+          <span class="field__icon">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5z" stroke="#888"/>
+              <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="#888"/>
+            </svg>
+          </span>
+
+          <input type="text" id="username" class="field__input" placeholder="Masukkan username">
+
+        </div>
+      </div>
+
+      <!-- PASSWORD -->
+      <div class="field">
+        <label class="field__label">Password</label>
+        <div class="field__input-wrap">
+
+          <span class="field__icon">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="10" rx="2" stroke="#888"/>
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="#888"/>
+            </svg>
+          </span>
+
+          <input type="password" id="password" class="field__input" placeholder="Masukkan password">
+
+          <span class="field__toggle" onclick="togglePassword()">
+            <svg id="eyeIcon" viewBox="0 0 24 24" fill="none">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="#888"/>
+              <circle cx="12" cy="12" r="3" stroke="#888"/>
+            </svg>
+          </span>
+
+        </div>
+      </div>
+
+      <!-- BUTTON LOGIN -->
+      <button type="submit" class="btn-masuk">
+        <span class="btn-masuk__text">Masuk</span>
+      </button>
+
+      <!-- MESSAGE -->
+      <div id="loginMsg" class="login-msg" style="display:none;"></div>
+
+      <!-- 🔙 BACK BUTTON PINDAH KE BAWAH -->
+      <a href="../index.html" class="back-btn">Kembali</a>
+
+    </form>
+
+    <div class="login-footer">
+      Kamus Kawanua © 2026 • Admin Panel
+    </div>
+
+  </div>
+
+</div>
+
+<script src="login.js"></script>
+</body>
+</html>
