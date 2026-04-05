@@ -2,11 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import os
 import pandas as pd
 from rapidfuzz import fuzz
 import numpy as np
 import torch
 from transformers import BertTokenizer, BertModel
+
+from supabase import create_client
 
 app = FastAPI()
 
@@ -22,48 +25,85 @@ app.add_middleware(
 )
 
 # =========================
+# SUPABASE CONFIG (FIX)
+# =========================
+SUPABASE_URL = "https://fhpjbkelhvopvfzykjne.supabase.co"
+SUPABASE_KEY = "sb_publishable_VwAwbQcRMbIEH2lGmxfN8w_k6jBI4y2"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# =========================
+# LOAD DATA (FIX ANTI CRASH)
+# =========================
+def load_data():
+    try:
+        response = supabase.table("dictionary").select("*").execute()
+        data = response.data
+
+        if data is None or len(data) == 0:
+            print("DEBUG: Supabase kosong / RLS belum aktif")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data)
+
+        print("DEBUG SHAPE:", df.shape)
+        print("DEBUG COLUMNS:", df.columns)
+
+        return df
+
+    except Exception as e:
+        print("SUPABASE ERROR:", e)
+        return pd.DataFrame()
+
+# =========================
 # LOGIN SCHEMA
 # =========================
 class LoginRequest(BaseModel):
     username: str
     password: str
 
-# =========================
-# DUMMY USER
-# =========================
-USER = {
-    "username": "admin",
-    "password": "admin"
-}
 
 # =========================
 # LOGIN ENDPOINT
 # =========================
 @app.post("/login")
 def login(data: LoginRequest):
-    if data.username == USER["username"] and data.password == USER["password"]:
-        return {
-            "success": True,
-            "message": "Login berhasil"
-        }
-    else:
+    try:
+        response = supabase.table("users") \
+            .select("*") \
+            .eq("username", data.username) \
+            .eq("password", data.password) \
+            .execute()
+
+        user = response.data
+
+        if user and len(user) > 0:
+            return {
+                "success": True,
+                "message": "Login berhasil"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Username atau password salah"
+            }
+
+    except Exception as e:
         return {
             "success": False,
-            "message": "Username atau password salah"
+            "error": str(e)
         }
 
 # =========================
-# LOAD DATA
+# LOAD EMBEDDINGS (TETAP)
 # =========================
-df = pd.read_csv('data/clean_dataset_with_text.csv')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+emb_path = os.path.join(BASE_DIR, "data", "embeddings.npy")
+
+embeddings = np.load(emb_path)
 
 # =========================
-# LOAD EMBEDDINGS
-# =========================
-embeddings = np.load('data/embeddings.npy')
-
-# =========================
-# LOAD MODEL
+# LOAD MODEL (TETAP)
 # =========================
 tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 model = BertModel.from_pretrained('bert-base-multilingual-cased')
@@ -113,60 +153,6 @@ def highlight_match(text, query):
     return text_str
 
 # =========================
-# WORD LIST
-# =========================
-manado_words = set(df['manado'].astype(str))
-indo_words = set(df['indonesia'].astype(str))
-eng_words = set(df['inggris'].astype(str))
-
-# =========================
-# SUGGESTION
-# =========================
-def get_suggestion(query, lang):
-
-    if lang == "manado":
-        words = manado_words
-    elif lang == "indonesia":
-        words = indo_words
-    elif lang == "inggris":
-        words = eng_words
-    else:
-        return None
-
-    scored = []
-
-    for word in words:
-        score = fuzz.ratio(query.lower(), word.lower())
-        scored.append((word, score))
-
-    scored = sorted(scored, key=lambda x: x[1], reverse=True)
-
-    suggestions = [
-        word for word, score in scored
-        if score >= 70 and word.lower() != query.lower()
-    ][:3]
-
-    return suggestions if suggestions else None
-
-# =========================
-# FORMAT RESULT (FIXED)
-# =========================
-def format_result(row, lang, query_original, score, method):
-
-    return {
-        "manado": highlight_match(row['manado'], query_original),
-        "indonesia": highlight_match(row['indonesia'], query_original),
-        "inggris": highlight_match(row['inggris'], query_original),
-
-        "kalimat_manado": highlight_match(row.get('kalimat_manado', '-'), query_original),
-        "kalimat_indonesia": highlight_match(row.get('kalimat_indonesia', '-'), query_original),
-        "kalimat_inggris": highlight_match(row.get('kalimat_inggris', '-'), query_original),
-
-        "score": round(float(score), 3),
-        "method": method
-    }
-
-# =========================
 # ROOT
 # =========================
 @app.get("/")
@@ -177,10 +163,73 @@ def root():
     }
 
 # =========================
-# SEARCH
+# SEARCH (LOGIKA 100% SAMA)
 # =========================
 @app.get("/search")
 def search(query: str, lang: str):
+
+    df = load_data()
+
+    # 🔥 GUARD (ANTI 500)
+    if df.empty:
+        return {
+            "query": query,
+            "results": [],
+            "error": "database kosong / RLS belum aktif / Supabase gagal"
+        }
+
+    # WORD LIST (tetap)
+    manado_words = set(df['manado'].astype(str))
+    indo_words = set(df['indonesia'].astype(str))
+    eng_words = set(df['inggris'].astype(str))
+
+    # =========================
+    # SUGGESTION FUNCTION
+    # =========================
+    def get_suggestion(query, lang):
+
+        if lang == "manado":
+            words = manado_words
+        elif lang == "indonesia":
+            words = indo_words
+        elif lang == "inggris":
+            words = eng_words
+        else:
+            return None
+
+        scored = []
+
+        for word in words:
+            score = fuzz.ratio(query.lower(), word.lower())
+            scored.append((word, score))
+
+        scored = sorted(scored, key=lambda x: x[1], reverse=True)
+
+        suggestions = [
+            word for word, score in scored
+            if score >= 70 and word.lower() != query.lower()
+        ][:3]
+
+        return suggestions if suggestions else None
+
+    # =========================
+    # FORMAT RESULT
+    # =========================
+    def format_result(row, lang, query_original, score, method):
+
+        return {
+            "manado": highlight_match(row['manado'], query_original),
+            "indonesia": highlight_match(row['indonesia'], query_original),
+            "inggris": highlight_match(row['inggris'], query_original),
+
+            "kalimat_manado": highlight_match(row.get('kalimat_manado', '-'), query_original),
+            "kalimat_indonesia": highlight_match(row.get('kalimat_indonesia', '-'), query_original),
+            "kalimat_inggris": highlight_match(row.get('kalimat_inggris', '-'), query_original),
+
+            "score": round(float(score), 3),
+            "method": method
+        }
+
     query_original = query
     query_norm = normalize(query)
 
@@ -213,6 +262,9 @@ def search(query: str, lang: str):
 
     results = sorted(results, key=lambda x: x['score'], reverse=True)[:5]
 
+    # =========================
+    # SEMANTIC (TETAP)
+    # =========================
     if not results:
         query_emb = encode(query_original)
 
@@ -230,6 +282,9 @@ def search(query: str, lang: str):
             row = df.iloc[idx]
             results.append(format_result(row, lang, query_original, sim, "semantic"))
 
+    # =========================
+    # SUGGESTION FALLBACK
+    # =========================
     if not results:
         suggestion = get_suggestion(query_original, lang)
 
