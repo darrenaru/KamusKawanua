@@ -37,18 +37,31 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # =========================
 def load_data():
     try:
-        response = supabase.table("dictionary").select("*").execute()
-        data = response.data
+        all_data = []
+        batch_size = 1000
+        start = 0
 
-        if data is None or len(data) == 0:
-            print("DEBUG: Supabase kosong / RLS belum aktif")
-            return pd.DataFrame()
+        while True:
+            response = supabase.table("dictionary") \
+                .select("*") \
+                .range(start, start + batch_size - 1) \
+                .execute()
 
-        df = pd.DataFrame(data)
+            data = response.data
 
-        print("DEBUG SHAPE:", df.shape)
-        print("DEBUG COLUMNS:", df.columns)
+            if not data:
+                break
 
+            all_data.extend(data)
+
+            if len(data) < batch_size:
+                break
+
+            start += batch_size
+
+        df = pd.DataFrame(all_data)
+
+        print("TOTAL DATA:", len(df))
         return df
 
     except Exception as e:
@@ -170,6 +183,10 @@ def search(query: str, lang: str):
 
     df = load_data()
 
+    # DEBUG (TAMBAHKAN INI)
+    print("TOTAL DATA:", len(df))
+    print("COLUMNS:", df.columns)
+
     # 🔥 GUARD (ANTI 500)
     if df.empty:
         return {
@@ -177,6 +194,7 @@ def search(query: str, lang: str):
             "results": [],
             "error": "database kosong / RLS belum aktif / Supabase gagal"
         }
+    
 
     # WORD LIST (tetap)
     manado_words = set(df['manado'].astype(str))

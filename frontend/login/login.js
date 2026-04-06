@@ -1,7 +1,7 @@
 // ==============================
 // LOGIN FORM HANDLER
 // ==============================
-
+console.log("LOGIN FILE YANG BARU TERLOAD");
 const form = document.getElementById("loginForm");
 const msg = document.getElementById("loginMsg");
 
@@ -37,11 +37,15 @@ form.addEventListener("submit", async (e) => {
         msg.style.display = "block";
 
         if (data.success) {
+            // ✅ SIMPAN STATUS LOGIN
+            localStorage.setItem("isLoggedIn", "true");
+
             msg.className = "login-msg login-msg--success";
             msg.innerText = "Login berhasil";
 
             setTimeout(() => {
-                window.location.href = "../index.html";
+                // ✅ REDIRECT KE DASHBOARD ADMIN
+                window.location.href = "../admin/pages/dashboard.html";
             }, 1000);
         } else {
             msg.className = "login-msg login-msg--error";

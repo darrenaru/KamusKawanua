@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Beranda Admin</title>
+  <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <img src="../../assets/images/logo.png" alt="logo">
+      <h2>KAMUS KAWANUA</h2>
+    </div>
+
+    <ul>
+      <li class="active">Beranda</li>
+      <li>Data Collection</li>
+      <li>Pre Processing</li>
+      <li>Processing</li>
+      <li>Testing</li>
+      <li>Evaluasi Performa Model</li>
+    </ul>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <h1 class="title">PILIH ALGORITMA</h1>
+
+    <div class="algorithms">
+
+      <button class="algo-btn" data-algo="mbert">MBERT</button>
+      <button class="algo-btn" data-algo="indobert">INDOBERT</button>
+      <button class="algo-btn" data-algo="xlmr">XLM-R</button>
+
+      <button class="algo-btn" data-algo="word2vec">WORD2VEC</button>
+      <button class="algo-btn" data-algo="glove">GLOVE</button>
+
+    </div>
+
+    <div id="selectedInfo" class="selected-info"></div>
+
+    <button id="nextBtn" class="next-btn">
+      Lanjut ke Data Collection
+    </button>
+
+  </main>
+
+</div>
+
+<script src="../js/dashboard.js"></script>
+</body>
+</html>
