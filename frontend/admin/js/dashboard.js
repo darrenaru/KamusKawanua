@@ -82,7 +82,9 @@ nextBtn.addEventListener("click", () => {
         return;
     }
 
+    // 🔥 SIMPAN STATE (SUDAH ADA)
     console.log("Lanjut dengan algoritma:", selected);
 
-    
+    // 🔥 REDIRECT KE DATA COLLECTION
+    window.location.href = "../pages/data-collection.html";
 });

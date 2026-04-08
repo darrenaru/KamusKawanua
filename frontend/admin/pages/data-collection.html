@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Data Collection</title>
+  <link rel="stylesheet" href="../css/data-collection.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <img src="../../assets/images/logo.png" alt="logo">
+    </div>
+
+    <ul>
+      <li onclick="goTo('dashboard.html')">Beranda</li>
+      <li class="active">Data Collection</li>
+      <li>Pre Processing</li>
+      <li>Processing</li>
+      <li>Testing</li>
+      <li>Evaluasi Performa Model</li>
+    </ul>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <h1>Data Collection</h1>
+
+    <!-- UPLOAD -->
+    <div class="upload-box">
+
+  <label class="upload-label">
+      <div class="upload-icon">📂</div>
+      <div class="upload-text">Klik untuk pilih file CSV</div>
+      <div id="fileName" class="file-name">Belum ada file</div>
+  </label>
+
+  <input type="file" id="fileInput" accept=".csv">
+
+  <div class="buttons">
+      <button type="button" onclick="resetFile()">Batal</button>
+      <button type="button" onclick="uploadDataset()">Unggah</button>
+  </div>
+  <div class="progress-container" id="progressContainer" style="display:none;">
+    <div class="progress-bar" id="progressBar"></div>
+</div>
+<p id="progressText" style="display:none;">Mengunggah...</p>
+
+</div>
+
+    <!-- SEARCH -->
+    <div class="search-box">
+      <input type="text" placeholder="Cari dataset...">
+    </div>
+
+    <!-- DATA LIST -->
+    <div id="datasetList" class="dataset-list"></div>
+
+  </div>
+
+</div>
+
+<!-- SUPABASE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- JS -->
+<script src="../js/data-collection.js"></script>
+
+</body>
+</html>

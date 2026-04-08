@@ -37,16 +37,23 @@ form.addEventListener("submit", async (e) => {
         msg.style.display = "block";
 
         if (data.success) {
-            // ✅ SIMPAN STATUS LOGIN
-            localStorage.setItem("isLoggedIn", "true");
 
-            msg.className = "login-msg login-msg--success";
-            msg.innerText = "Login berhasil";
+    // 🔥 PAKAI INPUT USER LANGSUNG (AMAN UNTUK SEKARANG)
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("username", username);
 
-            setTimeout(() => {
-                // ✅ REDIRECT KE DASHBOARD ADMIN
-                window.location.href = "../admin/pages/dashboard.html";
-            }, 1000);
+    // 🔥 DEBUG
+    console.log("LOGIN DEBUG:");
+    console.log("isLoggedIn =", localStorage.getItem("isLoggedIn"));
+    console.log("username =", localStorage.getItem("username"));
+
+    msg.className = "login-msg login-msg--success";
+    msg.innerText = "Login berhasil";
+
+    setTimeout(() => {
+        window.location.href = "../admin/pages/dashboard.html";
+    }, 1000);
+    
         } else {
             msg.className = "login-msg login-msg--error";
             msg.innerText = data.message || "Login gagal";
