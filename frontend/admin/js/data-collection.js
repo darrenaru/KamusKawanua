@@ -10,6 +10,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 // DATA
 // ==============================
 let datasets = [];
+let isUploading = false;
 
 // ==============================
 // INIT
@@ -28,6 +29,7 @@ if (!isLoggedIn) {
 }
 
     initFileInput();
+    initValidation();
     initSearch();
     fetchDatasets();
 });
@@ -54,6 +56,7 @@ async function fetchDatasets() {
 
         datasets = data.map(d => ({
             id: d.id,
+            name: d.name,
             total: d.total_data,
             kerja: d.kata_kerja,
             benda: d.kata_benda,
@@ -83,10 +86,10 @@ function initFileInput() {
         return;
     }
 
-    uploadBox.addEventListener("click", (e) => {
-        if (e.target.tagName.toLowerCase() === "button") return;
-        input.click();
-    });
+    const uploadLabel = document.querySelector(".upload-label");
+        uploadLabel.addEventListener("click", () => {
+            input.click();
+        });
 
     input.addEventListener("change", function () {
         if (this.files && this.files.length > 0) {
@@ -95,6 +98,22 @@ function initFileInput() {
             fileName.textContent = "Belum ada file";
         }
     });
+}
+
+function initValidation() {
+    const input = document.getElementById("fileInput");
+    const datasetName = document.getElementById("datasetName");
+    const uploadBtn = document.getElementById("uploadBtn");
+
+    function validate() {
+        const file = input.files[0];
+        const name = datasetName.value.trim();
+
+        uploadBtn.disabled = !(file && name);
+    }
+
+    input.addEventListener("change", validate);
+    datasetName.addEventListener("input", validate);
 }
 
 // ==============================
@@ -111,7 +130,7 @@ function renderDatasets(list = datasets) {
         card.className = "dataset-card";
 
         card.innerHTML = `
-            <h3>Dataset: ${ds.id}</h3>
+            <h3>${ds.name}</h3>
             <div class="dataset-info">
                 <div>Jumlah data</div><div>: ${ds.total}</div>
                 <div>Kata Kerja</div><div>: ${ds.kerja}</div>
@@ -171,34 +190,70 @@ function parseCSVStrict(text) {
     });
 }
 
+async function isDatasetNameExists(name) {
+    const { data, error } = await supabaseClient
+        .from("datasets")
+        .select("id")
+        .ilike("name", name) // case-insensitive
+
+    if (error) {
+        console.error("CHECK NAME ERROR:", error);
+        return false;
+    }
+
+    return data.length > 0;
+}
+
 // ==============================
 // UPLOAD FINAL
 // ==============================
 async function uploadDataset() {
+
+    // 🔒 HARD GUARD (ANTI DOUBLE CLICK)
+    if (isUploading) return;
+    isUploading = true;
+
     const input = document.getElementById("fileInput");
+    const datasetNameInput = document.getElementById("datasetName");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+
     const file = input.files[0];
+    const datasetName = datasetNameInput.value.trim();
 
-    if (!file) {
-        alert("Pilih file dulu");
-        return;
-    }
-
-    if (!file.name.endsWith(".csv")) {
-        alert("File harus CSV!");
-        return;
-    }
+    // 🔒 LOCK UI
+    uploadBtn.disabled = true;
+    cancelBtn.disabled = true;
+    uploadBtn.innerText = "Mengunggah...";
+    input.disabled = true;
+    datasetNameInput.disabled = true;
 
     // 🔥 UI ELEMENT
     const progressContainer = document.getElementById("progressContainer");
     const progressBar = document.getElementById("progressBar");
     const progressText = document.getElementById("progressText");
 
-    progressContainer.style.display = "block";
-    progressText.style.display = "block";
-    progressBar.style.width = "0%";
-    progressText.innerText = "Memproses file...";
-
     try {
+
+        // VALIDASI DULU
+        if (!file || !datasetName) {
+            alert("File dan nama dataset wajib diisi!");
+            return;
+        }
+
+        // CEK DUPLIKAT
+        const exists = await isDatasetNameExists(datasetName);
+
+        if (exists) {
+            alert("Nama dataset sudah digunakan!");
+            return;
+        }
+
+        progressContainer.style.display = "block";
+        progressText.style.display = "block";
+        progressBar.style.width = "0%";
+        progressText.innerText = "Memproses file...";
+
         const text = await file.text();
         const rows = parseCSVStrict(text);
 
@@ -214,8 +269,7 @@ async function uploadDataset() {
         });
 
         const { data: { session } } = await supabaseClient.auth.getSession();
-        
-        // 🔥 AMBIL USERNAME DARI LOCALSTORAGE
+
         const username = localStorage.getItem("username");
         console.log("UPLOAD DEBUG username =", username);
 
@@ -229,7 +283,7 @@ async function uploadDataset() {
         const { data: dataset, error: err1 } = await supabaseClient
             .from("datasets")
             .insert([{
-                name: file.name,
+                name: datasetName,
                 file_name: file.name,
                 total_data: rows.length,
                 kata_kerja: kerja,
@@ -264,7 +318,6 @@ async function uploadDataset() {
 
             if (error) throw error;
 
-            // 🔥 UPDATE PROGRESS
             const currentChunk = Math.floor(i / chunkSize) + 1;
             const percent = Math.round((currentChunk / totalChunks) * 100);
 
@@ -291,6 +344,16 @@ async function uploadDataset() {
 
         progressContainer.style.display = "none";
         progressText.style.display = "none";
+    } finally {
+
+        // 🔓 UNLOCK UI (WAJIB SELALU JALAN)
+        isUploading = false;
+
+        uploadBtn.disabled = false;
+        cancelBtn.disabled = false;
+        uploadBtn.innerText = "Unggah";
+        input.disabled = false;
+        datasetNameInput.disabled = false;
     }
 }
 
@@ -300,9 +363,13 @@ async function uploadDataset() {
 function resetFile() {
     const input = document.getElementById("fileInput");
     const label = document.getElementById("fileName");
+    const datasetNameInput = document.getElementById("datasetName");
+    const uploadBtn = document.getElementById("uploadBtn");
 
     input.value = "";
     label.innerText = "Belum ada file";
+    datasetNameInput.value = "";
+    uploadBtn.disabled = true;
 }
 
 // ==============================
@@ -317,7 +384,8 @@ function initSearch() {
         const keyword = this.value.toLowerCase();
 
         const filtered = datasets.filter(ds =>
-            String(ds.id).toLowerCase().includes(keyword)
+            ds.name.toLowerCase().includes(keyword) ||
+            ds.uploader?.toLowerCase().includes(keyword)
         );
 
         renderDatasets(filtered);
@@ -347,4 +415,8 @@ function parseCSVLine(line) {
     result.push(current);
 
     return result;
+}
+
+function goToPreprocessing() {
+    window.location.href = "preprocessing.html";
 }

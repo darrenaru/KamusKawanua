@@ -33,16 +33,26 @@
     <div class="upload-box">
 
   <label class="upload-label">
-      <div class="upload-icon">📂</div>
-      <div class="upload-text">Klik untuk pilih file CSV</div>
-      <div id="fileName" class="file-name">Belum ada file</div>
-  </label>
+    <div class="upload-icon">📂</div>
+    <div class="upload-text">Klik untuk pilih file CSV</div>
+    <div id="fileName" class="file-name">Belum ada file</div>
+</label>
+
+<!-- 🔥 PINDAHKAN KE SINI -->
+<input 
+    type="text" 
+    id="datasetName" 
+    placeholder="Nama dataset" 
+    class="dataset-input"
+/>
+
+    
 
   <input type="file" id="fileInput" accept=".csv">
 
   <div class="buttons">
-      <button type="button" onclick="resetFile()">Batal</button>
-      <button type="button" onclick="uploadDataset()">Unggah</button>
+      <button type="button" id="cancelBtn" onclick="resetFile()">Batal</button>
+      <button type="button" id="uploadBtn" onclick="uploadDataset()" disabled>Unggah</button>
   </div>
   <div class="progress-container" id="progressContainer" style="display:none;">
     <div class="progress-bar" id="progressBar"></div>
@@ -58,6 +68,11 @@
 
     <!-- DATA LIST -->
     <div id="datasetList" class="dataset-list"></div>
+
+    <!-- 🔥 NEXT BUTTON -->
+    <div class="next-container">
+        <button id="nextBtn" onclick="goToPreprocessing()">Lanjut →</button>
+    </div>
 
   </div>
 
