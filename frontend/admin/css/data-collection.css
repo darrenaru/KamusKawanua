@@ -306,3 +306,30 @@ button:disabled {
   background: #3a2a12;
   transform: scale(1.05);
 }
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.delete-btn {
+  background: transparent;
+  color: #a94442; /* merah earthy, bukan neon */
+  border: 1px solid rgba(169, 68, 66, 0.3);
+
+  padding: 6px 14px;
+  border-radius: 999px;
+
+  font-size: 12px;
+  font-weight: 500;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-btn:hover {
+  background: rgba(169, 68, 66, 0.1);
+  border-color: rgba(169, 68, 66, 0.6);
+}

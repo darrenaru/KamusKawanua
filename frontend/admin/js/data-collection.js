@@ -130,7 +130,11 @@ function renderDatasets(list = datasets) {
         card.className = "dataset-card";
 
         card.innerHTML = `
-            <h3>${ds.name}</h3>
+            <div class="card-header">
+                <h3>${ds.name}</h3>
+                <button class="delete-btn" onclick="deleteDataset(${ds.id})">Hapus</button>
+            </div>
+
             <div class="dataset-info">
                 <div>Jumlah data</div><div>: ${ds.total}</div>
                 <div>Kata Kerja</div><div>: ${ds.kerja}</div>
@@ -415,6 +419,40 @@ function parseCSVLine(line) {
     result.push(current);
 
     return result;
+}
+
+async function deleteDataset(datasetId) {
+
+    const confirmDelete = confirm("Yakin ingin menghapus dataset ini?");
+    if (!confirmDelete) return;
+
+    try {
+
+        // 🔥 HAPUS RAW DATA DULU
+        const { error: errRaw } = await supabaseClient
+            .from("raw_data")
+            .delete()
+            .eq("dataset_id", datasetId);
+
+        if (errRaw) throw errRaw;
+
+        // 🔥 HAPUS DATASET
+        const { error: errDataset } = await supabaseClient
+            .from("datasets")
+            .delete()
+            .eq("id", datasetId);
+
+        if (errDataset) throw errDataset;
+
+        alert("Dataset berhasil dihapus");
+
+        // 🔄 REFRESH UI
+        fetchDatasets();
+
+    } catch (err) {
+        console.error("DELETE ERROR:", err);
+        alert("Gagal menghapus dataset");
+    }
 }
 
 function goToPreprocessing() {
