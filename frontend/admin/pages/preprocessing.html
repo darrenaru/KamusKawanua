@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Pre Processing</title>
+  <link rel="stylesheet" href="../css/preprocessing.css">
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <img src="../../assets/images/logo.png" alt="logo">
+    </div>
+
+    <ul>
+      <li onclick="goTo('dashboard.html')">Beranda</li>
+      <li onclick="goTo('data-collection.html')">Data Collection</li>
+      <li class="active">Pre processing</li>
+      <li>Processing</li>
+      <li>Testing</li>
+      <li>Evaluasi Performa Model</li>
+    </ul>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <h1>Pre Processing</h1>
+
+    <!-- TABLE WRAPPER -->
+    <div class="table-wrapper">
+      <table id="datasetTable">
+        <thead>
+          <tr>
+            <th>Nama</th>
+            <th>Total</th>
+            <th>Kerja</th>
+            <th>Benda</th>
+            <th>Sifat</th>
+            <th>Keterangan</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+
+    <!-- DETAIL -->
+    <div id="datasetCard" class="dataset-card" style="display:none;">
+      <h3 id="datasetName"></h3>
+
+      <div class="dataset-info">
+        <div><span class="label">File</span><span class="value" id="fileName"></span></div>
+        <div><span class="label">Jumlah data</span><span class="value" id="total"></span></div>
+        <div><span class="label">Kata Kerja</span><span class="value" id="kerja"></span></div>
+        <div><span class="label">Kata Benda</span><span class="value" id="benda"></span></div>
+        <div><span class="label">Kata Sifat</span><span class="value" id="sifat"></span></div>
+        <div><span class="label">Kata Keterangan</span><span class="value" id="keterangan"></span></div>
+        <div><span class="label">Pengimpor</span><span class="value" id="uploader"></span></div>
+        <div><span class="label">Tanggal</span><span class="value" id="date"></span></div>
+      </div>
+
+      <!-- BUTTON -->
+      <button id="processBtn" disabled>Mulai Preprocessing</button>
+      
+      <div class="progress-container" id="progressContainer">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+
+      <p id="progressText"></p>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/preprocessing.js"></script>
+
+</body>
+</html>
