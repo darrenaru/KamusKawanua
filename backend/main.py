@@ -7,9 +7,14 @@ import pandas as pd
 from rapidfuzz import fuzz
 import numpy as np
 import torch
-from transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertModel, AutoTokenizer
 
 from supabase import create_client
+import json
+import time
+import re
+from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
+
 
 app = FastAPI()
 
@@ -25,15 +30,113 @@ app.add_middleware(
 )
 
 # =========================
-# SUPABASE CONFIG (FIX)
+# 🔥 SUPABASE CONFIG (WAJIB SERVICE ROLE)
 # =========================
 SUPABASE_URL = "https://fhpjbkelhvopvfzykjne.supabase.co"
-SUPABASE_KEY = "sb_publishable_VwAwbQcRMbIEH2lGmxfN8w_k6jBI4y2"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTM5NDY1NCwiZXhwIjoyMDkwOTcwNjU0fQ.ZLisXnkuyvgvYwBV81lsEbMSNJm3iMEKPMTswSSjpUg"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # =========================
-# LOAD DATA (FIX ANTI CRASH)
+# STEMMER
+# =========================
+factory = StemmerFactory()
+stemmer = factory.create_stemmer()
+
+# =========================
+# STOPWORD & SLANG
+# =========================
+def load_stopwords():
+    res = supabase.table("stopwords").select("word").execute()
+    return set([row["word"] for row in (res.data or [])])
+
+def load_slang():
+    res = supabase.table("slang_words").select("*").execute()
+    return {row["slang"]: row["formal"] for row in (res.data or [])}
+
+# =========================
+# CLEAN BASIC
+# =========================
+def clean_basic(text):
+    if not text:
+        return ""
+
+    text = text.lower()
+    text = re.sub(r'[^a-zA-Z\s]', ' ', text)
+    text = re.sub(r'(.)\1{2,}', r'\1', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+def remove_all_duplicates(tokens):
+    return list(dict.fromkeys(tokens))
+
+# =========================
+# TOKEN PROCESSING (FINAL FIX)
+# =========================
+
+# 🔥 HAPUS SEMUA DUPLIKAT (AGRESIF)
+def remove_all_duplicates(tokens):
+    return list(dict.fromkeys(tokens))
+
+
+# =========================
+# WORD PROCESSING
+# =========================
+def process_word(text, slang_dict):
+    text = clean_basic(text)
+
+    # 🔥 TOKEN MANUAL (BUKAN BERT)
+    tokens = text.split()
+
+    processed = []
+
+    for t in tokens:
+        # slang normalize
+        if t in slang_dict:
+            t = slang_dict[t]
+
+        processed.append(t)
+
+    # 🔥 REMOVE DUPLICATE
+    processed = remove_all_duplicates(processed)
+
+    return processed
+
+
+# =========================
+# SENTENCE PROCESSING (FULL NLP PIPELINE)
+# =========================
+def process_sentence(text, slang_dict, stopwords):
+    text = clean_basic(text)
+
+    # 🔥 TOKEN MANUAL (FIX UTAMA)
+    tokens = text.split()
+
+    processed = []
+
+    for t in tokens:
+
+        # slang normalize
+        if t in slang_dict:
+            t = slang_dict[t]
+
+        # stopword removal
+        if t in stopwords:
+            continue
+
+        # stemming
+        t = stemmer.stem(t)
+
+        processed.append(t)
+
+    # 🔥 REMOVE DUPLICATE GLOBAL
+    processed = remove_all_duplicates(processed)
+
+    return processed
+
+# =========================
+# LOAD DATA (SEARCH)
 # =========================
 def load_data():
     try:
@@ -69,16 +172,12 @@ def load_data():
         return pd.DataFrame()
 
 # =========================
-# LOGIN SCHEMA
+# LOGIN
 # =========================
 class LoginRequest(BaseModel):
     username: str
     password: str
 
-
-# =========================
-# LOGIN ENDPOINT
-# =========================
 @app.post("/login")
 def login(data: LoginRequest):
     try:
@@ -88,38 +187,31 @@ def login(data: LoginRequest):
             .eq("password", data.password) \
             .execute()
 
-        user = response.data
-
-        if user and len(user) > 0:
-            return {
-                "success": True,
-                "message": "Login berhasil"
-            }
+        if response.data:
+            return {"success": True, "message": "Login berhasil"}
         else:
-            return {
-                "success": False,
-                "message": "Username atau password salah"
-            }
+            return {"success": False, "message": "Username atau password salah"}
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 # =========================
-# LOAD EMBEDDINGS (TETAP)
+# EMBEDDINGS
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 emb_path = os.path.join(BASE_DIR, "data", "embeddings.npy")
 
-embeddings = np.load(emb_path)
+try:
+    embeddings = np.load(emb_path)
+except:
+    embeddings = []
 
 # =========================
-# LOAD MODEL (TETAP)
+# TOKENIZER
 # =========================
 tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 model = BertModel.from_pretrained('bert-base-multilingual-cased')
+tokenizer_pre = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
 
 def encode(text):
     inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)
@@ -128,26 +220,17 @@ def encode(text):
     return outputs.last_hidden_state[:, 0, :].squeeze().numpy()
 
 # =========================
-# COSINE SIMILARITY
+# UTIL
 # =========================
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# =========================
-# NORMALIZATION
-# =========================
 def normalize(text):
     text = str(text).lower().strip()
-    text = text.replace("aa", "a")
-    text = text.replace("ee", "e")
-    text = text.replace("ii", "i")
-    text = text.replace("oo", "o")
-    text = text.replace("uu", "u")
+    text = text.replace("aa", "a").replace("ee", "e")
+    text = text.replace("ii", "i").replace("oo", "o").replace("uu", "u")
     return text
 
-# =========================
-# HIGHLIGHT
-# =========================
 def highlight_match(text, query):
     text_str = str(text)
     text_lower = text_str.lower()
@@ -156,12 +239,7 @@ def highlight_match(text, query):
     if query_lower in text_lower:
         start = text_lower.index(query_lower)
         end = start + len(query_lower)
-
-        return (
-            text_str[:start]
-            + "<mark>" + text_str[start:end] + "</mark>"
-            + text_str[end:]
-        )
+        return text_str[:start] + "<mark>" + text_str[start:end] + "</mark>" + text_str[end:]
 
     return text_str
 
@@ -170,40 +248,188 @@ def highlight_match(text, query):
 # =========================
 @app.get("/")
 def root():
+    return {"message": "API aktif"}
+
+# =========================
+# 🔥 PREPROCESS FINAL (FULL FIX)
+# =========================
+@app.post("/preprocess/{dataset_id}")
+def preprocess(dataset_id: int):
+
+    stopwords = load_stopwords()
+    slang_dict = load_slang()
+
+    all_data = []
+    from_idx = 0
+    limit = 1000
+
+    # =========================
+    # FETCH DATA
+    # =========================
+    while True:
+        res = supabase.table("preprocessed_data") \
+            .select("*") \
+            .eq("dataset_id", dataset_id) \
+            .is_("input_ids", None) \
+            .range(from_idx, from_idx + limit - 1) \
+            .execute()
+
+        data = res.data
+
+        if not data:
+            break
+
+        all_data.extend(data)
+
+        if len(data) < limit:
+            break
+
+        from_idx += limit
+
+    total = len(all_data)
+    print("TOTAL:", total)
+
+    success = 0
+    failed = 0
+
+    # =========================
+    # PROCESS LOOP
+    # =========================
+    for row in all_data:
+        try:
+            # =========================
+            # WORD TOKEN (NO STOPWORD)
+            # =========================
+            def process_word(text):
+                text = clean_basic(text)
+                tokens = text.split()
+
+                tokens = [slang_dict.get(t, t) for t in tokens]
+
+                return tokens
+
+            manado_tokens = process_word(row.get("manado_clean"))
+            indonesia_tokens = process_word(row.get("indonesia_clean"))
+            inggris_tokens = process_word(row.get("inggris_clean"))
+
+            # =========================
+            # SENTENCE PIPELINE (FULL NLP)
+            # =========================
+            def process_sentence(text):
+                text = clean_basic(text)
+                tokens = text.split()
+
+                clean_tokens = []
+
+                for t in tokens:
+
+                    # slang normalize
+                    if t in slang_dict:
+                        t = slang_dict[t]
+
+                    # stopword remove
+                    if t in stopwords:
+                        continue
+
+                    # stemming
+                    t = stemmer.stem(t)
+
+                    clean_tokens.append(t)
+                    clean_tokens = remove_all_duplicates(clean_tokens)
+
+                return clean_tokens
+
+            kal_manado = process_sentence(row.get("kalimat_manado"))
+            kal_indo = process_sentence(row.get("kalimat_indonesia"))
+            kal_ing = process_sentence(row.get("kalimat_inggris"))
+
+            # =========================
+            # FINAL TEXT (UNTUK BERT)
+            # =========================
+            final_text = (
+                " ".join(manado_tokens) + " [SEP] " +
+                " ".join(indonesia_tokens) + " [SEP] " +
+                " ".join(inggris_tokens) + " [SEP] " +
+                " ".join(kal_indo)
+            )
+
+            # =========================
+            # TOKENIZER BERT (SETELAH CLEAN)
+            # =========================
+            encoded = tokenizer_pre(
+                final_text,
+                padding="max_length",
+                truncation=True,
+                max_length=64
+            )
+
+            bert_tokens = tokenizer_pre.convert_ids_to_tokens(encoded["input_ids"])
+
+            # =========================
+            # SAVE KE DATABASE
+            # =========================
+            supabase.table("preprocessed_data").update({
+
+                # WORD TOKENS
+                "manado_tokens": json.dumps(manado_tokens),
+                "indonesia_tokens": json.dumps(indonesia_tokens),
+                "inggris_tokens": json.dumps(inggris_tokens),
+
+                # SENTENCE CLEAN
+                "kalimat_manado_clean": " ".join(kal_manado),
+                "kalimat_indonesia_clean": " ".join(kal_indo),
+                "kalimat_inggris_clean": " ".join(kal_ing),
+
+                # SENTENCE TOKENS
+                "kalimat_manado_tokens": json.dumps(kal_manado),
+                "kalimat_indonesia_tokens": json.dumps(kal_indo),
+                "kalimat_inggris_tokens": json.dumps(kal_ing),
+
+                # BERT OUTPUT
+                "bert_tokens": json.dumps(bert_tokens),
+                "input_ids": json.dumps(encoded["input_ids"]),
+                "attention_mask": json.dumps(encoded["attention_mask"])
+
+            }).eq("id", row["id"]).execute()
+
+            success += 1
+            print(f"{success}/{total}")
+
+            time.sleep(0.01)
+
+        except Exception as e:
+            failed += 1
+            print("ERROR:", row["id"], e)
+
     return {
-        "message": "API Kamus Kawanua aktif",
-        "docs": "http://127.0.0.1:8000/docs"
+        "status": "done",
+        "total": total,
+        "success": success,
+        "failed": failed
     }
 
 # =========================
-# SEARCH (LOGIKA 100% SAMA)
+# SEARCH (TIDAK DIUBAH)
 # =========================
 @app.get("/search")
 def search(query: str, lang: str):
 
     df = load_data()
 
-    # DEBUG (TAMBAHKAN INI)
     print("TOTAL DATA:", len(df))
     print("COLUMNS:", df.columns)
 
-    # 🔥 GUARD (ANTI 500)
     if df.empty:
         return {
             "query": query,
             "results": [],
             "error": "database kosong / RLS belum aktif / Supabase gagal"
         }
-    
 
-    # WORD LIST (tetap)
     manado_words = set(df['manado'].astype(str))
     indo_words = set(df['indonesia'].astype(str))
     eng_words = set(df['inggris'].astype(str))
 
-    # =========================
-    # SUGGESTION FUNCTION
-    # =========================
     def get_suggestion(query, lang):
 
         if lang == "manado":
@@ -230,9 +456,6 @@ def search(query: str, lang: str):
 
         return suggestions if suggestions else None
 
-    # =========================
-    # FORMAT RESULT
-    # =========================
     def format_result(row, lang, query_original, score, method):
 
         return {
@@ -280,9 +503,6 @@ def search(query: str, lang: str):
 
     results = sorted(results, key=lambda x: x['score'], reverse=True)[:5]
 
-    # =========================
-    # SEMANTIC (TETAP)
-    # =========================
     if not results:
         query_emb = encode(query_original)
 
@@ -300,9 +520,6 @@ def search(query: str, lang: str):
             row = df.iloc[idx]
             results.append(format_result(row, lang, query_original, sim, "semantic"))
 
-    # =========================
-    # SUGGESTION FALLBACK
-    # =========================
     if not results:
         suggestion = get_suggestion(query_original, lang)
 

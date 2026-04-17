@@ -8,6 +8,26 @@ let selectedDataset = null;
 let isProcessing = false;
 
 // ==============================
+// CLEAN PIPELINE
+// ==============================
+function cleanText(text) {
+    if (!text) return "";
+
+    text = text.toLowerCase();
+
+    // remove symbol & angka
+    text = text.replace(/[^a-zA-Z\s]/g, "");
+
+    // remove double char (cooool → cool)
+    text = text.replace(/(.)\1{2,}/g, "$1$1");
+
+    // remove extra space
+    text = text.replace(/\s+/g, " ").trim();
+
+    return text;
+}
+
+// ==============================
 // LOAD DATASET
 // ==============================
 async function loadDatasets() {
@@ -83,7 +103,7 @@ function selectDataset(ds) {
 }
 
 // ==============================
-// FETCH ALL RAW DATA (FIX LIMIT 1000)
+// FETCH RAW DATA
 // ==============================
 async function fetchAllRawData(datasetId) {
     let allData = [];
@@ -98,19 +118,17 @@ async function fetchAllRawData(datasetId) {
             .range(from, from + limit - 1);
 
         if (error) throw error;
-
         if (!data || data.length === 0) break;
 
         allData = [...allData, ...data];
         from += limit;
     }
 
-    console.log("TOTAL RAW FETCHED:", allData.length);
     return allData;
 }
 
 // ==============================
-// PREPROCESSING
+// START PREPROCESSING
 // ==============================
 document.getElementById("processBtn").addEventListener("click", startPreprocessing);
 
@@ -127,40 +145,31 @@ async function startPreprocessing() {
     const progressContainer = document.getElementById("progressContainer");
 
     try {
-        // LOCK UI
         btn.disabled = true;
         btn.innerText = "Memproses...";
         table.style.pointerEvents = "none";
         table.style.opacity = "0.6";
 
         progressContainer.style.display = "block";
-        progressBar.style.width = "0%";
-        progressText.innerText = "0%";
+        progressBar.style.width = "10%";
+        progressText.innerText = "Cleaning data...";
 
-        // 🔥 FIX: FETCH ALL DATA
         const allData = await fetchAllRawData(selectedDataset.id);
 
         if (!allData || allData.length === 0) {
             throw new Error("Raw data kosong");
         }
 
-        const total = allData.length;
-        const chunkSize = 50;
+        const chunkSize = 100;
 
-        // ==============================
-        // PROCESS LOOP
-        // ==============================
-        for (let i = 0; i < total; i += chunkSize) {
+        for (let i = 0; i < allData.length; i += chunkSize) {
             const chunk = allData.slice(i, i + chunkSize);
-
-            console.log(`Processing chunk ${i} - ${i + chunk.length}`);
 
             const processed = chunk.map(row => ({
                 dataset_id: row.dataset_id,
                 id_kata: row.id_kata,
                 jenis: row.jenis,
 
-                // ORIGINAL
                 manado: row.manado,
                 indonesia: row.indonesia,
                 inggris: row.inggris,
@@ -168,80 +177,61 @@ async function startPreprocessing() {
                 kalimat_indonesia: row.kalimat_indonesia,
                 kalimat_inggris: row.kalimat_inggris,
 
-                // CLEAN
-                manado_clean: row.manado?.toLowerCase(),
-                indonesia_clean: row.indonesia?.toLowerCase(),
-                inggris_clean: row.inggris?.toLowerCase(),
+                manado_clean: cleanText(row.manado),
+                indonesia_clean: cleanText(row.indonesia),
+                inggris_clean: cleanText(row.inggris),
 
-                kalimat_manado_clean: row.kalimat_manado?.toLowerCase(),
-                kalimat_indonesia_clean: row.kalimat_indonesia?.toLowerCase(),
-                kalimat_inggris_clean: row.kalimat_inggris?.toLowerCase(),
+                kalimat_manado_clean: cleanText(row.kalimat_manado),
+                kalimat_indonesia_clean: cleanText(row.kalimat_indonesia),
+                kalimat_inggris_clean: cleanText(row.kalimat_inggris)
             }));
 
-            const { data: inserted, error: insertError } = await supabaseClient
+            const { error } = await supabaseClient
                 .from("preprocessed_data")
-                .insert(processed)
-                .select();
+                .insert(processed);
 
-            if (insertError) throw insertError;
-
-            if (!inserted || inserted.length !== processed.length) {
-                throw new Error(`Insert tidak lengkap di chunk ${i}`);
-            }
-
-            // 🔥 anti rate limit
-            await new Promise(r => setTimeout(r, 100));
-
-            const percent = Math.round(((i + chunk.length) / total) * 100);
-            progressBar.style.width = percent + "%";
-            progressText.innerText = percent + "%";
+            if (error) throw error;
         }
 
-        // ==============================
-// UPDATE STATUS (FIX TOTAL)
-// ==============================
-const datasetId = Number(selectedDataset.id);
+        // 🔥 TOKENIZER BACKEND
+        progressBar.style.width = "50%";
+progressText.innerText = "Tokenizing (mBERT)...";
 
-console.log("UPDATE DATASET ID:", datasetId, typeof datasetId);
+const res = await fetch(`http://127.0.0.1:8000/preprocess/${selectedDataset.id}`, {
+    method: "POST"
+});
 
-const { data: updated, error: updateError } = await supabaseClient
-    .from("datasets")
-    .update({ is_preprocessed: true })
-    .eq("id", datasetId)
-    .select();
+const result = await res.json();
 
-console.log("UPDATE RESULT:", updated);
-console.log("UPDATE ERROR:", updateError);
-
-if (updateError) throw updateError;
-
-if (!updated || updated.length === 0) {
-    throw new Error("Update gagal: tidak ada row yang terupdate (cek ID / RLS)");
+if (!res.ok) {
+    throw new Error("Backend tokenizer gagal");
 }
 
-        progressBar.style.width = "100%";
-        progressText.innerText = "Selesai";
+// 🔥 PROGRESS REAL BASED ON RESULT
+const percent = Math.round((result.success / result.total) * 100);
 
-        alert("Preprocessing selesai");
+progressBar.style.width = percent + "%";
+progressText.innerText = `${percent}% (${result.success}/${result.total})`;
+
+progressBar.style.width = "100%";
+progressText.innerText = "Selesai";
+
+        await supabaseClient
+            .from("datasets")
+            .update({ is_preprocessed: true })
+            .eq("id", selectedDataset.id);
+
+        alert("Preprocessing + Tokenisasi selesai");
 
         await loadDatasets();
 
-// 🔥 REFRESH SELECTED DATASET (WAJIB)
-const updatedDataset = datasets.find(d => d.id === selectedDataset.id);
-
-if (updatedDataset) {
-    selectDataset(updatedDataset);
-}
-
     } catch (err) {
-        console.error("PREPROCESS ERROR:", err);
-        alert(err.message || "Terjadi kesalahan");
+        console.error(err);
+        alert(err.message);
     } finally {
         isProcessing = false;
-
         btn.disabled = false;
         btn.innerText = "Mulai Preprocessing";
-
         table.style.pointerEvents = "auto";
         table.style.opacity = "1";
     }
