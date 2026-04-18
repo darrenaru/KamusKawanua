@@ -1,20 +1,30 @@
 // ==============================
-// INIT LANGUAGE OUTPUT
+// LANGUAGE STATE
 // ==============================
-function updateOutputOptions() {
-    const inputLang = document.getElementById("inputLang").value;
+let currentLang = "manado";
+
+function updateLanguageUI() {
+    const input = document.getElementById("inputLang");
     const output = document.getElementById("outputLang");
 
-    if (inputLang === "manado") {
-        output.value = "Indonesia - Inggris";
-    } else if (inputLang === "indonesia") {
-        output.value = "Manado - Inggris";
+    if (currentLang === "manado") {
+        input.value = "Manado";
+        output.value = "Indonesia";
     } else {
-        output.value = "Manado - Indonesia";
+        input.value = "Indonesia";
+        output.value = "Manado";
     }
 }
 
-document.addEventListener("DOMContentLoaded", updateOutputOptions);
+// ==============================
+// SWAP FUNCTION
+// ==============================
+function swapLanguage() {
+    currentLang = currentLang === "manado" ? "indonesia" : "manado";
+    updateLanguageUI();
+}
+
+document.addEventListener("DOMContentLoaded", updateLanguageUI);
 
 
 // ==============================
@@ -30,19 +40,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // ==============================
-// SEARCH FUNCTION
+// SEARCH FUNCTION (UPDATED)
 // ==============================
 async function search() {
     const query = document.getElementById("query").value.trim();
-    const inputLang = document.getElementById("inputLang").value;
 
     if (!query) return;
 
     try {
-        const res = await fetch(`http://127.0.0.1:8000/search?query=${query}&lang=${inputLang}`);
+        const res = await fetch(`http://127.0.0.1:8000/search?query=${query}&lang=${currentLang}`);
         const data = await res.json();
-
-        console.log("API RESPONSE FULL:", JSON.stringify(data, null, 2));
 
         displayResults(data);
 
@@ -50,47 +57,11 @@ async function search() {
         console.error(err);
         document.getElementById("results").innerHTML = "<p>Server error</p>";
     }
-    console.log(data);
 }
 
 
 // ==============================
-// SUPER ROBUST EXTRACTOR
-// ==============================
-function extractValue(data) {
-    if (!data) return "";
-
-    // kalau array
-    if (Array.isArray(data)) {
-
-        // cari semua string dalam array
-        for (let item of data) {
-
-            // nested array
-            if (Array.isArray(item)) {
-                for (let sub of item) {
-                    if (typeof sub === "string" && sub.length > 1) {
-                        return sub;
-                    }
-                }
-            }
-
-            // langsung string
-            if (typeof item === "string" && item.length > 1) {
-                return item;
-            }
-        }
-    }
-
-    // fallback kalau string langsung
-    if (typeof data === "string") return data;
-
-    return "";
-}
-
-
-// ==============================
-// DISPLAY RESULTS
+// DISPLAY RESULTS (UNCHANGED)
 // ==============================
 function displayResults(data) {
     const container = document.getElementById("results");
@@ -119,12 +90,6 @@ function displayResults(data) {
                     <strong>INDONESIA</strong>
                     <p>${item.indonesia}</p>
                     <p class="example">${item.kalimat_indonesia}</p>
-                </div>
-
-                <div class="result-section">
-                    <strong>INGGRIS</strong>
-                    <p>${item.inggris}</p>
-                    <p class="example">${item.kalimat_inggris}</p>
                 </div>
             </div>
 

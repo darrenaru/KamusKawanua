@@ -6,6 +6,9 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 let datasets = [];
 let selectedDataset = null;
 let isProcessing = false;
+let allWords = [];
+let currentPage = 1;
+const perPage = 20;
 
 // ==============================
 // CLEAN PIPELINE
@@ -14,14 +17,8 @@ function cleanText(text) {
     if (!text) return "";
 
     text = text.toLowerCase();
-
-    // remove symbol & angka
     text = text.replace(/[^a-zA-Z\s]/g, "");
-
-    // remove double char (cooool → cool)
     text = text.replace(/(.)\1{2,}/g, "$1$1");
-
-    // remove extra space
     text = text.replace(/\s+/g, " ").trim();
 
     return text;
@@ -40,6 +37,11 @@ async function loadDatasets() {
 
     datasets = data;
     renderTable();
+
+    // 🔥 FIX: AUTO SELECT DATASET
+    if (datasets.length > 0) {
+        selectDataset(datasets[0]);
+    }
 }
 
 // ==============================
@@ -47,6 +49,8 @@ async function loadDatasets() {
 // ==============================
 function renderTable() {
     const body = document.getElementById("tableBody");
+    if (!body) return;
+
     body.innerHTML = "";
 
     if (!datasets || datasets.length === 0) {
@@ -87,7 +91,9 @@ function renderTable() {
 function selectDataset(ds) {
     selectedDataset = ds;
 
-    document.getElementById("processBtn").disabled = ds.is_preprocessed;
+    const btn = document.getElementById("processBtn");
+
+    btn.disabled = ds.is_preprocessed;
 
     document.getElementById("datasetCard").style.display = "block";
 
@@ -128,10 +134,222 @@ async function fetchAllRawData(datasetId) {
 }
 
 // ==============================
-// START PREPROCESSING
+// MODAL CONTROL + EVENTS (SAFE)
 // ==============================
-document.getElementById("processBtn").addEventListener("click", startPreprocessing);
+document.addEventListener("DOMContentLoaded", () => {
 
+    loadDatasets();
+
+    const processBtn = document.getElementById("processBtn");
+    if (processBtn) processBtn.addEventListener("click", startPreprocessing);
+
+    const nextBtn = document.getElementById("nextPage");
+if (nextBtn) nextBtn.addEventListener("click", () => {
+    const effectivePerPage = perPage - (perPage % 3);
+    const maxPage = Math.ceil(allWords.length / effectivePerPage);
+    if (currentPage < maxPage) {
+        currentPage++;
+        renderWords();
+    }
+});
+
+const prevBtn = document.getElementById("prevPage");
+if (prevBtn) prevBtn.addEventListener("click", () => {
+    if (currentPage > 1) {
+        currentPage--;
+        renderWords();
+    }
+});
+
+    const addBtn = document.getElementById("addWordBtn");
+    if (addBtn) addBtn.addEventListener("click", addWord);
+
+    const filterType = document.getElementById("filterType");
+    if (filterType) {
+        filterType.addEventListener("change", async () => {
+            const value = filterType.value;
+            if (!value) return;
+
+            currentType = value;
+
+            document.getElementById("modalTitle").innerText =
+                value === "stopword"
+                    ? "Manajemen Stopword"
+                    : "Manajemen Slang";
+
+            document.getElementById("wordInput").value = "";
+            document.getElementById("wordModal").style.display = "flex";
+
+            await loadWords();
+        });
+    }
+
+    const closeModal = document.getElementById("closeModal");
+    if (closeModal) {
+        closeModal.onclick = () => document.getElementById("wordModal").style.display = "none";
+    }
+
+    window.onclick = (e) => {
+        if (e.target.id === "wordModal") {
+            document.getElementById("wordModal").style.display = "none";
+        }
+    };
+});
+
+// ==============================
+// WORD LOGIC
+// ==============================
+let currentType = "";
+
+async function loadWords() {
+    const table = document.getElementById("wordTableBody");
+    if (!table) return;
+
+    // 🔥 RESET TOTAL
+    allWords = [];
+    table.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
+
+    const tableName = currentType === "stopword" ? "stopwords" : "slang_words";
+
+    const { data, error } = await supabaseClient
+        .from(tableName)
+        .select("*")
+        .order("id", { ascending: false });
+
+    if (error) {
+        console.error(error);
+        table.innerHTML = "<tr><td colspan='2'>Gagal load data</td></tr>";
+        return;
+    }
+
+    // 🔥 FORCE CLEAN DATA
+    allWords = Array.isArray(data) ? data : [];
+
+    console.log("DATA DARI SUPABASE:", allWords); // DEBUG WAJIB
+
+    currentPage = 1;
+
+    renderWords();
+}
+
+function renderWords() {
+    if (!Array.isArray(allWords)) {
+    console.error("allWords bukan array:", allWords);
+    allWords = [];
+}
+    const table = document.getElementById("wordTableBody");
+    if (!table) return;
+
+    if (!allWords.length) {
+        table.innerHTML = "<tr><td colspan='2'>Belum ada data</td></tr>";
+        document.getElementById("pageInfo").innerText = "0 / 0";
+        return;
+    }
+
+    const start = (currentPage - 1) * perPage;
+    // ambil data normal
+    let pageData = allWords.slice(start, start + perPage);
+
+    // =========================
+    // PAKSA KELIPATAN 3
+    // =========================
+    const remainder = pageData.length % 3;
+
+    if (remainder !== 0) {
+        pageData = pageData.slice(0, pageData.length - remainder);
+    }
+
+    table.innerHTML = `
+        <tr>
+            <td colspan="2">
+                <div class="word-grid" id="wordGrid"></div>
+            </td>
+        </tr>
+    `;
+
+    const grid = document.getElementById("wordGrid");
+
+    pageData.forEach(item => {
+        let content = "";
+
+        if (currentType === "stopword") {
+            content = item.word;
+        } else {
+            content = `${item.slang} → ${item.formal}`;
+        }
+
+        const card = document.createElement("div");
+        card.className = "word-card";
+
+        card.innerHTML = `
+            <div class="word-text">${content}</div>
+            <button onclick="deleteWord(${item.id})">Hapus</button>
+        `;
+
+        grid.appendChild(card);
+    });
+
+    // =========================
+    // TOTAL PAGE CALCULATION
+    // =========================
+    // total efektif (kelipatan 3)
+    const effectivePerPage = perPage - (perPage % 3);
+    const totalPage = Math.ceil(allWords.length / effectivePerPage);
+
+    document.getElementById("pageInfo").innerText =
+        `${currentPage} / ${totalPage}`;
+}
+
+async function addWord() {
+    const input = document.getElementById("wordInput");
+    const value = input.value.trim();
+
+    if (!value) return alert("Input kosong");
+
+    let payload;
+
+    if (currentType === "stopword") {
+        payload = { word: value, language: "manado" };
+    } else {
+        // format: slang|formal
+        const parts = value.split("|");
+
+        if (parts.length !== 2) {
+            return alert("Format slang: slang|formal");
+        }
+
+        payload = {
+            slang: parts[0].trim(),
+            formal: parts[1].trim()
+        };
+    }
+
+    const tableName = currentType === "stopword" ? "stopwords" : "slang_words";
+
+    const { error } = await supabaseClient
+        .from(tableName)
+        .insert([payload]);
+
+    if (error) return alert("Gagal tambah");
+
+    input.value = "";
+    loadWords();
+}
+
+async function deleteWord(id) {
+    const tableName = currentType === "stopword" ? "stopwords" : "slang_words";
+
+    await supabaseClient
+        .from(tableName)
+        .delete()
+        .eq("id", id);
+
+    await loadWords();
+}
+
+// ==============================
+// START PREPROCESSING (UNCHANGED)
+// ==============================
 async function startPreprocessing() {
     if (!selectedDataset) return;
     if (isProcessing) return;
@@ -144,98 +362,83 @@ async function startPreprocessing() {
     const progressText = document.getElementById("progressText");
     const progressContainer = document.getElementById("progressContainer");
 
+    let progress = 0;
+    let interval;
+
     try {
         btn.disabled = true;
         btn.innerText = "Memproses...";
         table.style.pointerEvents = "none";
         table.style.opacity = "0.6";
 
+        // 🔥 FIX: RESET PROGRESS
         progressContainer.style.display = "block";
-        progressBar.style.width = "10%";
-        progressText.innerText = "Cleaning data...";
+        progressBar.style.width = "0%";
+        progressText.innerText = "Memulai...";
 
-        const allData = await fetchAllRawData(selectedDataset.id);
+        // 🔥 SMOOTH PROGRESS
+        interval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.random() * 6;
+                progressBar.style.width = progress + "%";
 
-        if (!allData || allData.length === 0) {
-            throw new Error("Raw data kosong");
-        }
+                if (progress < 30) {
+                    progressText.innerText = "Mengambil data...";
+                } else if (progress < 60) {
+                    progressText.innerText = "Preprocessing...";
+                } else {
+                    progressText.innerText = "Tokenisasi...";
+                }
+            }
+        }, 300);
 
-        const chunkSize = 100;
+        const res = await fetch(`http://localhost:8000/preprocess/${selectedDataset.id}`, {
+            method: "POST"
+        });
 
-        for (let i = 0; i < allData.length; i += chunkSize) {
-            const chunk = allData.slice(i, i + chunkSize);
+        if (!res.ok) throw new Error("Server error");
 
-            const processed = chunk.map(row => ({
-                dataset_id: row.dataset_id,
-                id_kata: row.id_kata,
-                jenis: row.jenis,
+        const result = await res.json();
+        console.log(result);
 
-                manado: row.manado,
-                indonesia: row.indonesia,
-                inggris: row.inggris,
-                kalimat_manado: row.kalimat_manado,
-                kalimat_indonesia: row.kalimat_indonesia,
-                kalimat_inggris: row.kalimat_inggris,
+        clearInterval(interval);
 
-                manado_clean: cleanText(row.manado),
-                indonesia_clean: cleanText(row.indonesia),
-                inggris_clean: cleanText(row.inggris),
+        // 🔥 FINISH
+        progressBar.style.width = "100%";
+        progressText.innerText = "Selesai";
 
-                kalimat_manado_clean: cleanText(row.kalimat_manado),
-                kalimat_indonesia_clean: cleanText(row.kalimat_indonesia),
-                kalimat_inggris_clean: cleanText(row.kalimat_inggris)
-            }));
-
-            const { error } = await supabaseClient
-                .from("preprocessed_data")
-                .insert(processed);
-
-            if (error) throw error;
-        }
-
-        // 🔥 TOKENIZER BACKEND
-        progressBar.style.width = "50%";
-progressText.innerText = "Tokenizing (mBERT)...";
-
-const res = await fetch(`http://127.0.0.1:8000/preprocess/${selectedDataset.id}`, {
-    method: "POST"
-});
-
-const result = await res.json();
-
-if (!res.ok) {
-    throw new Error("Backend tokenizer gagal");
-}
-
-// 🔥 PROGRESS REAL BASED ON RESULT
-const percent = Math.round((result.success / result.total) * 100);
-
-progressBar.style.width = percent + "%";
-progressText.innerText = `${percent}% (${result.success}/${result.total})`;
-
-progressBar.style.width = "100%";
-progressText.innerText = "Selesai";
+        // 🔥 FIX: UPDATE STATE LOKAL
+        selectedDataset.is_preprocessed = true;
 
         await supabaseClient
             .from("datasets")
             .update({ is_preprocessed: true })
             .eq("id", selectedDataset.id);
 
-        alert("Preprocessing + Tokenisasi selesai");
-
         await loadDatasets();
 
     } catch (err) {
         console.error(err);
-        alert(err.message);
+        alert("Preprocessing gagal");
     } finally {
+        clearInterval(interval);
+
         isProcessing = false;
-        btn.disabled = false;
+
         btn.innerText = "Mulai Preprocessing";
+        btn.disabled = selectedDataset?.is_preprocessed || false;
+
         table.style.pointerEvents = "auto";
         table.style.opacity = "1";
     }
 }
 
+// ==============================
 // INIT
-loadDatasets();
+// ==============================
+document.addEventListener("DOMContentLoaded", () => {
+    loadDatasets();
+
+    const processBtn = document.getElementById("processBtn");
+    if (processBtn) processBtn.addEventListener("click", startPreprocessing);
+});

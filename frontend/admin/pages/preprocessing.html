@@ -29,8 +29,17 @@
   <div class="main">
     <h1>Pre Processing</h1>
 
-    <!-- TABLE WRAPPER -->
-    <div class="table-wrapper">
+    <!-- DROPDOWN -->
+    <div class="topbar">
+      <select id="filterType">
+        <option value="" disabled selected hidden>Filter</option>
+        <option value="stopword">Stopword</option>
+        <option value="slang">Slang</option>
+      </select>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-wrapper" id="datasetSection">
       <table id="datasetTable">
         <thead>
           <tr>
@@ -47,7 +56,6 @@
       </table>
     </div>
 
-
     <!-- DETAIL -->
     <div id="datasetCard" class="dataset-card" style="display:none;">
       <h3 id="datasetName"></h3>
@@ -63,9 +71,8 @@
         <div><span class="label">Tanggal</span><span class="value" id="date"></span></div>
       </div>
 
-      <!-- BUTTON -->
       <button id="processBtn" disabled>Mulai Preprocessing</button>
-      
+
       <div class="progress-container" id="progressContainer">
         <div id="progressBar" class="progress-bar"></div>
       </div>
@@ -77,6 +84,36 @@
 
 </div>
 
+<!-- MODAL -->
+<div id="wordModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+      <span class="close" id="closeModal">&times;</span>
+    </div>
+
+    <div class="modal-body">
+      <div class="input-group">
+        <input type="text" id="wordInput" placeholder="Masukkan kata...">
+        <button id="addWordBtn">Tambah</button>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <tbody id="wordTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <button id="prevPage">&lt;</button>
+        <span id="pageInfo">1</span>
+        <button id="nextPage">&gt;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 🔥 WAJIB ADA -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/preprocessing.js"></script>
 

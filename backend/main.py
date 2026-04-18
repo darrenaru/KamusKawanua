@@ -264,13 +264,12 @@ def preprocess(dataset_id: int):
     limit = 1000
 
     # =========================
-    # FETCH DATA
+    # 🔥 FETCH DARI RAW_DATA (FIX UTAMA)
     # =========================
     while True:
-        res = supabase.table("preprocessed_data") \
+        res = supabase.table("raw_data") \
             .select("*") \
             .eq("dataset_id", dataset_id) \
-            .is_("input_ids", None) \
             .range(from_idx, from_idx + limit - 1) \
             .execute()
 
@@ -297,64 +296,58 @@ def preprocess(dataset_id: int):
     # =========================
     for row in all_data:
         try:
+
             # =========================
-            # WORD TOKEN (NO STOPWORD)
+            # WORD TOKEN
             # =========================
-            def process_word(text):
+            def process_word_local(text):
                 text = clean_basic(text)
                 tokens = text.split()
-
                 tokens = [slang_dict.get(t, t) for t in tokens]
+                return remove_all_duplicates(tokens)
 
-                return tokens
-
-            manado_tokens = process_word(row.get("manado_clean"))
-            indonesia_tokens = process_word(row.get("indonesia_clean"))
-            inggris_tokens = process_word(row.get("inggris_clean"))
+            manado_tokens = process_word_local(row.get("manado"))
+            indonesia_tokens = process_word_local(row.get("indonesia"))
 
             # =========================
-            # SENTENCE PIPELINE (FULL NLP)
+            # SENTENCE PIPELINE
             # =========================
-            def process_sentence(text):
+            def process_sentence_local(text):
                 text = clean_basic(text)
                 tokens = text.split()
 
                 clean_tokens = []
 
                 for t in tokens:
-
-                    # slang normalize
                     if t in slang_dict:
                         t = slang_dict[t]
 
-                    # stopword remove
                     if t in stopwords:
                         continue
 
-                    # stemming
                     t = stemmer.stem(t)
-
                     clean_tokens.append(t)
-                    clean_tokens = remove_all_duplicates(clean_tokens)
+
+                # 🔥 FIX: remove duplicate di luar loop
+                clean_tokens = remove_all_duplicates(clean_tokens)
 
                 return clean_tokens
 
-            kal_manado = process_sentence(row.get("kalimat_manado"))
-            kal_indo = process_sentence(row.get("kalimat_indonesia"))
-            kal_ing = process_sentence(row.get("kalimat_inggris"))
+            kal_manado = process_sentence_local(row.get("kalimat_manado"))
+            kal_indo = process_sentence_local(row.get("kalimat_indonesia"))
 
             # =========================
-            # FINAL TEXT (UNTUK BERT)
+            # FINAL TEXT (NO ENGLISH)
             # =========================
             final_text = (
                 " ".join(manado_tokens) + " [SEP] " +
                 " ".join(indonesia_tokens) + " [SEP] " +
-                " ".join(inggris_tokens) + " [SEP] " +
+                " ".join(kal_manado) + " [SEP] " +
                 " ".join(kal_indo)
             )
 
             # =========================
-            # TOKENIZER BERT (SETELAH CLEAN)
+            # BERT TOKENIZER
             # =========================
             encoded = tokenizer_pre(
                 final_text,
@@ -366,31 +359,42 @@ def preprocess(dataset_id: int):
             bert_tokens = tokenizer_pre.convert_ids_to_tokens(encoded["input_ids"])
 
             # =========================
-            # SAVE KE DATABASE
+            # 🔥 INSERT (BUKAN UPDATE)
             # =========================
-            supabase.table("preprocessed_data").update({
+            supabase.table("preprocessed_data").insert({
+            "dataset_id": dataset_id,
+            "id_kata": row.get("id_kata"),
 
-                # WORD TOKENS
-                "manado_tokens": json.dumps(manado_tokens),
-                "indonesia_tokens": json.dumps(indonesia_tokens),
-                "inggris_tokens": json.dumps(inggris_tokens),
+            # 🔥 TAMBAHKAN INI (FIX UTAMA)
+            "jenis": row.get("jenis"),
+            "kalimat_manado": row.get("kalimat_manado"),
+            "kalimat_indonesia": row.get("kalimat_indonesia"),
 
-                # SENTENCE CLEAN
-                "kalimat_manado_clean": " ".join(kal_manado),
-                "kalimat_indonesia_clean": " ".join(kal_indo),
-                "kalimat_inggris_clean": " ".join(kal_ing),
+            # ORIGINAL
+            "manado": row.get("manado"),
+            "indonesia": row.get("indonesia"),
 
-                # SENTENCE TOKENS
-                "kalimat_manado_tokens": json.dumps(kal_manado),
-                "kalimat_indonesia_tokens": json.dumps(kal_indo),
-                "kalimat_inggris_tokens": json.dumps(kal_ing),
+            # 🔥 CLEAN VERSION (TAMBAHKAN)
+            "manado_clean": clean_basic(row.get("manado")),
+            "indonesia_clean": clean_basic(row.get("indonesia")),
 
-                # BERT OUTPUT
-                "bert_tokens": json.dumps(bert_tokens),
-                "input_ids": json.dumps(encoded["input_ids"]),
-                "attention_mask": json.dumps(encoded["attention_mask"])
+            # TOKENS
+            "manado_tokens": json.dumps(manado_tokens),
+            "indonesia_tokens": json.dumps(indonesia_tokens),
 
-            }).eq("id", row["id"]).execute()
+            # SENTENCE CLEAN
+            "kalimat_manado_clean": " ".join(kal_manado),
+            "kalimat_indonesia_clean": " ".join(kal_indo),
+
+            # SENTENCE TOKENS
+            "kalimat_manado_tokens": json.dumps(kal_manado),
+            "kalimat_indonesia_tokens": json.dumps(kal_indo),
+
+            # BERT
+            "bert_tokens": json.dumps(bert_tokens),
+            "input_ids": json.dumps(encoded["input_ids"]),
+            "attention_mask": json.dumps(encoded["attention_mask"])
+        }).execute()
 
             success += 1
             print(f"{success}/{total}")
@@ -399,7 +403,7 @@ def preprocess(dataset_id: int):
 
         except Exception as e:
             failed += 1
-            print("ERROR:", row["id"], e)
+            print("ERROR:", row.get("id_kata"), e)
 
     return {
         "status": "done",
@@ -436,8 +440,6 @@ def search(query: str, lang: str):
             words = manado_words
         elif lang == "indonesia":
             words = indo_words
-        elif lang == "inggris":
-            words = eng_words
         else:
             return None
 
@@ -461,11 +463,9 @@ def search(query: str, lang: str):
         return {
             "manado": highlight_match(row['manado'], query_original),
             "indonesia": highlight_match(row['indonesia'], query_original),
-            "inggris": highlight_match(row['inggris'], query_original),
 
             "kalimat_manado": highlight_match(row.get('kalimat_manado', '-'), query_original),
             "kalimat_indonesia": highlight_match(row.get('kalimat_indonesia', '-'), query_original),
-            "kalimat_inggris": highlight_match(row.get('kalimat_inggris', '-'), query_original),
 
             "score": round(float(score), 3),
             "method": method
@@ -479,14 +479,11 @@ def search(query: str, lang: str):
     for idx, row in df.iterrows():
         manado = normalize(row['manado'])
         indo = normalize(row['indonesia'])
-        eng = normalize(row['inggris'])
 
         if lang == "manado":
             target = manado
         elif lang == "indonesia":
             target = indo
-        elif lang == "inggris":
-            target = eng
         else:
             return {"message": "lang harus diisi"}
 
