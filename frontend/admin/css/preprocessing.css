@@ -1,0 +1,432 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #f7f5f0;
+  --text: #1a1714;
+  --accent: #2c1f0e;
+}
+
+/* BASE */
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg);
+  min-height: 100vh;
+  position: relative;
+}
+
+/* GRID BG */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(44,31,14,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44,31,14,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: 0;
+}
+
+/* LAYOUT */
+.layout {
+  display: flex;
+  position: relative;
+  z-index: 1;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 250px;
+  background: rgba(241, 231, 216, 0.85);
+  backdrop-filter: blur(6px);
+  min-height: 100vh;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo {
+  margin-top: 20px;
+}
+
+.logo img {
+  width: 220px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  width: 100%;
+}
+
+.sidebar li {
+  padding: 14px 20px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.sidebar li.active {
+  background: rgba(200,169,110,0.4);
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* TABLE */
+.table-wrapper {
+  width: 100%;
+  max-width: 1000px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  overflow: hidden;
+  margin-bottom: 30px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+thead {
+  background: rgba(44,31,14,0.08);
+}
+
+th {
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+td {
+  padding: 12px;
+  font-size: 14px;
+  border-top: 1px solid #eee;
+  text-align: center;
+}
+
+td.col-name {
+  text-align: left;
+  padding-left: 16px;
+  width: 30%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+tbody tr:hover {
+  background: rgba(200,169,110,0.2);
+  cursor: pointer;
+}
+
+tbody tr.selected {
+  background: rgba(44,31,14,0.15);
+}
+
+/* STATUS */
+.status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.status.done {
+  background: #b7e4c7;
+}
+
+.status.pending {
+  background: #ddd;
+}
+
+/* ======================
+   BUTTON SYSTEM
+====================== */
+button {
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+/* PRIMARY */
+#processBtn,
+.input-group button {
+  background: var(--accent);
+  color: white;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(44,31,14,0.15);
+}
+
+#processBtn {
+  margin: 25px auto 0 auto;
+  width: 200px;
+  display: block;
+}
+
+#processBtn:hover:not(:disabled),
+.input-group button:hover {
+  background: #3a2a12;
+  transform: translateY(-1px);
+}
+
+#processBtn:active,
+.input-group button:active {
+  transform: scale(0.96);
+}
+
+#processBtn:disabled {
+  opacity: 0.5;
+}
+
+/* DELETE BUTTON */
+button[onclick^="deleteWord"] {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+button[onclick^="deleteWord"]:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+}
+
+/* DETAIL CARD */
+.dataset-card {
+  margin-top: 40px;
+  width: 100%;
+  max-width: 500px;
+  background: white;
+  padding: 28px 30px;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dataset-card h3 {
+  margin-bottom: 20px;
+}
+
+.dataset-info {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+}
+
+.dataset-info div {
+  background: #f9f9f9;
+  padding: 10px 14px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* TOPBAR */
+.topbar {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+/* DROPDOWN CUSTOM */
+.topbar select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  padding: 10px 40px 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%232c1f0e' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 18px;
+}
+
+.topbar select:hover {
+  border-color: var(--accent);
+}
+
+/* MODAL */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+
+  /* penting: stop scroll body */
+  overflow: hidden;
+}
+
+.modal-content {
+  background: white;
+  width: 700px;
+  height: 600px; /* FIX HEIGHT */
+
+  border-radius: 14px;
+  padding: 20px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* body modal bisa scroll sendiri */
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* INPUT */
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.input-group input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+}
+
+/* TABLE */
+.table-scroll {
+  border-radius: 8px;
+}
+
+/* PAGINATION */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+  gap: 12px;
+}
+
+.pagination button {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: white;
+  font-weight: 600;
+}
+
+.pagination button:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.pagination span {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ======================
+   WORD GRID (NEW)
+====================== */
+
+.word-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 10px;
+}
+
+.word-card {
+  background: #f9f9f9;
+  border-radius: 12px;
+  padding: 10px 12px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  border: 1px solid #eee;
+}
+
+.word-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* button kecil */
+.word-card button {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.word-card button:hover {
+  background: #f5f5f5;
+}
+
+.word-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 10px;
+
+  justify-content: center; /* ini kunci */
+}
+
+/* ======================
+   PROGRESS BAR (FIX)
+====================== */
+
+.progress-container {
+  width: 100%;
+  height: 12px;
+  background: #eee;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 20px;
+
+  display: none; /* default hidden */
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #2c1f0e;
+  border-radius: 999px;
+
+  transition: width 0.3s ease;
+}
+
+#progressText {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+}

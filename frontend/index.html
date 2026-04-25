@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kamus Kawanua</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="navbar">
+    <div class="nav-right">
+        <a href="login/login.html" class="login-btn">Login</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <h1>KAMUS KAWANUA</h1>
+
+    <div class="language-title">
+        Manado &bull; Indonesia
+    </div>
+
+    <div class="language-row">
+
+            <div class="lang-box">
+                <input type="text" id="inputLang" readonly>
+            </div>
+
+            <div class="swap-btn" onclick="swapLanguage()">
+                <img src="assets/images/reverse-arrow.png" alt="swap">
+            </div>
+
+            <div class="lang-box">
+                <input type="text" id="outputLang" readonly>
+    </div>
+
+</div>
+
+</div>
+
+    <div class="search-box">
+        <input type="text" id="query" placeholder="Masukkan kata..." />
+        <button onclick="search()" class="search-btn">
+            <img src="assets/images/search.png" alt="search">
+        </button>
+    </div>
+
+    <div id="results"></div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

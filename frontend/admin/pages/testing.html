@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pengujian</title>
+
+    <link rel="stylesheet" href="../css/testing.css">
+</head>
+
+<body>
+
+    <div class="layout">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="logo">
+                <img src="logo.png">
+            </div>
+
+            <ul>
+                <li>Beranda</li>
+                <li>Data Collection</li>
+                <li>Pre Processing</li>
+                <li>Processing</li>
+                <li class="active">Testing</li>
+                <li>Evaluasi Performa Model</li>
+            </ul>
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+
+            <h1>Pengujian</h1>
+
+            <!-- Konfigurasi Testing -->
+            <div class="card">
+                <h3>Konfigurasi Testing</h3>
+
+                <div class="form-group">
+                    Dataset:
+                    <select id="selDataset">
+                        <option value="dataset_kamus.csv">dataset_kamus.csv</option>
+                        <option value="dataset_paralel.csv">dataset_paralel.csv</option>
+                        <option value="dataset_slang.csv">dataset_slang.csv</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    Algoritma/Model:
+                    <select id="selModel">
+                        <option value="xlmr">XLM-R</option>
+                        <option value="mbert">mBERT</option>
+                        <option value="indobert">IndoBERT</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    Arah Terjemahan:
+                    <select id="selDirection">
+                        <option value="m2i">Manado - Indonesia</option>
+                        <option value="i2m">Indonesia - Manado</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Info Dataset -->
+            <div class="card">
+                <div class="ds-header">
+                    <div>
+                        <h3 id="dsTitle">dataset_kamus.csv</h3>
+                        <p class="ds-subtitle" id="dsSubtitle">Kamus terjemahan Manado - Indonesia</p>
+                    </div>
+                    <span class="status-badge idle" id="statusBadge">
+                        <span class="dot"></span>
+                    <span id="statusText">idle</span>
+                    </span>
+                </div>
+
+                <div class="ds-row">
+                    <div class="ds-field">
+                        <span class="ds-label">File</span>
+                        <span id="dsFile">dataset_kamus.csv</span>
+                    </div>
+                    <div class="ds-field">
+                        <span class="ds-label">Jumlah Data</span>
+                        <span id="dsTotal">3,724 pasangan</span>
+                    </div>
+                </div>
+
+                <div class="ds-divider"></div>
+
+                <p class="ds-label">Distribusi Kata per Kategori</p>
+                <div class="ds-kategori">
+                    <div class="kat-item verb">
+                        <div class="kat-count" id="katVerb">1,926</div>
+                        <div class="kat-label">Kata Kerja</div>
+                    </div>
+                    <div class="kat-item noun">
+                        <div class="kat-count" id="katNoun">1,426</div>
+                        <div class="kat-label">Kata Benda</div>
+                    </div>
+                    <div class="kat-item adj">
+                        <div class="kat-count" id="katAdj">0</div>
+                        <div class="kat-label">Kata Sifat</div>
+                    </div>
+                    <div class="kat-item adv">
+                        <div class="kat-count" id="katAdv">372</div>
+                        <div class="kat-label">Kata Keterangan</div>
+                    </div>
+                </div>
+
+                <div class="ds-divider"></div>
+
+                <div class="ds-meta">
+                    <span>Pengimport: <b id="dsImporter">Reagen</b></span>
+                    <span>Tanggal: <b id="dsDate">2026-04-12</b></span>
+                </div>
+            </div>
+
+            <!-- Input Kalimat -->
+            <div class="card">
+                <h3>Uji Terjemahan Kalimat</h3>
+
+                <div class="form-group">
+                    <label class="input-label">Masukkan kalimat untuk diterjemahkan:</label>
+                    <textarea id="inputKalimat" class="input-textarea" placeholder="Ketik kalimat di sini..."></textarea>
+                </div>
+
+                <button class="btn primary btn-sm" id="btnTranslate" onclick="translateSentence()">Terjemahkan</button>
+
+                <div class="translate-result" id="translateResult">
+                    <div class="result-row">
+                        <span class="result-label">Sumber:</span>
+                        <span class="result-value" id="resultSource">—</span>
+                    </div>
+                    <div class="result-divider"></div>
+                    <div class="result-row">
+                        <span class="result-label">Hasil:</span>
+                        <span class="result-value result-output" id="resultOutput">—</span>
+                    </div>
+                    <div class="result-divider"></div>
+                    <div class="result-row">
+                        <span class="result-label">Model:</span>
+                        <span class="result-value" id="resultModel">—</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Arah:</span>
+                        <span class="result-value" id="resultDir">—</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Waktu:</span>
+                        <span class="result-value" id="resultTime">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn primary" id="btnStart" onclick="startTesting()">Mulai Testing</button>
+
+            <!-- Progress -->
+            <div class="card">
+                <div class="progress-header">
+                    <b>Progress Testing</b>
+                    <span class="run-badge" id="runBadge">#1</span>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <p id="progressText" class="progress-text">Menunggu...</p>
+
+                <div class="progress-summary" id="progressSummary">
+                    <span>Dataset: <b id="sumDataset">—</b></span>
+                    <span>Model: <b id="sumModel">—</b></span>
+                    <span>Arah: <b id="sumDir">—</b></span>
+                </div>
+            </div>
+
+            <!-- 9 Metrik -->
+            <div class="metrics">
+                <div class="metric-box" id="mAcc">
+                    <div class="metric-label">Accuracy</div>
+                    <h3 id="acc">0%</h3>
+                    <div class="small">Prediksi Benar</div>
+                </div>
+                <div class="metric-box" id="mPrec">
+                    <div class="metric-label">Precision</div>
+                    <h3 id="prec">0%</h3>
+                    <div class="small">Ketepatan</div>
+                </div>
+                <div class="metric-box" id="mF1">
+                    <div class="metric-label">F1-Score</div>
+                    <h3 id="f1">0%</h3>
+                    <div class="small">Harmonic Mean</div>
+                </div>
+                <div class="metric-box" id="mMacro">
+                    <div class="metric-label">Macro Avg</div>
+                    <h3 id="macro">0%</h3>
+                    <div class="small">Rata-rata Antar Kelas</div>
+                </div>
+                <div class="metric-box" id="mRec">
+                    <div class="metric-label">Recall</div>
+                    <h3 id="rec">0%</h3>
+                    <div class="small">Kelengkapan</div>
+                </div>
+                <div class="metric-box" id="mStd">
+                    <div class="metric-label">Standard Deviation</div>
+                    <h3 id="std">0%</h3>
+                    <div class="small">Penyebaran Data</div>
+                </div>
+                <div class="metric-box" id="mWeighted">
+                    <div class="metric-label">Weighted Avg</div>
+                    <h3 id="weighted">0%</h3>
+                    <div class="small">Bobot Kelas</div>
+                </div>
+                <div class="metric-box" id="mRoc">
+                    <div class="metric-label">ROC-AUC</div>
+                    <h3 id="roc">0%</h3>
+                    <div class="small">Kurva ROC</div>
+                </div>
+                <div class="metric-box" id="mMcc">
+                    <div class="metric-label">MCC</div>
+                    <h3 id="mcc">0%</h3>
+                    <div class="small">Korelasi Matthews</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="../js/testing.js"></script>
+
+</body>
+
+</html>
