@@ -6,6 +6,7 @@ import os
 import random
 import threading
 import uuid
+from pathlib import Path
 from statistics import mean
 from typing import Literal
 
@@ -31,6 +32,9 @@ _MBERT_JOBS_LOCK = threading.Lock()
 
 _INDOBERT_TOKENIZER: AutoTokenizer | None = None
 _MBERT_TOKENIZER: AutoTokenizer | None = None
+_ARTIFACTS_ROOT = Path(__file__).resolve().parents[1] / "artifacts"
+_MBERT_ARTIFACTS_ROOT = _ARTIFACTS_ROOT / "mbert"
+_MBERT_INDEX_PATH = _MBERT_ARTIFACTS_ROOT / "index.json"
 
 
 def _get_indobert_tokenizer() -> AutoTokenizer:
@@ -856,6 +860,18 @@ def _run_mbert_training_core(
         params.algo = "mbert"
         model_id = _save_model_result(payload, average)
         saved_rows = _save_epoch_results(model_id, params, epoch_results)
+        artifact_info = None
+        if str(params.mode or "").lower() == "training-final":
+            artifact_info = _save_mbert_artifact(
+                model=model,
+                tokenizer=_get_mbert_tokenizer(),
+                model_id=model_id,
+                payload=payload,
+                label2id=label2id,
+                id2label=id2label,
+                average=average,
+                best_epoch=best_epoch,
+            )
 
         return {
             "status": "done",
@@ -872,6 +888,7 @@ def _run_mbert_training_core(
             "bestEpoch": best_epoch,
             "modelId": model_id,
             "savedEpochRows": saved_rows,
+            "artifact": artifact_info,
             "datasetSize": total_samples,
             "trainSize": len(train_dataset),
             "testSize": len(test_dataset),
@@ -992,6 +1009,65 @@ def _save_epoch_results(model_id: int, params: TrainingParams, epoch_results: li
         # Be tolerant when epoch-detail table is not available in current Supabase schema.
         # Summary metrics are still persisted in `models`.
         return 0
+
+
+def _save_mbert_artifact(
+    *,
+    model: AutoModelForSequenceClassification,
+    tokenizer: AutoTokenizer,
+    model_id: int,
+    payload: TrainingRequest,
+    label2id: dict,
+    id2label: dict,
+    average: dict,
+    best_epoch: dict | None,
+) -> dict:
+    _MBERT_ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
+    run_token = uuid.uuid4().hex[:8]
+    out_dir = _MBERT_ARTIFACTS_ROOT / f"model_{model_id}_{run_token}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    model.save_pretrained(str(out_dir))
+    tokenizer.save_pretrained(str(out_dir))
+
+    metadata = {
+        "modelId": int(model_id),
+        "algo": "mbert",
+        "trainingName": payload.trainingName or "Untitled Training",
+        "modelName": payload.modelName or "Untitled Model",
+        "datasetId": payload.datasetId,
+        "splitRatio": payload.params.splitRatio,
+        "params": payload.params.model_dump(),
+        "label2id": label2id,
+        "id2label": {str(k): v for k, v in id2label.items()},
+        "average": average,
+        "bestEpoch": best_epoch,
+        "artifactDir": str(out_dir),
+    }
+    metadata_path = out_dir / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    index_data: dict[str, dict] = {}
+    if _MBERT_INDEX_PATH.exists():
+        try:
+            raw = json.loads(_MBERT_INDEX_PATH.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                index_data = raw
+        except Exception:
+            index_data = {}
+    index_data[str(model_id)] = {
+        "artifactDir": str(out_dir),
+        "metadataPath": str(metadata_path),
+        "modelName": metadata["modelName"],
+        "datasetId": payload.datasetId,
+        "splitRatio": payload.params.splitRatio,
+    }
+    _MBERT_INDEX_PATH.write_text(json.dumps(index_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "artifactDir": str(out_dir),
+        "metadataPath": str(metadata_path),
+    }
 
 
 @router.post("/train")
@@ -1261,6 +1337,24 @@ def get_mbert_training_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job mBERT tidak ditemukan")
     return job
+
+
+@router.get("/train-mbert/artifact/{model_id}")
+def get_mbert_artifact(model_id: int):
+    if model_id <= 0:
+        raise HTTPException(status_code=400, detail="model_id tidak valid")
+    if not _MBERT_INDEX_PATH.exists():
+        raise HTTPException(status_code=404, detail="Index artefak mBERT belum tersedia")
+    try:
+        raw = json.loads(_MBERT_INDEX_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Gagal membaca index artefak mBERT") from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="Format index artefak mBERT tidak valid")
+    item = raw.get(str(model_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Artefak mBERT untuk model_id ini tidak ditemukan")
+    return item
 
 
 @router.get("/model-ratio-results")

@@ -29,6 +29,7 @@ body::before {
     linear-gradient(90deg, rgba(44,31,14,0.04) 1px, transparent 1px);
   background-size: 40px 40px;
   z-index: 0;
+  pointer-events: none;
 }
 
 /* RADIAL GRADIENT */
@@ -41,6 +42,7 @@ body::after {
   top: -150px;
   right: -120px;
   z-index: 0;
+  pointer-events: none;
 }
 
 /* =========================
@@ -66,6 +68,8 @@ body::after {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
+  z-index: 3;
 }
 
 /* LOGO */
@@ -101,13 +105,17 @@ body::after {
   background: rgba(200,169,110,0.4);
 }
 
+.sidebar li:hover {
+  background: rgba(200,169,110,0.25);
+}
+
 /* NON-CLICKABLE SIDEBAR */
 .sidebar li {
   padding: 14px 20px;
   font-weight: 500;
   width: 100%;
   box-sizing: border-box;
-  pointer-events: none; /* 🔒 disable interaction */
+  cursor: pointer;
 }
 
 /* ACTIVE STEP */

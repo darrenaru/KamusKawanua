@@ -29,6 +29,7 @@ body::before {
     linear-gradient(90deg, rgba(44,31,14,0.04) 1px, transparent 1px);
   background-size: 40px 40px;
   z-index: 0;
+  pointer-events: none;
 }
 
 /* RADIAL */
@@ -41,6 +42,7 @@ body::after {
   top: -150px;
   right: -120px;
   z-index: 0;
+  pointer-events: none;
 }
 
 /* =========================
@@ -66,6 +68,8 @@ body::after {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
+  z-index: 3;
 }
 
 /* LOGO */
@@ -89,16 +93,32 @@ body::after {
 }
 
 .sidebar li {
-  padding: 14px 20px;
-  font-weight: 500;
   width: 100%;
   box-sizing: border-box;
-  pointer-events: none;
+}
+
+.sidebar li a {
+  display: block;
+  width: 100%;
+  padding: 14px 20px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 /* ACTIVE */
 .sidebar li.active {
   background: rgba(200,169,110,0.4);
+}
+
+.sidebar li:hover {
+  background: rgba(200,169,110,0.25);
+}
+
+.sidebar,
+.sidebar * {
+  pointer-events: auto;
 }
 
 /* =========================
@@ -278,33 +298,6 @@ body::after {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* =========================
-   NEXT BUTTON
-========================= */
-
-.next-container {
-  position: fixed;
-  bottom: 30px;
-  right: 40px;
-  z-index: 10;
-}
-
-#nextBtn {
-  padding: 12px 24px;
-  background: #2c1f0e;
-  color: white;
-  border: none;
-  border-radius: 999px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-#nextBtn:hover {
-  background: #3a2a12;
-  transform: scale(1.05);
 }
 
 .card-header {

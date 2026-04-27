@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Data Collection</title>
-  <link rel="stylesheet" href="../css/data-collection.css">
+  <link rel="stylesheet" href="../css/data-collection.css?v=2">
 </head>
 <body>
 
@@ -16,12 +16,12 @@
     </div>
 
     <ul>
-      <li onclick="goTo('dashboard.html')">Beranda</li>
-      <li class="active">Data Collection</li>
-      <li>Pre Processing</li>
-      <li>Processing</li>
-      <li>Testing</li>
-      <li>Evaluasi Performa Model</li>
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li class="active"><a href="data-collection.html">Data Collection</a></li>
+      <li><a href="preprocessing.html">Preprocessing</a></li>
+      <li><a href="processing.html">Processing</a></li>
+      <li><a href="testing.html">Testing</a></li>
+      <li><a href="evaluasi.html">Evaluasi</a></li>
     </ul>
   </div>
 
@@ -69,11 +69,6 @@
     <!-- DATA LIST -->
     <div id="datasetList" class="dataset-list"></div>
 
-    <!-- 🔥 NEXT BUTTON -->
-    <div class="next-container">
-        <button id="nextBtn" onclick="goToPreprocessing()">Lanjut →</button>
-    </div>
-
   </div>
 
 </div>
@@ -82,7 +77,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <!-- JS -->
-<script src="../js/data-collection.js"></script>
+<script src="../js/data-collection.js?v=2"></script>
 
 </body>
 </html>

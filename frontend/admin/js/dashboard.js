@@ -14,7 +14,6 @@ if (!isLoggedIn) {
 
 const buttons = document.querySelectorAll(".algo-btn");
 const info = document.getElementById("selectedInfo");
-const nextBtn = document.getElementById("nextBtn");
 
 // ==============================
 // LABEL MAP
@@ -69,22 +68,3 @@ window.onload = () => {
         applySelection(saved);
     }
 };
-
-// ==============================
-// NEXT BUTTON VALIDATION
-// ==============================
-
-nextBtn.addEventListener("click", () => {
-    const selected = localStorage.getItem("selectedAlgorithm");
-
-    if (!selected) {
-        alert("Pilih algoritma terlebih dahulu!");
-        return;
-    }
-
-    // 🔥 SIMPAN STATE (SUDAH ADA)
-    console.log("Lanjut dengan algoritma:", selected);
-
-    // 🔥 REDIRECT KE DATA COLLECTION
-    window.location.href = "../pages/data-collection.html";
-});

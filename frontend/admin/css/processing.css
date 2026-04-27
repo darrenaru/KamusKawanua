@@ -51,30 +51,42 @@ body::before {
   align-items: center;
   position: sticky;
   top: 0;
+  z-index: 2000;
 }
 
 .logo {
   margin-top: 20px;
   margin-bottom: 30px;
+  pointer-events: none;
 }
 .logo img {
   width: 220px;
   display: block;
+  pointer-events: none;
 }
 
 .sidebar ul {
   list-style: none;
   padding: 0;
   width: 100%;
+  position: relative;
+  z-index: 2;
 }
 
 .sidebar li {
-  padding: 14px 20px;
-  font-weight: 500;
   width: 100%;
   transition: all 0.2s ease;
-  cursor: pointer;
   color: var(--text);
+}
+
+.sidebar li a {
+  display: block;
+  width: 100%;
+  padding: 14px 20px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .sidebar li:hover {
@@ -91,6 +103,11 @@ body::before {
 .sidebar li.disabled-link {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.sidebar,
+.sidebar * {
+  pointer-events: auto;
 }
 
 .main {

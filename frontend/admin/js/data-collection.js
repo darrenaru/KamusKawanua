@@ -454,7 +454,3 @@ async function deleteDataset(datasetId) {
         alert("Gagal menghapus dataset");
     }
 }
-
-function goToPreprocessing() {
-    window.location.href = "preprocessing.html";
-}
