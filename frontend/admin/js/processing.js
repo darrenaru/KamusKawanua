@@ -967,104 +967,166 @@
   // ==================== INDOBERT PARAMETERS (DROPDOWN) ====================
   function generateIndoBERTParams() {
     return `
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="lr-options">
-          <option value="1e-5">1e-5</option>
-          <option value="2e-5">2e-5 (Recommended)</option>
-          <option value="3e-5">3e-5</option>
-          <option value="5e-5">5e-5</option>
-        </datalist>
+    <div class="layer-card">
+      <div class="layer-header">
+        <h4>1. Input Layer</h4>
+        <p>Parameter input dibedakan dari layer lain untuk menyesuaikan token teks yang masuk ke IndoBERT.</p>
       </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Contoh: 3" value="" min="1" max="100">
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Batch Size", "batch_size")}
+          <input type="text" id="batch-size" list="batch-size-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="batch-size-options">
+            <option value="8">8</option>
+            <option value="16">16 (Recommended)</option>
+            <option value="32">32</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Max Length", "max_length")}
+          <input type="text" id="max-length" list="max-length-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="max-length-options">
+            <option value="8">8</option>
+            <option value="16">16</option>
+            <option value="32">32</option>
+            <option value="64">64 (Recommended)</option>
+          </datalist>
+        </div>
       </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Batch Size", "batch_size")}
-        <input type="text" id="batch-size" list="batch-size-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="batch-size-options">
-          <option value="8">8</option>
-          <option value="16">16 (Recommended)</option>
-          <option value="32">32</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Max Length", "max_length")}
-        <input type="text" id="max-length" list="max-length-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="max-length-options">
-          <option value="8">8</option>
-          <option value="16">16 (Recommended)</option>
-          <option value="32">32</option>
-          <option value="64">64</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Optimizer", "optimizer")}
-        <input type="text" id="optimizer" list="optimizer-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="optimizer-options">
-          <option value="AdamW">AdamW (Recommended)</option>
-          <option value="Adam">Adam</option>
-          <option value="SGD">SGD</option>
-          <option value="RMSProp">RMSProp</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-        <input type="text" id="weight-decay" list="weight-decay-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="weight-decay-options">
-          <option value="0.0">0.0</option>
-          <option value="0.01">0.01 (Recommended)</option>
-          <option value="0.05">0.05</option>
-        </datalist>
+      <div class="param-row">
+        <div class="param-group">
+          <label>Input Representation</label>
+          <input type="text" value="WordPiece Tokens + [CLS]/[SEP]" disabled>
+          <small>Representasi input mengikuti tokenizer bawaan IndoBERT.</small>
+        </div>
+        <div class="param-group">
+          <label>Attention Mask</label>
+          <input type="text" value="Automatic" disabled>
+          <small>Otomatis dibentuk saat fine-tuning.</small>
+        </div>
       </div>
     </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Scheduler", "scheduler")}
-        <input type="text" id="scheduler" list="scheduler-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="scheduler-options">
-          <option value="linear">Linear (Recommended)</option>
-          <option value="cosine">Cosine</option>
-          <option value="step">Step</option>
-          <option value="exponential">Exponential</option>
-          <option value="constant">Constant</option>
-        </datalist>
+
+    <div class="layer-card">
+      <div class="layer-header">
+        <h4>2. Hidden Layer</h4>
+        <p>Hyperparameter fine-tuning encoder IndoBERT dan classifier head.</p>
       </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Dropout", "dropout")}
-        <input type="text" id="dropout" list="dropout-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="dropout-options">
-          <option value="0.1">0.1 (Recommended)</option>
-          <option value="0.2">0.2</option>
-          <option value="0.3">0.3</option>
-        </datalist>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Learning Rate", "lr")}
+          <input type="text" id="lr" list="lr-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="lr-options">
+            <option value="1e-5">1e-5</option>
+            <option value="2e-5">2e-5 (Recommended)</option>
+            <option value="3e-5">3e-5</option>
+            <option value="5e-5">5e-5</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Epoch", "epoch")}
+          <input type="number" id="epoch" placeholder="Contoh: 3" value="" min="1" max="100">
+        </div>
+      </div>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Optimizer", "optimizer")}
+          <input type="text" id="optimizer" list="optimizer-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="optimizer-options">
+            <option value="AdamW">AdamW (Recommended)</option>
+            <option value="Adam">Adam</option>
+            <option value="SGD">SGD</option>
+            <option value="RMSProp">RMSProp</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
+          <input type="text" id="weight-decay" list="weight-decay-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="weight-decay-options">
+            <option value="0.0">0.0</option>
+            <option value="0.01">0.01 (Recommended)</option>
+            <option value="0.05">0.05</option>
+          </datalist>
+        </div>
+      </div>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Scheduler", "scheduler")}
+          <input type="text" id="scheduler" list="scheduler-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="scheduler-options">
+            <option value="linear">Linear (Recommended)</option>
+            <option value="cosine">Cosine</option>
+            <option value="step">Step</option>
+            <option value="exponential">Exponential</option>
+            <option value="constant">Constant</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Warmup Ratio", "warmup")}
+          <input type="text" id="warmup" list="warmup-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="warmup-options">
+            <option value="0.0">0.0</option>
+            <option value="0.1">0.1 (Recommended)</option>
+            <option value="0.2">0.2</option>
+            <option value="0.3">0.3</option>
+          </datalist>
+        </div>
+      </div>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Dropout", "dropout")}
+          <input type="text" id="dropout" list="dropout-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="dropout-options">
+            <option value="0.1">0.1 (Recommended)</option>
+            <option value="0.2">0.2</option>
+            <option value="0.3">0.3</option>
+          </datalist>
+          <small>Dropout dan weight decay bekerja pada classifier head saat fine-tuning.</small>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
+          <input type="text" id="grad-accum" list="grad-accum-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="grad-accum-options">
+            <option value="1">1 (Recommended)</option>
+            <option value="2">2</option>
+            <option value="4">4</option>
+          </datalist>
+        </div>
       </div>
     </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-        <input type="text" id="early-stopping" list="early-stopping-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="early-stopping-options">
-          <option value="0">Nonaktif</option>
-          <option value="2">Aktif (patience 2) (Recommended)</option>
-          <option value="3">Aktif (patience 3)</option>
-        </datalist>
+
+    <div class="layer-card">
+      <div class="layer-header">
+        <h4>3. Output Layer</h4>
+        <p>Konfigurasi keluaran untuk klasifikasi fine-tuning dengan Softmax.</p>
       </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-        <input type="text" id="grad-accum" list="grad-accum-options" placeholder="Pilih atau ketik manual" value="">
-        <datalist id="grad-accum-options">
-          <option value="1">1 (Recommended)</option>
-          <option value="2">2</option>
-          <option value="4">4</option>
-        </datalist>
+      <div class="param-row">
+        <div class="param-group">
+          <label>Output Activation</label>
+          <input type="text" value="Softmax" disabled>
+          <small>Hasil akhir menggunakan Softmax untuk probabilitas kelas.</small>
+        </div>
+        <div class="param-group">
+          <label>Loss Function</label>
+          <input type="text" value="Cross Entropy" disabled>
+          <small>Loss utama untuk klasifikasi multi-class.</small>
+        </div>
+      </div>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
+          <input type="text" id="early-stopping" list="early-stopping-options" placeholder="Pilih atau ketik manual" value="">
+          <datalist id="early-stopping-options">
+            <option value="0">Nonaktif</option>
+            <option value="2">Aktif (patience 2) (Recommended)</option>
+            <option value="3">Aktif (patience 3)</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          <label>Prediction Target</label>
+          <input type="text" value="Label Class" disabled>
+          <small>Neuron output mewakili jumlah label pada dataset.</small>
+        </div>
       </div>
     </div>
   `;
