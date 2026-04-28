@@ -64,13 +64,17 @@
       </div>
 
       <!-- BUTTON -->
-      <button id="processBtn" disabled>Mulai Preprocessing</button>
+      <div class="action-row">
+        <button id="processBtn" disabled>Mulai Preprocessing</button>
+        <button id="cancelProcessBtn" style="display:none;" disabled>Cancel Preprocessing</button>
+      </div>
+      <button id="continueBtn" style="display:none;">Lanjut ke Processing</button>
       
       <div class="progress-container" id="progressContainer">
         <div id="progressBar" class="progress-bar"></div>
       </div>
 
-      <p id="progressText"></p>
+      <p id="progressText" class="progress-text">Pilih dataset, lalu klik Mulai Preprocessing</p>
     </div>
 
   </div>

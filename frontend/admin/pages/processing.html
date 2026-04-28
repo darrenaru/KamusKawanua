@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Processing - Kamus Kawanua</title>
+    <link rel="stylesheet" href="../css/processing.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="logo">
+          <img src="../../assets/images/logo.png" alt="Logo" />
+        </div>
+
+        <ul>
+          <li class="disabled-link">Beranda</li>
+          <li class="disabled-link">Data Collection</li>
+          <li class="disabled-link">Pre Processing</li>
+          <li class="active">Processing</li>
+          <li class="disabled-link">Testing</li>
+          <li class="disabled-link">Evaluasi Performa Model</li>
+        </ul>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="main">
+        <div class="main-header">
+          <h1>Processing</h1>
+          <button class="manual-btn" id="manual-btn" title="Manual Book">
+            ?
+          </button>
+        </div>
+
+        <div class="processing-container">
+          <!-- SECTION RASIO DATA SPLIT -->
+          <div class="ratio-section">
+            <div class="ratio-header">
+              <h3>Split Data Ratio</h3>
+            </div>
+
+            <div class="ratio-input-group">
+              <div class="ratio-input">
+                <label class="label-with-help">
+                  <span>Train (%)</span>
+                  <span class="param-help-icon">i
+                    <span class="param-help-tooltip">
+                      <strong>Fungsi:</strong> Menentukan porsi data untuk melatih model.<br />
+                      <strong>Dampak:</strong> Nilai lebih besar memberi lebih banyak contoh belajar.<br />
+                      <strong>Risiko:</strong> Terlalu besar membuat data uji terlalu sedikit.
+                    </span>
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  id="train-input"
+                  min="1"
+                  max="99"
+                  placeholder="Contoh: 80"
+                />
+              </div>
+              <div class="ratio-input">
+                <label class="label-with-help">
+                  <span>Test (%)</span>
+                  <span class="param-help-icon">i
+                    <span class="param-help-tooltip">
+                      <strong>Fungsi:</strong> Menentukan porsi data untuk evaluasi model.<br />
+                      <strong>Dampak:</strong> Nilai lebih besar membuat evaluasi lebih representatif.<br />
+                      <strong>Risiko:</strong> Terlalu besar mengurangi data train, model bisa kurang belajar.
+                    </span>
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  id="test-input"
+                  min="1"
+                  max="99"
+                  placeholder="Otomatis / Manual"
+                />
+              </div>
+              <button class="btn-ratio-primary" id="btn-add-ratio">Add</button>
+            </div>
+
+            <div class="ratio-table-container">
+              <table class="ratio-table" id="ratio-table">
+                <thead>
+                  <tr>
+                    <th>Train</th>
+                    <th>Test</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="ratio-table-body"></tbody>
+              </table>
+            </div>
+
+            <div
+              class="ratio-empty-state"
+              id="ratio-empty-state"
+              style="display: none"
+            >
+              <p>There are no data ratios yet. Add a new ratio.</p>
+            </div>
+          </div>
+
+          <!-- TOP CONTROLS -->
+          <div class="top-controls">
+            <select id="algo-select">
+              <option value="" disabled selected>Select Algorithm</option>
+              <option value="indobert">IndoBERT</option>
+              <option value="mbert">mBERT</option>
+              <option value="xlm-r">XLM-R</option>
+              <option value="glove">GloVe</option>
+              <option value="word2vec">Word2Vec</option>
+            </select>
+
+            <button class="btn-secondary" id="btn-pilih-dataset" type="button">
+              Select Dataset
+            </button>
+
+            <select id="model-select">
+              <option value="" disabled selected>Select Model</option>
+              <option value="baru">Create a New Model</option>
+              <option value="lama">Select Old Model</option>
+            </select>
+
+            <div class="mode-selection">
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="training-mode"
+                  value="cari-rasio"
+                  checked
+                />
+                <span>Find the Best Ratio</span>
+              </label>
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="training-mode"
+                  value="training-final"
+                />
+                <span>Final Training Using the Best Ratio</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- CARD DATASET DIPILIH -->
+          <div class="file-card" id="dataset-card" style="display: none">
+            <p class="file-card-label">Datasets</p>
+            <p class="file-card-name" id="dataset-card-name">—</p>
+          </div>
+
+          <div class="final-best-ratio-badge" id="final-best-ratio-badge" style="display: none">
+            Using best ratio: <strong id="final-best-ratio-text">-</strong>
+          </div>
+
+          <!-- CARD MODEL LAMA DIPILIH -->
+          <div class="file-card" id="model-card" style="display: none">
+            <p class="file-card-label">Selected Model</p>
+            <p class="file-card-name" id="model-card-name">—</p>
+          </div>
+
+          <!-- CARD NAMA MODEL BARU -->
+          <div class="file-card" id="new-model-name-card" style="display: none">
+            <p class="file-card-label">📝 New Model Name</p>
+            <input
+              type="text"
+              id="new-model-name"
+              placeholder="Enter new model name"
+              style="
+                flex: 1;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+              "
+            />
+            <button
+              class="btn-small"
+              id="btn-simpan-nama"
+              style="margin-left: 10px"
+            >
+              Save
+            </button>
+          </div>
+
+          <!-- PARAMETER CARD - Mode Cari Rasio Terbaik -->
+          <div class="parameter-card" id="param-card-cari-rasio">
+            <h3 style="margin-bottom: 20px">Find the Best Ratio</h3>
+
+            <div id="dynamic-params-cari-rasio"></div>
+
+            <div
+              style="
+                display: flex;
+                justify-content: flex-end;
+                gap: 15px;
+                margin-top: 20px;
+              "
+            >
+              <button class="btn-mulai" id="btn-mulai-cari">
+                Start Searching
+              </button>
+            </div>
+          </div>
+
+          <!-- PARAMETER CARD - Mode Training Final -->
+          <div
+            class="parameter-card"
+            id="param-card-training-final"
+            style="display: none"
+          >
+            <h3 style="margin-bottom: 20px">
+              Mode: Final Training with the Best Ratio
+            </h3>
+
+            <div
+              class="training-final-form"
+              style="
+                margin-bottom: 20px;
+                padding: 20px;
+                background: #f8f6f2;
+                border-radius: 12px;
+              "
+            >
+              <div class="param-row">
+                <div class="param-group">
+                  <label class="label-with-help">
+                    <span>📝 Training Name</span>
+                    <span class="param-help-icon">i
+                      <span class="param-help-tooltip">
+                        <strong>Fungsi:</strong> Nama identitas eksperimen training.<br />
+                        <strong>Dampak:</strong> Memudahkan membedakan hasil antar percobaan.<br />
+                        <strong>Risiko:</strong> Nama tidak jelas membuat tracking hasil jadi membingungkan.
+                      </span>
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    id="training-name"
+                    placeholder="Example: IndoBERT-Final-v2"
+                    style="width: 100%"
+                  />
+                </div>
+                <div class="param-group">
+                  <label class="label-with-help">
+                    <span>📊 Description</span>
+                    <span class="param-help-icon">i
+                      <span class="param-help-tooltip">
+                        <strong>Fungsi:</strong> Catatan konteks training (dataset/tujuan/perubahan).<br />
+                        <strong>Dampak:</strong> Membantu interpretasi hasil saat review ulang.<br />
+                        <strong>Risiko:</strong> Kosong/tidak jelas menyulitkan evaluasi eksperimen.
+                      </span>
+                    </span>
+                  </label>
+                  <textarea
+                    id="training-desc"
+                    placeholder="Additional notes (optional)"
+                    rows="2"
+                    style="width: 100%; resize: vertical"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- 🔧 TAMBAHAN: RIWAYAT TRAINING -->
+            <div class="history-section" style="margin-bottom: 25px">
+              <h4
+                style="
+                  margin-bottom: 15px;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                "
+              >
+                Training Log
+                <span style="font-size: 12px; font-weight: normal; color: #888"
+                  >(Data tersimpan di browser)</span
+                >
+              </h4>
+              <div
+                class="table-container"
+                style="max-height: 200px; overflow-y: auto"
+              >
+                <table class="history-table" id="history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Training Name</th>
+                      <th>Ratio</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-body">
+                    <tr class="empty-row">
+                      <td
+                        colspan="4"
+                        style="text-align: center; color: #999; padding: 20px"
+                      >
+                        No training history yet
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="dynamic-params-training-final"></div>
+
+            <div
+              style="display: flex; justify-content: flex-end; margin-top: 20px"
+            >
+              <button class="btn-mulai" id="btn-mulai-training">
+                Start Final Training
+              </button>
+            </div>
+          </div>
+
+          <!-- TRAINING CARD CONTAINER - Untuk menampung multiple training cards -->
+          <div
+            id="training-cards-container"
+            style="display: flex; flex-direction: column; gap: 20px"
+          ></div>
+
+          <!-- TABEL PERBANDINGAN ANTAR RASIO -->
+          <div
+            id="ratio-comparison-section"
+            style="display: none; margin-top: 30px"
+          >
+            <h3 style="margin-bottom: 15px">Ratio Comparison</h3>
+            <div class="table-container">
+              <table class="comparison-table" id="comparison-table">
+                <thead>
+                  <tr>
+                    <th>Rasio Split Data</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1-Score</th>
+                    <th>Loss</th>
+                    <th>MCC</th>
+                  </tr>
+                </thead>
+                <tbody id="comparison-body">
+                  <tr class="empty-row">
+                    <td colspan="7" style="text-align: center; color: #999">
+                      No comparison data available
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- GLOBAL BEST PARAMS DISPLAY -->
+          <div
+            id="best-params-display"
+            style="
+              display: none;
+              padding: 20px;
+              background: #eeebe6;
+              border-radius: 20px;
+              margin-top: 20px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <div>
+                <h4 style="margin-bottom: 10px">Best Parameters Found:</h4>
+                <div class="best-params-content"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TRAINING CARD (Progress & Tabel Hasil) - Template -->
+          <template id="training-card-template">
+            <div class="training-card">
+              <div
+                class="training-header"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                  margin-bottom: 15px;
+                "
+              >
+                <div>
+                  <h3 class="training-title">
+                    #<span class="training-number">1</span> Best Ratio Search
+                  </h3>
+                  <p
+                    class="training-params-info"
+                    style="font-size: 13px; color: #666; margin-top: 5px"
+                  ></p>
+                </div>
+                <button
+                  class="btn-remove-training"
+                  title="Delete this training result"
+                  style="
+                    background: none;
+                    border: none;
+                    font-size: 20px;
+                    cursor: pointer;
+                    color: #999;
+                  "
+                >
+                  ✕
+                </button>
+              </div>
+
+              <!-- Progress Bar -->
+              <div class="progress-wrap">
+                <div class="progress-bar">
+                  <span class="progress-label">0%</span>
+                </div>
+              </div>
+
+              <div class="loading-visual" style="display: none">
+                <span class="loading-spinner"></span>
+                <span class="loading-text">Training sedang diproses...</span>
+              </div>
+
+              <div class="progress-visualizer">
+                <div class="progress-visualizer-header">
+                  <span>Training Activity</span>
+                </div>
+                <ul class="progress-log-list">
+                  <li class="progress-log-item log-info">
+                    Menunggu proses dimulai...
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Tabel Hasil Training -->
+              <div class="results-section">
+                <div
+                  style="
+                    display: flex;
+                    align-items: baseline;
+                    gap: 15px;
+                    margin: 20px 0 15px;
+                  "
+                >
+                  <h4 style="margin: 0; font-size: 18px">
+                    Hasil
+                    <span
+                      class="result-ratio-display"
+                      style="color: var(--accent); font-weight: 700"
+                      >—</span
+                    >
+                  </h4>
+                </div>
+
+                <div class="table-container">
+                  <table class="results-table">
+                    <thead>
+                      <tr>
+                        <th>Epoch</th>
+                        <th>Accuracy</th>
+                        <th>Precision</th>
+                        <th>Recall</th>
+                        <th>F1-Score</th>
+                        <th>Loss</th>
+                        <th>MCC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="empty-row">
+                        <td colspan="7" style="text-align: center; color: #999">
+                          No training results available
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot class="average-row" style="display: none">
+                      <tr
+                        style="
+                          background: #f0ede8;
+                          font-weight: 600;
+                          border-top: 2px solid var(--accent);
+                        "
+                      >
+                        <td><strong>Average</strong></td>
+                        <td class="avg-accuracy">-</td>
+                        <td class="avg-precision">-</td>
+                        <td class="avg-recall">-</td>
+                        <td class="avg-f1">-</td>
+                        <td class="avg-loss">-</td>
+                        <td class="avg-mcc">-</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Tombol Aksi -->
+              <div
+                style="
+                  display: flex;
+                  justify-content: flex-end;
+                  gap: 15px;
+                  margin-top: 20px;
+                "
+              >
+                <button
+                  class="btn-gunakan-terbaik-card btn-small-outline"
+                  style="display: none"
+                >
+                  Use Best Model
+                </button>
+                <button class="btn-simpan-card btn-small" style="display: none">
+                  Save Model
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <!-- /processing-container -->
+      </main>
+    </div>
+    <!-- /layout -->
+
+    <!-- MODAL MANUAL BOOK -->
+    <div id="modal-manual" class="modal-overlay">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>Manual Book - Training Parameter Guide</h3>
+          <button onclick="closeManualBook()" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="manual-section">
+            <h4>🎯 Percentage Split (Train:Test)</h4>
+            <p>
+              <strong>Function:</strong> Divides the dataset into training and
+              testing data.
+            </p>
+            <p>
+              <strong>Input:</strong> Enter a number for training (e.g., 80 will
+              automatically become 80:20)
+            </p>
+            <p>
+              <strong>Recommendation:</strong> <strong>80</strong> (80%
+              training, 20% testing)
+            </p>
+            <p>
+              <strong>Reason:</strong> The 80:20 ratio provides sufficient data
+              for training (80%) while still reserving representative data for
+              testing (20%).
+            </p>
+          </div>
+
+          <!-- INDOBERT -->
+          <div class="algo-section">
+            <h3>🤖 IndoBERT</h3>
+
+            <div class="manual-section">
+              <h4>📊 Learning Rate</h4>
+              <p><strong>Range:</strong> 1e-5 (0.00001) until 5e-5 (0.00005)</p>
+              <p>
+                <strong>Recommendation:</strong> <strong>2e-5 (0.00002)</strong>
+              </p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔄 Epoch</h4>
+              <p><strong>Range:</strong> 2 - 5</p>
+              <p><strong>Recommendation:</strong> <strong>3</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📦 Batch Size</h4>
+              <p><strong>Range:</strong> 8 - 32</p>
+              <p><strong>Recommendation:</strong> <strong>16</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📏 Max Length</h4>
+              <p><strong>Range:</strong> 8 - 32</p>
+              <p><strong>Recommendation:</strong> <strong>32</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚙️ Optimizer</h4>
+              <p>
+                <strong>Recommendation:</strong>
+                <strong>AdamW</strong>
+              </p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚖️ Weight Decay</h4>
+              <p><strong>Recommendation:</strong> <strong>0.01</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏰ Scheduler</h4>
+              <p><strong>Recommendation:</strong> <strong>Linear</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔥 Warmup Steps</h4>
+              <p><strong>Recommendation:</strong> <strong>~10%</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>💧 Dropout</h4>
+              <p><strong>Recommendation:</strong> <strong>0.1</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏹️ Early Stopping</h4>
+              <p><strong>Recommendation:</strong> <strong>2</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📚 Gradient Accumulation</h4>
+              <p><strong>Recommendation:</strong> <strong>1</strong></p>
+            </div>
+          </div>
+
+          <!-- mBERT -->
+          <div class="algo-section">
+            <h3>🌐 mBERT</h3>
+
+            <div class="manual-section">
+              <h4>📊 Learning Rate</h4>
+              <p><strong>Range:</strong> 1e-5 hingga 5e-5</p>
+              <p>
+                <strong>Recommendation:</strong> <strong>2e-5 - 3e-5</strong>
+              </p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔄 Epoch</h4>
+              <p><strong>Range:</strong> 2 - 5</p>
+              <p><strong>Recommendation:</strong> <strong>3 - 4</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📦 Batch Size</h4>
+              <p><strong>Range:</strong> 8 - 32</p>
+              <p><strong>Recommendation:</strong> <strong>16 - 32</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📏 Max Length</h4>
+              <p><strong>Range:</strong> 8 - 256</p>
+              <p><strong>Recommendation:</strong> <strong>32 - 128</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚙️ Optimizer</h4>
+              <p><strong>Recommendation:</strong> <strong>AdamW</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚖️ Weight Decay</h4>
+              <p><strong>Range:</strong> 0.01 - 0.1</p>
+              <p><strong>Recommendation:</strong> <strong>0.01</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏰ Scheduler</h4>
+              <p><strong>Pilihan:</strong> Linear, Cosine, Constant</p>
+              <p><strong>Recommendation:</strong> <strong>Linear</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔥 Warmup Ratio</h4>
+              <p><strong>Range:</strong> 0.0 - 0.3</p>
+              <p><strong>Recommendation:</strong> <strong>0.1 (10%)</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>💧 Dropout</h4>
+              <p><strong>Range:</strong> 0.0 - 0.5</p>
+              <p><strong>Recommendation:</strong> <strong>0.1</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏹️ Early Stopping</h4>
+              <p><strong>Range:</strong> 2 - 5</p>
+              <p><strong>Recommendation:</strong> <strong>2 - 3</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📚 Gradient Accumulation</h4>
+              <p><strong>Range:</strong> 1 - 4</p>
+              <p><strong>Recommendation:</strong> <strong>1 - 2</strong></p>
+            </div>
+          </div>
+
+          <!-- XLM-R -->
+          <div class="algo-section">
+            <h3>🚀 XLM-R</h3>
+
+            <div class="manual-section">
+              <h4>📊 Learning Rate</h4>
+              <p><strong>Range:</strong> 1e-5 hingga 2e-5</p>
+              <p><strong>Recommendation:</strong> <strong>1e-5</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔄 Epoch</h4>
+              <p><strong>Range:</strong> 3 - 5</p>
+              <p><strong>Recommendation:</strong> <strong>3 - 4</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📦 Batch Size</h4>
+              <p><strong>Range:</strong> 8 - 32</p>
+              <p><strong>Recommendation:</strong> <strong>8 - 16</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📏 Max Length</h4>
+              <p><strong>Range:</strong> 8 - 256</p>
+              <p><strong>Recommendation:</strong> <strong>32 - 128</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚙️ Optimizer</h4>
+              <p><strong>Recommendation:</strong> <strong>AdamW</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⚖️ Weight Decay</h4>
+              <p><strong>Recommendation:</strong> <strong>0.01</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏰ Scheduler</h4>
+              <p><strong>Recommendation:</strong> <strong>Linear</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔥 Warmup Steps</h4>
+              <p><strong>Recommendation:</strong> <strong>10%</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>💧 Dropout</h4>
+              <p><strong>Recommendation:</strong> <strong>0.1</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>⏹️ Early Stopping</h4>
+              <p><strong>Recommendation:</strong> <strong>2</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📚 Gradient Accumulation</h4>
+              <p><strong>Recommendation:</strong> <strong>1</strong></p>
+            </div>
+          </div>
+
+          <!-- Word2Vec -->
+          <div class="algo-section">
+            <h3>📝 Word2Vec</h3>
+
+            <div class="manual-section">
+              <h4>📐 Vector Size</h4>
+              <p><strong>Range:</strong> 100 - 200</p>
+              <p><strong>Recommendation:</strong> <strong>100</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🪟 Window Size</h4>
+              <p><strong>Recommendation:</strong> <strong>5</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔢 Min Count</h4>
+              <p><strong>Recommendation:</strong> <strong>1</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📊 Learning Rate</h4>
+              <p><strong>Recommendation:</strong> <strong>0.025</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔄 Epoch</h4>
+              <p><strong>Recommendation:</strong> <strong>50</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🎯 Model Type</h4>
+              <p><strong>Pilihan:</strong> CBOW atau Skip-gram</p>
+              <p><strong>Recommendation:</strong> <strong>Skip-gram</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🎲 Negative Sampling</h4>
+              <p><strong>Recommendation:</strong> <strong>5</strong></p>
+            </div>
+          </div>
+
+          <!-- GloVe -->
+          <div class="algo-section">
+            <h3>🧤 GloVe</h3>
+
+            <div class="manual-section">
+              <h4>📐 Vector Size</h4>
+              <p><strong>Range:</strong> 100 - 200</p>
+              <p><strong>Recommendation:</strong> <strong>100</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🪟 Window Size</h4>
+              <p><strong>Recommendation:</strong> <strong>5</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔢 Min Count</h4>
+              <p><strong>Recommendation:</strong> <strong>1</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📊 Learning Rate</h4>
+              <p><strong>Recommendation:</strong> <strong>0.05</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>🔄 Epoch</h4>
+              <p><strong>Recommendation:</strong> <strong>50</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>📈 X_max</h4>
+              <p><strong>Recommendation:</strong> <strong>100</strong></p>
+            </div>
+
+            <div class="manual-section">
+              <h4>α (Alpha)</h4>
+              <p><strong>Recommendation:</strong> <strong>0.75</strong></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DATASET SELECTION -->
+    <div id="modal-dataset" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Select Pre-processed Dataset</h3>
+        <div class="modal-body">
+          <p>Select the dataset that has already undergone preprocessing:</p>
+          <ul class="model-list" id="dataset-list">
+            <li data-ratio="80" data-kfold="5">dataset_cleaned_v1.csv</li>
+            <li data-ratio="70" data-kfold="">dataset_normalized_v2.csv</li>
+            <li data-ratio="80" data-kfold="10">dataset_tokenized_v3.csv</li>
+            <li data-ratio="90" data-kfold="5">dataset_cv_k5.csv</li>
+            <li data-ratio="50" data-kfold="">dataset_stemmed_v4.csv</li>
+          </ul>
+        </div>
+        <div
+          class="modal-footer"
+          style="
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+          "
+        >
+          <button onclick="closeModalDataset()" class="btn-close-outline">
+            Cancel
+          </button>
+          <button onclick="pilihDataset()" class="btn-close">Select</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL MODEL LAMA -->
+    <div id="modal-lama" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Trained Models List</h3>
+        <div class="modal-body">
+          <ul class="model-list" id="model-list">
+            <li
+              data-algo="indobert"
+              data-lr="0.00002"
+              data-epoch="3"
+              data-batch="16"
+              data-maxlen="32"
+              data-ratio="80"
+              data-kfold="5"
+              data-optimizer="AdamW"
+              data-weight-decay="0.01"
+              data-scheduler="linear"
+              data-warmup="0.1"
+              data-dropout="0.1"
+              data-early-stopping="2"
+              data-grad-accum="1"
+            >
+              IndoBERT-Final-v1
+            </li>
+            <li
+              data-algo="mbert"
+              data-lr="0.00003"
+              data-epoch="4"
+              data-batch="32"
+              data-maxlen="64"
+              data-ratio="70"
+              data-kfold=""
+              data-optimizer="AdamW"
+              data-weight-decay="0.01"
+              data-scheduler="linear"
+              data-warmup="0.1"
+              data-dropout="0.1"
+              data-early-stopping="3"
+              data-grad-accum="2"
+            >
+              mBERT-Kawanua-Base
+            </li>
+            <li
+              data-algo="xlm-r"
+              data-lr="0.00001"
+              data-epoch="3"
+              data-batch="8"
+              data-maxlen="128"
+              data-ratio="80"
+              data-kfold="5"
+              data-optimizer="AdamW"
+              data-weight-decay="0.01"
+              data-scheduler="linear"
+              data-warmup="0.1"
+              data-dropout="0.1"
+              data-early-stopping="2"
+              data-grad-accum="1"
+            >
+              XLM-R-Large-v2
+            </li>
+            <li
+              data-algo="word2vec"
+              data-lr="0.025"
+              data-epoch="50"
+              data-vector-size="100"
+              data-window-size="5"
+              data-min-count="1"
+              data-model-type="skip-gram"
+              data-negative="5"
+              data-ratio="80"
+            >
+              Word2Vec-SkipGram-v1
+            </li>
+            <li
+              data-algo="glove"
+              data-lr="0.05"
+              data-epoch="50"
+              data-vector-size="100"
+              data-window-size="5"
+              data-min-count="1"
+              data-x-max="100"
+              data-alpha="0.75"
+              data-ratio="80"
+            >
+              GloVe-Enhanced-v1
+            </li>
+          </ul>
+        </div>
+        <div
+          class="modal-footer"
+          style="display: flex; justify-content: flex-end; margin-top: 20px"
+        >
+          <button onclick="closeModalLama()" class="btn-close-outline">
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="history-detail-modal" class="modal-overlay" style="display: none">
+      <div class="modal-content modal-large" style="max-width: 950px">
+        <div class="modal-header">
+          <h3>📋 Detail Training Final</h3>
+          <button onclick="closeHistoryDetailModal()" class="close-btn">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Info Training -->
+          <div
+            class="history-detail-info"
+            style="
+              margin-bottom: 20px;
+              padding: 15px;
+              background: #f8f6f2;
+              border-radius: 10px;
+            "
+          >
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+              "
+            >
+              <div>
+                <strong>Training Name:</strong>
+                <span id="detail-training-name">-</span>
+              </div>
+              <div>
+                <strong>Model Name:</strong>
+                <span id="detail-model-name">-</span>
+              </div>
+              <div>
+                <strong>Split Ratio:</strong> <span id="detail-ratio">-</span>
+              </div>
+              <div><strong>Date:</strong> <span id="detail-date">-</span></div>
+              <div>
+                <strong>Algorithm:</strong> <span id="detail-algo">-</span>
+              </div>
+            </div>
+            <div style="margin-top: 15px">
+              <strong>Description:</strong>
+              <p id="detail-desc" style="margin-top: 5px; color: #666">-</p>
+            </div>
+            <details style="margin-top: 15px">
+              <summary
+                style="cursor: pointer; font-weight: 600; color: var(--accent)"
+              >
+                View Parameters
+              </summary>
+              <div
+                id="detail-params"
+                style="
+                  margin-top: 10px;
+                  padding: 10px;
+                  background: white;
+                  border-radius: 8px;
+                  font-size: 13px;
+                "
+              ></div>
+            </details>
+          </div>
+
+          <!-- Tabel Hasil Training -->
+          <h4 style="margin-bottom: 15px">Training Results</h4>
+          <div class="table-container">
+            <table class="results-table" id="history-results-table">
+              <thead>
+                <tr>
+                  <th>Epoch</th>
+                  <th>Accuracy</th>
+                  <th>Precision</th>
+                  <th>Recall</th>
+                  <th>F1-Score</th>
+                  <th>Loss</th>
+                  <th>MCC</th>
+                </tr>
+              </thead>
+              <tbody id="history-results-body">
+                <tr>
+                  <td colspan="7" style="text-align: center">-</td>
+                </tr>
+              </tbody>
+              <tfoot
+                id="history-average-row"
+                style="
+                  background: #f0ede8;
+                  font-weight: 600;
+                  border-top: 2px solid var(--accent);
+                "
+              >
+                <!-- Diisi oleh JavaScript -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer" style="margin-top: 20px">
+          <button onclick="closeHistoryDetailModal()" class="btn-close-outline">
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast-notif" class="toast"></div>
+
+    <!-- SUPABASE -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/processing.js"></script>
+  </body>
+</html>

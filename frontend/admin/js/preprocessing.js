@@ -6,6 +6,28 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 let datasets = [];
 let selectedDataset = null;
 let isProcessing = false;
+let preprocessJobId = null;
+let cancelRequested = false;
+
+// ==============================
+// CLEAN PIPELINE
+// ==============================
+function cleanText(text) {
+    if (!text) return "";
+
+    text = text.toLowerCase();
+
+    // remove symbol & angka
+    text = text.replace(/[^a-zA-Z\s]/g, "");
+
+    // remove double char (cooool → cool)
+    text = text.replace(/(.)\1{2,}/g, "$1$1");
+
+    // remove extra space
+    text = text.replace(/\s+/g, " ").trim();
+
+    return text;
+}
 
 // ==============================
 // LOAD DATASET
@@ -68,6 +90,10 @@ function selectDataset(ds) {
     selectedDataset = ds;
 
     document.getElementById("processBtn").disabled = ds.is_preprocessed;
+    document.getElementById("cancelProcessBtn").style.display = "none";
+    document.getElementById("cancelProcessBtn").disabled = true;
+    const continueBtn = document.getElementById("continueBtn");
+    continueBtn.style.display = ds.is_preprocessed ? "block" : "none";
 
     document.getElementById("datasetCard").style.display = "block";
 
@@ -80,10 +106,19 @@ function selectDataset(ds) {
     document.getElementById("keterangan").innerText = ds.kata_keterangan;
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
+    updateProgressUI(0, "Siap diproses");
+}
+
+function goToProcessing() {
+    if (selectedDataset?.id) {
+        localStorage.setItem("processing_selected_dataset_id", String(selectedDataset.id));
+        localStorage.setItem("processing_selected_dataset_name", selectedDataset.name || "");
+    }
+    window.location.href = "processing.html";
 }
 
 // ==============================
-// FETCH ALL RAW DATA (FIX LIMIT 1000)
+// FETCH RAW DATA
 // ==============================
 async function fetchAllRawData(datasetId) {
     let allData = [];
@@ -98,21 +133,76 @@ async function fetchAllRawData(datasetId) {
             .range(from, from + limit - 1);
 
         if (error) throw error;
-
         if (!data || data.length === 0) break;
 
         allData = [...allData, ...data];
         from += limit;
     }
 
-    console.log("TOTAL RAW FETCHED:", allData.length);
     return allData;
 }
 
 // ==============================
-// PREPROCESSING
+// START PREPROCESSING
 // ==============================
 document.getElementById("processBtn").addEventListener("click", startPreprocessing);
+document.getElementById("cancelProcessBtn").addEventListener("click", cancelPreprocessing);
+document.getElementById("continueBtn").addEventListener("click", goToProcessing);
+
+function updateProgressUI(percent, text) {
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
+    progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    progressText.innerText = text;
+}
+
+async function pollPreprocessStatus(jobId) {
+    while (true) {
+        const res = await fetch(`http://127.0.0.1:8000/preprocess/status/${jobId}`);
+        const status = await res.json();
+        if (!res.ok) {
+            throw new Error(status?.message || "Gagal membaca status preprocessing");
+        }
+
+        const percent = 35 + Math.round((status.percent || 0) * 0.65);
+        const deviceLabel = status.device ? ` | Device: ${status.device.toUpperCase()}` : "";
+        const hasTotal = Number(status.total || 0) > 0;
+        updateProgressUI(
+            percent,
+            hasTotal
+                ? `Tokenizing ${status.processed || 0}/${status.total || 0}${deviceLabel}`
+                : `Menyiapkan tokenizer...${deviceLabel}`,
+        );
+
+        if (status.status === "done") return status;
+        if (status.status === "cancelled") {
+            throw new Error("Preprocessing dibatalkan");
+        }
+        if (status.status === "error") {
+            throw new Error(status.error || "Backend tokenizer gagal");
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+}
+
+async function cancelPreprocessing() {
+    if (!isProcessing) return;
+    cancelRequested = true;
+    const cancelBtn = document.getElementById("cancelProcessBtn");
+    cancelBtn.disabled = true;
+    cancelBtn.innerText = "Cancelling...";
+
+    if (preprocessJobId) {
+        try {
+            await fetch(`http://127.0.0.1:8000/preprocess/cancel/${preprocessJobId}`, {
+                method: "POST",
+            });
+        } catch (e) {
+            console.error("Cancel request error:", e);
+        }
+    }
+}
 
 async function startPreprocessing() {
     if (!selectedDataset) return;
@@ -121,127 +211,122 @@ async function startPreprocessing() {
     isProcessing = true;
 
     const btn = document.getElementById("processBtn");
+    const cancelBtn = document.getElementById("cancelProcessBtn");
     const table = document.getElementById("datasetTable");
-    const progressBar = document.getElementById("progressBar");
-    const progressText = document.getElementById("progressText");
     const progressContainer = document.getElementById("progressContainer");
 
     try {
-        // LOCK UI
+        cancelRequested = false;
+        preprocessJobId = null;
         btn.disabled = true;
         btn.innerText = "Memproses...";
+        cancelBtn.style.display = "inline-block";
+        cancelBtn.disabled = false;
+        cancelBtn.innerText = "Cancel Preprocessing";
         table.style.pointerEvents = "none";
         table.style.opacity = "0.6";
 
         progressContainer.style.display = "block";
-        progressBar.style.width = "0%";
-        progressText.innerText = "0%";
+        updateProgressUI(5, "Cleaning data...");
 
-        // 🔥 FIX: FETCH ALL DATA
         const allData = await fetchAllRawData(selectedDataset.id);
 
         if (!allData || allData.length === 0) {
             throw new Error("Raw data kosong");
         }
 
-        const total = allData.length;
-        const chunkSize = 50;
+        const chunkSize = 100;
 
-        // ==============================
-        // PROCESS LOOP
-        // ==============================
-        for (let i = 0; i < total; i += chunkSize) {
+        for (let i = 0; i < allData.length; i += chunkSize) {
+            if (cancelRequested) {
+                throw new Error("Preprocessing dibatalkan");
+            }
             const chunk = allData.slice(i, i + chunkSize);
-
-            console.log(`Processing chunk ${i} - ${i + chunk.length}`);
 
             const processed = chunk.map(row => ({
                 dataset_id: row.dataset_id,
                 id_kata: row.id_kata,
                 jenis: row.jenis,
 
-                // ORIGINAL
                 manado: row.manado,
                 indonesia: row.indonesia,
-                inggris: row.inggris,
                 kalimat_manado: row.kalimat_manado,
                 kalimat_indonesia: row.kalimat_indonesia,
-                kalimat_inggris: row.kalimat_inggris,
 
-                // CLEAN
-                manado_clean: row.manado?.toLowerCase(),
-                indonesia_clean: row.indonesia?.toLowerCase(),
-                inggris_clean: row.inggris?.toLowerCase(),
+                manado_clean: cleanText(row.manado),
+                indonesia_clean: cleanText(row.indonesia),
 
-                kalimat_manado_clean: row.kalimat_manado?.toLowerCase(),
-                kalimat_indonesia_clean: row.kalimat_indonesia?.toLowerCase(),
-                kalimat_inggris_clean: row.kalimat_inggris?.toLowerCase(),
+                kalimat_manado_clean: cleanText(row.kalimat_manado),
+                kalimat_indonesia_clean: cleanText(row.kalimat_indonesia)
             }));
 
-            const { data: inserted, error: insertError } = await supabaseClient
+            const { error } = await supabaseClient
                 .from("preprocessed_data")
-                .insert(processed)
-                .select();
+                .upsert(processed, {
+                    onConflict: "dataset_id,id_kata",
+                    ignoreDuplicates: false,
+                });
 
-            if (insertError) throw insertError;
-
-            if (!inserted || inserted.length !== processed.length) {
-                throw new Error(`Insert tidak lengkap di chunk ${i}`);
-            }
-
-            // 🔥 anti rate limit
-            await new Promise(r => setTimeout(r, 100));
-
-            const percent = Math.round(((i + chunk.length) / total) * 100);
-            progressBar.style.width = percent + "%";
-            progressText.innerText = percent + "%";
+            if (error) throw error;
+            const inserted = Math.min(allData.length, i + chunk.length);
+            const insertPercent = Math.round((inserted / allData.length) * 35);
+            updateProgressUI(
+                insertPercent,
+                `Seeding preprocessed_data ${inserted}/${allData.length}`,
+            );
         }
 
-        // ==============================
-// UPDATE STATUS (FIX TOTAL)
-// ==============================
-const datasetId = Number(selectedDataset.id);
+        if (cancelRequested) {
+            throw new Error("Preprocessing dibatalkan");
+        }
 
-console.log("UPDATE DATASET ID:", datasetId, typeof datasetId);
+        // Jalankan tokenizer backend secara async + polling progres real.
+        const startRes = await fetch(
+            `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=indobert`,
+            { method: "POST" },
+        );
+        const startData = await startRes.json();
+        if (!startRes.ok || !startData?.job_id) {
+            throw new Error(startData?.message || "Gagal memulai tokenizer backend");
+        }
 
-const { data: updated, error: updateError } = await supabaseClient
-    .from("datasets")
-    .update({ is_preprocessed: true })
-    .eq("id", datasetId)
-    .select();
+        preprocessJobId = startData.job_id;
+        updateProgressUI(35, "Tokenizer backend dimulai...");
+        const result = await pollPreprocessStatus(preprocessJobId);
 
-console.log("UPDATE RESULT:", updated);
-console.log("UPDATE ERROR:", updateError);
+        const finalDevice = (result.device || "cpu").toUpperCase();
+        updateProgressUI(
+            100,
+            `Selesai ${result.processed || 0}/${result.total || 0} | Device: ${finalDevice}`,
+        );
 
-if (updateError) throw updateError;
+        await supabaseClient
+            .from("datasets")
+            .update({ is_preprocessed: true })
+            .eq("id", selectedDataset.id);
 
-if (!updated || updated.length === 0) {
-    throw new Error("Update gagal: tidak ada row yang terupdate (cek ID / RLS)");
-}
+        document.getElementById("continueBtn").style.display = "block";
 
-        progressBar.style.width = "100%";
-        progressText.innerText = "Selesai";
-
-        alert("Preprocessing selesai");
+        alert("Preprocessing + Tokenisasi selesai");
 
         await loadDatasets();
 
-// 🔥 REFRESH SELECTED DATASET (WAJIB)
-const updatedDataset = datasets.find(d => d.id === selectedDataset.id);
-
-if (updatedDataset) {
-    selectDataset(updatedDataset);
-}
-
     } catch (err) {
-        console.error("PREPROCESS ERROR:", err);
-        alert(err.message || "Terjadi kesalahan");
+        console.error(err);
+        if (cancelRequested) {
+            updateProgressUI(0, "Preprocessing dibatalkan");
+        } else {
+            updateProgressUI(0, `Error: ${err.message}`);
+        }
+        alert(err.message);
     } finally {
         isProcessing = false;
-
+        preprocessJobId = null;
         btn.disabled = false;
         btn.innerText = "Mulai Preprocessing";
-
+        cancelBtn.style.display = "none";
+        cancelBtn.disabled = true;
+        cancelBtn.innerText = "Cancel Preprocessing";
         table.style.pointerEvents = "auto";
         table.style.opacity = "1";
     }

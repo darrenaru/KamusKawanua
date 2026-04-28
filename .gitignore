@@ -21,3 +21,30 @@ Thumbs.db
 
 # Logs
 *.log
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy

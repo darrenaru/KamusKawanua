@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import torch
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+from backend.processing.service import _build_text, _fetch_preprocessed_rows, _safe_name
+from backend.supabase_client import supabase
+
+
+def _get_dataset_name(dataset_id: int) -> str | None:
+    try:
+        res = (
+            supabase.table("datasets")
+            .select("name,file_name")
+            .eq("id", dataset_id)
+            .range(0, 0)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        if not row:
+            return None
+        return row.get("name") or row.get("file_name")
+    except Exception:
+        return None
+
+
+def _insert_testing_result(payload: dict[str, Any]) -> int | None:
+    try:
+        res = supabase.table("testing_results").insert(payload).execute()
+        data = res.data or []
+        print("INSERT RESPONSE:", data)
+        testing_result_id = None
+        if data and len(data) > 0:
+            testing_result_id = data[0].get("id")
+        return int(testing_result_id) if testing_result_id is not None else None
+    except Exception as e:
+        print("INSERT ERROR:", str(e))
+        raise ValueError(f"Gagal menyimpan ke testing_results: {e}")
+
+
+def test_indobert_model(
+    *,
+    dataset_id: int,
+    model_name: str,
+    model_id: int | None,
+    max_length: int,
+    limit: int | None,
+    save_result: bool,
+) -> dict:
+    rows = _fetch_preprocessed_rows(dataset_id)
+    if not rows:
+        raise ValueError("Dataset tidak ditemukan atau preprocessed_data kosong untuk dataset_id ini.")
+
+    valid_rows: list[dict] = []
+    for row in rows:
+        label = str(row.get("jenis") or "").strip()
+        if not label:
+            continue
+        text = _build_text(row)
+        if not text:
+            continue
+        valid_rows.append(row)
+
+    if not valid_rows:
+        raise ValueError("Tidak ada row valid (kolom 'jenis' dan text input harus terisi).")
+
+    if limit:
+        valid_rows = valid_rows[:limit]
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+    model_dir = os.path.join(model_root, _safe_name(model_name))
+    if not os.path.isdir(model_dir):
+        raise ValueError(
+            f"Model '{model_name}' tidak ditemukan di trained_models. "
+            "Pastikan model_name benar dan model sudah ditraining."
+        )
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    id2label_cfg = model.config.id2label or {}
+
+    actual_labels: list[str] = []
+    predicted_labels: list[str] = []
+    sample_results: list[dict] = []
+
+    with torch.no_grad():
+        for row in valid_rows:
+            text = _build_text(row)
+            actual = str(row.get("jenis") or "").strip()
+
+            enc = tokenizer(
+                text,
+                truncation=True,
+                padding="max_length",
+                max_length=max_length,
+                return_tensors="pt",
+            )
+            enc = {k: v.to(device) for k, v in enc.items()}
+
+            logits = model(**enc).logits.squeeze(0)
+            probs = torch.softmax(logits, dim=-1)
+            pred_idx = int(torch.argmax(probs).item())
+            pred_score = float(probs[pred_idx].item())
+            predicted = id2label_cfg.get(pred_idx, str(pred_idx))
+
+            actual_labels.append(actual)
+            predicted_labels.append(predicted)
+
+            if len(sample_results) < 100:
+                rid = row.get("id")
+                sample_results.append(
+                    {
+                        "id": int(rid) if rid is not None else 0,
+                        "id_kata": row.get("id_kata"),
+                        "text": text,
+                        "actual": actual,
+                        "predicted": predicted,
+                        "score": pred_score,
+                        "correct": predicted == actual,
+                    }
+                )
+
+    total_data = len(actual_labels)
+    if total_data == 0:
+        raise ValueError("Tidak ada data valid untuk testing.")
+
+    accuracy = float(accuracy_score(actual_labels, predicted_labels))
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average="macro",
+        zero_division=0,
+    )
+
+    dataset_name = _get_dataset_name(dataset_id)
+    testing_result_id: int | None = None
+    print("SAVE RESULT:", save_result)
+    if save_result:
+        insert_payload = {
+            "dataset_id": dataset_id,
+            "model_id": model_id,
+            "model_name": model_name,
+            "dataset_name": dataset_name,
+            "total_data": total_data,
+            "accuracy": accuracy,
+            "precision_macro": float(precision_macro),
+            "recall_macro": float(recall_macro),
+            "f1_macro": float(f1_macro),
+            "max_length": max_length,
+        }
+        print("INSERT PAYLOAD:", insert_payload)
+        testing_result_id = _insert_testing_result(insert_payload)
+
+    return {
+        "status": "ok",
+        "testing_result_id": testing_result_id,
+        "dataset_id": dataset_id,
+        "dataset_name": dataset_name,
+        "model_id": model_id,
+        "model_name": model_name,
+        "total_data": total_data,
+        "accuracy": accuracy,
+        "precision_macro": float(precision_macro),
+        "recall_macro": float(recall_macro),
+        "f1_macro": float(f1_macro),
+        "results": sample_results,
+    }

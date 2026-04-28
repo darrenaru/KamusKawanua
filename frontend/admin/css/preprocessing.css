@@ -154,17 +154,28 @@ tbody tr.selected {
 }
 
 /* BUTTON */
-#processBtn {
-  margin: 25px auto 0 auto;  /* 🔥 center horizontal */
+.action-row {
+  margin-top: 22px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+
+#processBtn,
+#cancelProcessBtn {
   width: 200px;
   padding: 10px 0;
   border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#processBtn {
   border: none;
   background: var(--accent);
   color: white;
-  font-weight: 500;
-  cursor: pointer;
-  display: block;            /* 🔥 WAJIB untuk center */
 }
 
 #processBtn:hover:not(:disabled) {
@@ -174,6 +185,40 @@ tbody tr.selected {
 #processBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+#cancelProcessBtn {
+  border: 1.5px solid #9b1c1c;
+  background: transparent;
+  color: #9b1c1c;
+}
+
+#cancelProcessBtn:hover:not(:disabled) {
+  background: #9b1c1c;
+  color: #fff;
+}
+
+#cancelProcessBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#continueBtn {
+  margin: 10px auto 0 auto;
+  width: 200px;
+  padding: 10px 0;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  display: block;
+}
+
+#continueBtn:hover {
+  background: var(--accent);
+  color: white;
 }
 
 /* DETAIL CARD */
@@ -232,19 +277,37 @@ tbody tr.selected {
 
 /* PROGRESS */
 .progress-container {
-  margin-top: 15px;
+  margin-top: 16px;
   width: 100%;
   height: 10px;
-  background: #eee;
-  border-radius: 10px;
+  background: #ece8e2;
+  border-radius: 999px;
   overflow: hidden;
   display: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .progress-bar {
   height: 100%;
   width: 0%;
   background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.progress-text {
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 0;
+  text-align: left;
+  color: #3b342b;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.3;
 }
 
 /* FILE NAME KHUSUS */
