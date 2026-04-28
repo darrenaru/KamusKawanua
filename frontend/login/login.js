@@ -1,7 +1,7 @@
 // ==============================
 // LOGIN FORM HANDLER
 // ==============================
-console.log("LOGIN FILE YANG BARU TERLOAD");
+console.log("LOGIN FILE LOADED");
 const form = document.getElementById("loginForm");
 const msg = document.getElementById("loginMsg");
 
@@ -15,11 +15,11 @@ form.addEventListener("submit", async (e) => {
     msg.style.display = "none";
     msg.innerText = "";
 
-    // VALIDASI
+    // VALIDATION
     if (!username || !password) {
         msg.style.display = "block";
         msg.className = "login-msg login-msg--error";
-        msg.innerText = "Semua field wajib diisi";
+        msg.innerText = "All fields are required";
         return;
     }
 
@@ -38,31 +38,29 @@ form.addEventListener("submit", async (e) => {
 
         if (data.success) {
 
-    // 🔥 PAKAI INPUT USER LANGSUNG (AMAN UNTUK SEKARANG)
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("username", username);
+            localStorage.setItem("isLoggedIn", "true");
+            localStorage.setItem("username", username);
 
-    // 🔥 DEBUG
-    console.log("LOGIN DEBUG:");
-    console.log("isLoggedIn =", localStorage.getItem("isLoggedIn"));
-    console.log("username =", localStorage.getItem("username"));
+            console.log("LOGIN DEBUG:");
+            console.log("isLoggedIn =", localStorage.getItem("isLoggedIn"));
+            console.log("username =", localStorage.getItem("username"));
 
-    msg.className = "login-msg login-msg--success";
-    msg.innerText = "Login berhasil";
+            msg.className = "login-msg login-msg--success";
+            msg.innerText = "Login successful";
 
-    setTimeout(() => {
-        window.location.href = "../admin/pages/dashboard.html";
-    }, 1000);
-    
+            setTimeout(() => {
+                window.location.href = "../admin/pages/dashboard.html";
+            }, 1000);
+
         } else {
             msg.className = "login-msg login-msg--error";
-            msg.innerText = data.message || "Login gagal";
+            msg.innerText = data.message || "Login failed";
         }
 
     } catch (error) {
         msg.style.display = "block";
         msg.className = "login-msg login-msg--error";
-        msg.innerText = "Server tidak terhubung";
+        msg.innerText = "Server not reachable";
     }
 });
 
