@@ -386,7 +386,6 @@
     const modelSelect = document.getElementById("model-select");
     const btnPilihDataset = document.getElementById("btn-pilih-dataset");
     const modeRadios = document.querySelectorAll('input[name="training-mode"]');
-    const manualBtn = document.getElementById("manual-btn");
     const btnSimpanNama = document.getElementById("btn-simpan-nama");
 
     initRatioManager();
@@ -401,10 +400,6 @@
     }
     modeRadios.forEach((radio) =>
       radio.addEventListener("change", onModeChange),
-    );
-    manualBtn.addEventListener(
-      "click",
-      () => (document.getElementById("modal-manual").style.display = "flex"),
     );
 
     if (btnSimpanNama) {
@@ -1642,10 +1637,6 @@
       .querySelectorAll("#model-list li")
       .forEach((el) => el.classList.remove("selected"));
     selectedModel = null;
-  };
-
-  window.closeManualBook = function () {
-    document.getElementById("modal-manual").style.display = "none";
   };
 
   document.addEventListener("click", function (e) {

@@ -116,24 +116,6 @@ body::before {
   font-size: 18px;
 }
 
-.manual-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: white;
-  border: none;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.manual-btn:hover {
-  background: #4a3520;
-  transform: scale(1.1);
-}
-
 .processing-container {
   width: 100%;
   max-width: 1180px;
@@ -618,7 +600,7 @@ body::before {
   border: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 
 .parameter-card h3 {
@@ -631,6 +613,7 @@ body::before {
   border: 1px solid #e4ddd1;
   border-radius: 16px;
   padding: 16px 16px 14px;
+  margin-top: 6px;
 }
 
 .layer-header {
@@ -1166,10 +1149,6 @@ body::before {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
 
-.modal-large {
-  width: 700px;
-}
-
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -1197,38 +1176,6 @@ body::before {
 
 .modal-body {
   color: #555;
-}
-
-.manual-section {
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #eee;
-}
-
-.manual-section h4 {
-  color: var(--accent);
-  margin-bottom: 8px;
-  font-size: 16px;
-}
-
-.manual-section p {
-  margin-bottom: 5px;
-  line-height: 1.5;
-}
-
-.manual-section .note {
-  background: #f8f6f2;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-top: 8px;
-  font-size: 13px;
-}
-
-.algo-section h3 {
-  color: #2c1f0e;
-  margin: 20px 0 15px;
-  border-bottom: 2px solid #c8a96e;
-  padding-bottom: 5px;
 }
 
 .btn-close {
