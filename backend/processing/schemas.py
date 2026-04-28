@@ -29,6 +29,7 @@ class IndoBertEpochMetrics(BaseModel):
     precision_macro: float
     recall_macro: float
     f1_macro: float
+    mcc: float = 0.0
 
 
 class IndoBertTrainResponse(BaseModel):

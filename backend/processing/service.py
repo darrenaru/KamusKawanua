@@ -7,7 +7,11 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import (
+    accuracy_score,
+    matthews_corrcoef,
+    precision_recall_fscore_support,
+)
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
@@ -321,6 +325,7 @@ def train_indobert_softmax(
         prec, rec, f1, _ = precision_recall_fscore_support(
             y_true, y_pred, average="macro", zero_division=0
         )
+        mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
         m = {
             "epoch": ep,
             "train_loss": float(np.mean(train_losses)) if train_losses else 0.0,
@@ -329,6 +334,7 @@ def train_indobert_softmax(
             "precision_macro": float(prec),
             "recall_macro": float(rec),
             "f1_macro": float(f1),
+            "mcc": float(mcc),
         }
         metrics.append(m)
         if on_epoch_end:

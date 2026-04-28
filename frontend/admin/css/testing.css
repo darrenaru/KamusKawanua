@@ -3,10 +3,25 @@
     --bg: #f7f5f0;
     --text: #1a1714;
     --accent: #2c1f0e;
+    --accent-hover: #3a2a12;
+    --accent-soft: rgba(200, 169, 110, 0.4);
+    --accent-glow: rgba(200, 169, 110, 0.2);
+    --text-primary: #1a1714;
+    --text-secondary: #6b5e50;
+    --text-muted: #9a8e7f;
     --accent-light: rgba(200, 169, 110, 0.4);
     --card-bg: white;
     --muted: #777;
-    --border: #e8e4dd;
+    --border: rgba(44, 31, 14, 0.1);
+    --border-light: rgba(44, 31, 14, 0.06);
+    --border-strong: rgba(44, 31, 14, 0.18);
+    --bg-card: rgba(255, 252, 245, 0.75);
+    --bg-header: rgba(200, 169, 110, 0.18);
+    --bg-row-alt: rgba(44, 31, 14, 0.025);
+    --bg-row-hover: rgba(200, 169, 110, 0.12);
+    --success: #5a7a3a;
+    --chart-w2v: #2c1f0e;
+    --chart-glove: #c8a96e;
 }
 
 
@@ -16,8 +31,9 @@ body {
     margin: 0;
     font-family: 'Inter', sans-serif;
     background-color: var(--bg);
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
     position: relative;
 }
 
@@ -52,7 +68,7 @@ body::after {
 
 .layout {
     display: flex;
-    height: 100vh;
+    min-height: 100vh;
     position: relative;
     z-index: 1;
 }
@@ -62,31 +78,70 @@ body::after {
 
 .sidebar {
     width: 250px;
+    min-width: 250px;
     background: rgba(241, 231, 216, 0.85);
     backdrop-filter: blur(6px);
+    height: 100vh;
     flex-shrink: 0;
     padding: 20px 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     overflow: hidden;
+    position: sticky;
+    top: 0;
+    box-sizing: border-box;
+}
+
+.logo {
+    margin-top: 20px;
+    margin-bottom: 20px;
 }
 
 .logo img {
     width: 220px;
+    display: block;
 }
 
 .sidebar ul {
     list-style: none;
     padding: 0;
+    margin: 0;
     width: 100%;
 }
 
 .sidebar li {
+    padding: 0;
+    width: 100%;
+}
+
+.sidebar li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 14px 20px;
     font-weight: 500;
-    width: 100%;
-    pointer-events: none;
+    color: inherit;
+    text-decoration: none;
+}
+
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sidebar li.active {
@@ -98,12 +153,43 @@ body::after {
 
 .main {
     flex: 1;
-    padding: 60px;
+    min-height: 100vh;
+    padding: 40px 60px 60px;
     overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .main h1 {
-    margin-bottom: 20px;
+    margin-bottom: 36px;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.title-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--accent-glow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 
@@ -147,16 +233,44 @@ body::after {
 /* CARD */
 
 .card {
-    background: var(--card-bg);
+    background: var(--bg-card);
+    border: 1px solid rgba(44, 31, 14, 0.1);
     padding: 25px;
-    border-radius: 14px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-    margin-top: 20px;
+    border-radius: 8px;
+    box-shadow: none;
+    margin-top: 0;
+    margin-bottom: 22px;
 }
 
 .card h3 {
     margin: 0 0 12px 0;
     font-size: 16px;
+}
+
+.card-title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-title-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--accent-glow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-title-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 
@@ -251,17 +365,6 @@ select:focus {
 .result-value {
     color: var(--text);
     font-weight: 500;
-}
-
-#resultProbs {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.prob-item {
-    font-size: 13px;
-    line-height: 1.35;
 }
 
 .result-output {
@@ -561,7 +664,372 @@ select:focus {
 }
 
 
-/* RESPONSIF */
+/* ===================================================
+   TAMBAHAN: OPSI SUMBER DATA
+=================================================== */
+
+.ds-options {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.ds-option {
+    flex: 1;
+    max-width: 200px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: #fafafa;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+}
+
+.ds-option:hover {
+    border-color: var(--accent);
+    background: var(--bg);
+}
+
+.ds-option.active {
+    border-color: var(--accent);
+    background: var(--bg);
+    box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.ds-option .radio-circle {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #bbb;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s;
+}
+
+.ds-option.active .radio-circle {
+    border-color: var(--accent);
+}
+
+.ds-option .radio-circle::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: scale(0);
+    transition: transform 0.2s;
+}
+
+.ds-option.active .radio-circle::after {
+    transform: scale(1);
+}
+
+.ds-option .opt-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+
+/* PANEL TERSEMBUNYI */
+
+.ds-panel {
+    display: none;
+    margin-top: 10px;
+}
+
+.ds-panel.show {
+    display: block;
+}
+
+
+/* ===================================================
+   TAMBAHAN: UPLOAD AREA
+=================================================== */
+
+.upload-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border: 1.5px dashed #ccc;
+    border-radius: 12px;
+    background: #fafafa;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    max-width: 360px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.upload-area:hover {
+    border-color: var(--accent);
+    background: var(--bg);
+}
+
+.upload-area.has-file {
+    border-style: solid;
+    border-color: #059669;
+    color: var(--text);
+    font-weight: 500;
+}
+
+
+/* ===================================================
+   TAMBAHAN: INPUT KATA
+=================================================== */
+
+.input-text {
+    width: 100%;
+    max-width: 320px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid #ccc;
+    background: #fafafa;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.input-text:focus {
+    outline: 2px solid var(--accent-light);
+    border-color: var(--accent);
+}
+
+.input-text.over {
+    border-color: #dc2626;
+}
+
+.input-text.over:focus {
+    outline-color: rgba(220, 38, 38, 0.3);
+}
+
+.kata-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.kata-hint.over {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+
+/* ===================================================
+   TAMBAHAN: TOMBOL UJI KATA
+=================================================== */
+
+.btn-test-kata {
+    margin-top: 10px;
+    padding: 7px 18px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    background: var(--accent);
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    transition: 0.2s;
+}
+
+.btn-test-kata:hover {
+    transform: scale(1.05);
+}
+
+.btn-test-kata:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+
+/* ===================================================
+   TAMBAHAN: HASIL UJI KATA
+=================================================== */
+
+.kata-result {
+    display: none;
+    margin-top: 14px;
+    padding: 16px 20px;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.kata-result.show {
+    display: block;
+}
+
+.kata-result-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 12px;
+}
+
+.kata-result-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kata-result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.kata-result-item.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.kata-result-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kata-result-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.kata-result-word {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.kata-result-arrow {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 2px 0;
+}
+
+.kata-result-translated {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.kata-result-time {
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.kata-result-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 0;
+}
+
+.kata-result-summary {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+}
+
+.kata-result-summary b {
+    color: var(--text);
+}
+
+
+/* ===================================================
+   TAMBAHAN: TABEL EVALUASI (MENGAJANG KE KANAN)
+=================================================== */
+
+.eval-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 4px;
+    table-layout: fixed;
+}
+
+.eval-table thead th {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 12px 8px;
+    text-align: center;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg);
+    transition: opacity 0.3s;
+    opacity: 0.4;
+}
+
+.eval-table thead th:first-child {
+    border-radius: 10px 0 0 0;
+}
+
+.eval-table thead th:last-child {
+    border-radius: 0 10px 0 0;
+}
+
+.eval-table thead th.revealed {
+    opacity: 1;
+}
+
+.eval-table tbody td {
+    padding: 16px 8px;
+    text-align: center;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 18px;
+    border-bottom: none;
+    transition: opacity 0.3s;
+    opacity: 0.3;
+}
+
+.eval-table tbody td.revealed {
+    opacity: 1;
+}
+
+.eval-table tbody tr:last-child td:first-child {
+    border-radius: 0 0 0 10px;
+}
+
+.eval-table tbody tr:last-child td:last-child {
+    border-radius: 0 0 10px 0;
+}
+
+
+/* ===================================================
+   RESPONSIF
+=================================================== */
 
 @media (max-width: 900px) {
     .metrics {
@@ -606,5 +1074,25 @@ select:focus {
     .progress-summary.show {
         flex-direction: column;
         gap: 4px;
+    }
+    .kata-result-summary {
+        flex-direction: column;
+        gap: 4px;
+    }
+    .ds-options {
+        flex-direction: column;
+    }
+    .ds-option {
+        max-width: none;
+    }
+    .eval-table {
+        table-layout: auto;
+    }
+    .eval-table thead th,
+    .eval-table tbody td {
+        padding: 10px 6px;
+    }
+    .eval-table tbody td {
+        font-size: 14px;
     }
 }

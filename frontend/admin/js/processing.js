@@ -192,8 +192,10 @@
         <td><strong>${item.train}%</strong></td>
         <td><strong>${item.test}%</strong></td>
         <td>
-          <button class="btn-edit" data-index="${index}">✏️ Ubah</button>
-          <button class="btn-delete" data-index="${index}">🗑️ Hapus</button>
+          <div class="ratio-action-wrap">
+            <button class="btn-edit" data-index="${index}">Ubah</button>
+            <button class="btn-delete" data-index="${index}">Hapus</button>
+          </div>
         </td>
       </tr>
     `,
@@ -703,6 +705,7 @@
     const value = e.target.value;
     const modelCard = document.getElementById("model-card");
     const newModelNameCard = document.getElementById("new-model-name-card");
+    const datasetCard = document.getElementById("dataset-card");
 
     if (value === "baru") {
       // Dataset dikunci di mode final: tidak perlu pilih ulang dataset.
@@ -720,7 +723,7 @@
         .addEventListener("click", simpanNamaModel);
     } else if (value === "lama") {
       document.getElementById("modal-lama").style.display = "flex";
-      datasetCard.style.display = "none";
+      if (datasetCard) datasetCard.style.display = "none";
       modelCard.style.display = "flex";
       newModelNameCard.style.display = "none";
     }
@@ -1749,7 +1752,7 @@
     const modelNameCardShown =
       document.getElementById("new-model-name-card").style.display === "flex";
 
-    if (!datasetSelected) {
+    if (mode !== "training-final" && !datasetSelected) {
       showToast("⚠️ Pilih dataset terlebih dahulu");
       return;
     }
@@ -1989,12 +1992,14 @@
     // Reset UI
     tableBody.innerHTML = "";
     progressWrap.classList.remove("done");
-    progressBar.style.width = "0%";
-    progressLabel.innerText = "0%";
+    const setProgressPct = (value) => {
+      const safe = Math.max(0, Math.min(100, Number(value) || 0));
+      progressBar.style.width = `${safe.toFixed(1)}%`;
+      progressLabel.innerText = `${Math.round(safe)}%`;
+    };
+    setProgressPct(0);
     resetProgressLog(card, "Menyiapkan training job IndoBERT...");
     setLoadingVisual(card, true, "Mengirim job ke backend...");
-    const animator = createProgressAnimator(progressBar, progressLabel);
-    animator.begin(3);
 
     try {
       const payload = {
@@ -2037,8 +2042,7 @@
       const epochResults = [];
       let renderedEpochs = 0;
       let lastStatus = "";
-
-      animator.setTarget(8);
+      setProgressPct(2);
 
       const poll = async () => {
         const stRes = await fetch(`${API_BASE}/processing/train/status/${jobId}`);
@@ -2051,14 +2055,15 @@
           if (st.status === "running") appendProgressLog(card, "Training sedang berjalan di backend", "info");
         }
 
-        // update progress target (animasi halus jalan sendiri)
-        const cur = st.current_epoch || 0;
-        const basePct = Math.max(
-          8,
-          Math.min(96, Math.round((cur / Math.max(1, totalEpochs)) * 100)),
-        );
-        if (st.status === "queued") animator.setTarget(10);
-        if (st.status === "running") animator.setTarget(basePct);
+        // Progress sinkron dengan status backend (epoch aktual)
+        const cur = Number(st.current_epoch || 0);
+        if (st.status === "queued") {
+          setProgressPct(2);
+        }
+        if (st.status === "running") {
+          const progressByEpoch = (cur / Math.max(1, totalEpochs)) * 100;
+          setProgressPct(progressByEpoch);
+        }
 
         // render new epochs
         const metrics = st.metrics || [];
@@ -2071,6 +2076,7 @@
           const recall = (m.recall_macro * 100) || 0;
           const f1 = (m.f1_macro * 100) || 0;
           const loss = m.val_loss ?? m.train_loss ?? 0;
+          const mcc = Number(m.mcc ?? 0);
 
           row.innerHTML = `
             <td>${m.epoch}</td>
@@ -2079,7 +2085,7 @@
             <td>${recall.toFixed(2)}%</td>
             <td>${f1.toFixed(2)}%</td>
             <td>${parseFloat(loss).toFixed(4)}</td>
-            <td>-</td>
+            <td>${mcc.toFixed(4)}</td>
           `;
           tableBody.appendChild(row);
           epochResults.push({
@@ -2089,19 +2095,18 @@
             recall,
             f1,
             loss: parseFloat(loss),
-            mcc: 0,
+            mcc,
           });
           appendProgressLog(
             card,
-            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | F1 ${f1.toFixed(2)}% | Loss ${parseFloat(loss).toFixed(4)}`,
+            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | F1 ${f1.toFixed(2)}% | MCC ${mcc.toFixed(4)} | Loss ${parseFloat(loss).toFixed(4)}`,
             "info",
           );
           renderedEpochs++;
         }
 
         if (st.status === "done") {
-          animator.finish();
-          progressLabel.innerText = "100%";
+          setProgressPct(100);
           progressWrap.classList.add("done");
           setLoadingVisual(card, false);
           appendProgressLog(
@@ -2119,7 +2124,6 @@
         }
 
         if (st.status === "error") {
-          animator.fail();
           progressLabel.innerText = "Gagal";
           setLoadingVisual(card, false);
           appendProgressLog(card, `Training gagal: ${st.error || "-"}`, "error");
@@ -2623,6 +2627,15 @@
     document.getElementById("param-card-cari-rasio").style.display = "none";
     document.getElementById("param-card-training-final").style.display =
       "block";
+    applyModeSpecificVisibility();
+
+    const modelSelect = document.getElementById("model-select");
+    const modelCard = document.getElementById("model-card");
+    const newModelNameCard = document.getElementById("new-model-name-card");
+    if (modelSelect) modelSelect.value = "";
+    if (modelCard) modelCard.style.display = "none";
+    if (newModelNameCard) newModelNameCard.style.display = "none";
+    modelNameSaved = false;
 
     // Nonaktifkan ratio section
     const ratioSection = document.querySelector(".ratio-section");
