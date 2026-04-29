@@ -108,6 +108,47 @@ var selectedModelId = null;
 var selectedModelMaxLength = 64;
 var testingModels = [];
 
+function showTestingError(message) {
+    var box = document.getElementById('testingError');
+    if (!box) return;
+    if (!message) {
+        box.style.display = 'none';
+        box.textContent = '';
+        return;
+    }
+    box.style.display = 'block';
+    box.textContent = message;
+}
+
+function setTestingUiBusy(busy) {
+    var btn = document.getElementById('btnStart');
+    if (btn) {
+        btn.disabled = !!busy;
+        btn.classList.toggle('is-loading', !!busy);
+    }
+
+    var els = [
+        'selAlgorithm',
+        'selModel',
+        'selDirection',
+        'fileDataset',
+        'inputKata',
+        'btnTestKata'
+    ];
+    for (var i = 0; i < els.length; i++) {
+        var el = document.getElementById(els[i]);
+        if (el) el.disabled = !!busy;
+    }
+
+    // Kunci toggle sumber data saat sedang running.
+    var options = document.querySelectorAll('.ds-option');
+    for (var j = 0; j < options.length; j++) {
+        options[j].classList.toggle('disabled', !!busy);
+        options[j].style.pointerEvents = busy ? 'none' : '';
+        options[j].style.opacity = busy ? '0.6' : '';
+    }
+}
+
 function initAlgorithmModelSelect() {
     var algorithmSelect = document.getElementById('selAlgorithm');
     var modelSelect = document.getElementById('selModel');
@@ -209,7 +250,7 @@ function initAlgorithmModelSelect() {
             };
             algorithmSelect.innerHTML = '<option value="unavailable">Tidak tersedia</option>';
             populateModelOptions('unavailable');
-            alert(err.message || 'Gagal memuat data model testing.');
+            showTestingError(err.message || 'Gagal memuat data model testing.');
         });
 
     algorithmSelect.addEventListener('change', function() {
@@ -243,10 +284,6 @@ function initUpload() {
     var area = document.getElementById('uploadArea');
     var input = document.getElementById('fileDataset');
 
-    area.addEventListener('click', function() {
-        input.click();
-    });
-
     area.addEventListener('dragover', function(e) {
         e.preventDefault();
         area.style.borderColor = 'var(--accent)';
@@ -279,7 +316,7 @@ function initUpload() {
 
 function handleFile(file) {
     if (!file.name.toLowerCase().endsWith('.csv')) {
-        alert('Hanya file .csv yang diizinkan.');
+        showTestingError('Hanya file .csv yang diizinkan.');
         return;
     }
 
@@ -326,7 +363,7 @@ function handleFile(file) {
 }
 
 /* =============================
-   INPUT KATA (MAKS 3)
+   INPUT KATA (MAKS 2)
 ============================= */
 function initKataInput() {
     var input = document.getElementById('inputKata');
@@ -338,9 +375,9 @@ function initKataInput() {
         var words = val === '' ? [] : val.split(/\s+/);
         var count = words.length;
 
-        hint.textContent = count + ' / 3 kata';
+        hint.textContent = count + ' / 2 kata';
 
-        if (count > 3) {
+        if (count > 2) {
             hint.classList.add('over');
             input.classList.add('over');
             kataValid = false;
@@ -354,7 +391,7 @@ function initKataInput() {
 
         document.getElementById('kataResult').classList.remove('show');
 
-        if (count > 0 && count <= 3) {
+        if (count > 0 && count <= 2) {
             document.getElementById('dsTitle').textContent = '"' + val + '"';
             document.getElementById('dsSubtitle').textContent = 'Input kata manual';
             document.getElementById('dsFile').textContent = 'Input langsung';
@@ -560,30 +597,30 @@ function animateValue(el, target, duration) {
 ============================= */
 async function startTesting() {
     if (isRunning) return;
+    showTestingError('');
 
     var kataVal = document.getElementById('inputKata').value.trim();
 
     if (currentMode === 'input') {
         if (!kataVal) {
-            alert('Silakan input kata terlebih dahulu.');
+            showTestingError('Silakan input kata terlebih dahulu.');
             return;
         }
         if (!kataValid) {
-            alert('Input kata tidak boleh lebih dari 3 kata.');
+            showTestingError('Input kata tidak boleh lebih dari 2 kata.');
             return;
         }
     }
 
     if (!selectedDatasetId || isNaN(selectedDatasetId)) {
-        alert('Dataset tidak ditemukan dari model terpilih. Pastikan kolom dataset_id pada tabel models terisi.');
+        showTestingError('Dataset tidak ditemukan dari model terpilih. Pastikan kolom dataset_id pada tabel models terisi.');
         return;
     }
 
     isRunning = true;
     runCount++;
 
-    var btn = document.getElementById('btnStart');
-    btn.disabled = true;
+    setTestingUiBusy(true);
 
     resetMetrics();
     setStatus('pending');
@@ -591,8 +628,8 @@ async function startTesting() {
 
     var model = document.getElementById('selModel').value;
     if (!model) {
-        alert('Model belum tersedia. Simpan model terlebih dahulu dari halaman Processing.');
-        btn.disabled = false;
+        showTestingError('Model belum tersedia. Simpan model terlebih dahulu dari halaman Processing.');
+        setTestingUiBusy(false);
         isRunning = false;
         return;
     }
@@ -653,10 +690,10 @@ async function startTesting() {
     } catch (err) {
         bar.classList.remove('running');
         setStatus('idle');
-        text.textContent = 'Gagal terhubung ke backend testing: ' + (err && err.message ? err.message : 'error');
-        btn.disabled = false;
+        text.textContent = 'Gagal menjalankan testing';
+        showTestingError(err && err.message ? err.message : 'Gagal menjalankan testing backend.');
+        setTestingUiBusy(false);
         isRunning = false;
-        alert(err.message || 'Gagal menjalankan testing backend.');
         return;
     }
 
@@ -713,7 +750,7 @@ function finishTesting(result, direction) {
     });
 
     var btn = document.getElementById('btnStart');
-    btn.disabled = false;
+    setTestingUiBusy(false);
     isRunning = false;
 }
 

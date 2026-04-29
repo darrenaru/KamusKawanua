@@ -528,7 +528,6 @@
         selectedLi.classList.add("selected");
       }
 
-      showToast(`✅ Dataset otomatis dipilih: ${datasetName}`);
       return;
     }
 

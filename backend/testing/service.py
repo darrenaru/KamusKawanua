@@ -329,6 +329,10 @@ def test_indobert_model(
             "precision_macro": float(precision_macro),
             "recall_macro": float(recall_macro),
             "f1_macro": float(f1_macro),
+            "std_deviation": float(std_deviation),
+            "weighted_avg": float(f1_weighted),
+            "roc_auc": float(roc_auc),
+            "mcc": float(mcc),
             "max_length": max_length,
         }
         print("INSERT PAYLOAD:", insert_payload)

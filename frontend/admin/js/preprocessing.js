@@ -9,6 +9,17 @@ let isProcessing = false;
 let preprocessJobId = null;
 let cancelRequested = false;
 
+function openDatasetModal() {
+    const modal = document.getElementById("datasetCard");
+    if (modal) modal.style.display = "flex";
+}
+
+function closeDatasetModal() {
+    const modal = document.getElementById("datasetCard");
+    if (!modal || isProcessing) return;
+    modal.style.display = "none";
+}
+
 // ==============================
 // CLEAN PIPELINE
 // ==============================
@@ -101,7 +112,7 @@ function selectDataset(ds) {
     const continueBtn = document.getElementById("continueBtn");
     continueBtn.style.display = ds.is_preprocessed ? "block" : "none";
 
-    document.getElementById("datasetCard").style.display = "block";
+    openDatasetModal();
 
     document.getElementById("fileName").innerText = ds.file_name || "-";
     document.getElementById("datasetName").innerText = ds.name;
@@ -154,6 +165,15 @@ async function fetchAllRawData(datasetId) {
 document.getElementById("processBtn").addEventListener("click", startPreprocessing);
 document.getElementById("cancelProcessBtn").addEventListener("click", cancelPreprocessing);
 document.getElementById("continueBtn").addEventListener("click", goToProcessing);
+document.getElementById("closeDatasetModal").addEventListener("click", closeDatasetModal);
+
+document.getElementById("datasetCard").addEventListener("click", function(e) {
+    if (e.target.id === "datasetCard") closeDatasetModal();
+});
+
+document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeDatasetModal();
+});
 
 function updateProgressUI(percent, text) {
     const progressBar = document.getElementById("progressBar");

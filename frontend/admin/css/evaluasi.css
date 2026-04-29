@@ -138,7 +138,7 @@ body::after {
   stroke-linejoin: round;
 }
 
-.sidebar li.active { background: rgba(200, 169, 110, 0.4); }
+.sidebar li.active { background: rgba(200, 169, 110, 0.4); font-weight: 400; }
 
 /* =========================
    MAIN

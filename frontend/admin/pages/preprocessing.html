@@ -53,37 +53,40 @@
     </div>
 
 
-    <!-- DETAIL -->
-    <div id="datasetCard" class="dataset-card" style="display:none;">
-      <h3 id="datasetName"></h3>
-
-      <div class="dataset-info">
-        <div><span class="label">File</span><span class="value" id="fileName"></span></div>
-        <div><span class="label">Jumlah data</span><span class="value" id="total"></span></div>
-        <div><span class="label">Kata Kerja</span><span class="value" id="kerja"></span></div>
-        <div><span class="label">Kata Benda</span><span class="value" id="benda"></span></div>
-        <div><span class="label">Kata Sifat</span><span class="value" id="sifat"></span></div>
-        <div><span class="label">Kata Keterangan</span><span class="value" id="keterangan"></span></div>
-        <div><span class="label">Pengimpor</span><span class="value" id="uploader"></span></div>
-        <div><span class="label">Tanggal</span><span class="value" id="date"></span></div>
-      </div>
-
-      <!-- BUTTON -->
-      <div class="action-row">
-        <button id="processBtn" disabled>Mulai Preprocessing</button>
-        <button id="cancelProcessBtn" style="display:none;" disabled>Cancel Preprocessing</button>
-      </div>
-      <button id="continueBtn" style="display:none;">Lanjut ke Processing</button>
-      
-      <div class="progress-container" id="progressContainer">
-        <div id="progressBar" class="progress-bar"></div>
-      </div>
-
-      <p id="progressText" class="progress-text">Pilih dataset, lalu klik Mulai Preprocessing</p>
-    </div>
-
   </div>
 
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="datasetCard" class="dataset-modal" style="display:none;">
+  <div class="dataset-card" role="dialog" aria-modal="true" aria-labelledby="datasetName">
+    <button type="button" id="closeDatasetModal" class="modal-close" aria-label="Tutup popup">×</button>
+    <h3 id="datasetName"></h3>
+
+    <div class="dataset-info">
+      <div><span class="label">File</span><span class="value" id="fileName"></span></div>
+      <div><span class="label">Jumlah data</span><span class="value" id="total"></span></div>
+      <div><span class="label">Kata Kerja</span><span class="value" id="kerja"></span></div>
+      <div><span class="label">Kata Benda</span><span class="value" id="benda"></span></div>
+      <div><span class="label">Kata Sifat</span><span class="value" id="sifat"></span></div>
+      <div><span class="label">Kata Keterangan</span><span class="value" id="keterangan"></span></div>
+      <div><span class="label">Pengimpor</span><span class="value" id="uploader"></span></div>
+      <div><span class="label">Tanggal</span><span class="value" id="date"></span></div>
+    </div>
+
+    <!-- BUTTON -->
+    <div class="action-row">
+      <button id="processBtn" disabled>Mulai Preprocessing</button>
+      <button id="cancelProcessBtn" style="display:none;" disabled>Cancel Preprocessing</button>
+    </div>
+    <button id="continueBtn" style="display:none;">Lanjut ke Processing</button>
+    
+    <div class="progress-container" id="progressContainer">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+
+    <p id="progressText" class="progress-text">Pilih dataset, lalu klik Mulai Preprocessing</p>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
