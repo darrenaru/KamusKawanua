@@ -2,6 +2,17 @@
    DATA
 ============================= */
 var API_BASE = 'http://127.0.0.1:8000';
+// Prefer same-origin only when it looks like the backend (e.g. port 8000).
+try {
+    if (window.location && window.location.origin && window.location.origin !== 'null') {
+        var port = window.location.port;
+        if (!port || port === '8000') {
+            API_BASE = window.location.origin;
+        }
+    }
+} catch (e) {
+    // ignore
+}
 
 var kamusM2I = {
     'torang': 'kita',
@@ -26,6 +37,7 @@ var kamusM2I = {
     'besar': 'besar',
     'su': 'sudah',
     'belum': 'belum',
+    'nda': 'tidak',
     'so': 'ada',
     'tau': 'tahu',
     'bakudapa': 'bertemu',
@@ -394,8 +406,11 @@ function testKata() {
     var model = document.getElementById('selModel').value;
     var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
     var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
-    var kamus = direction === 'm2i' ? kamusM2I : kamusI2M;
+    var kamus = direction === 'm2i' ? kamusM2I : kamusI2M; // fallback jika backend gagal
     var variation = modelVariation[model] || modelVariation.default;
+
+    var sourceLang = direction === 'm2i' ? 'manado' : 'indonesia';
+    var targetKey = direction === 'm2i' ? 'indonesia' : 'manado';
 
     var listEl = document.getElementById('kataResultList');
     listEl.innerHTML = '';
@@ -410,26 +425,15 @@ function testKata() {
 
     words.forEach(function(word, index) {
         setTimeout(function() {
-            var wordStart = performance.now();
             var delay = 300 + Math.random() * 500;
 
-            setTimeout(function() {
-                var wordEnd = performance.now();
-                var wordTime = ((wordEnd - wordStart) / 1000).toFixed(2);
+            setTimeout(async function() {
+                var wordStart = performance.now();
 
-                var lowerWord = word.toLowerCase();
-                var translated;
+                var lowerWord = String(word).toLowerCase();
+                var translated = '[tidak ditemukan]';
 
-                if (kamus[lowerWord]) {
-                    if (Math.random() < variation.wrong) {
-                        translated = '[' + kamus[lowerWord] + ']';
-                    } else {
-                        translated = kamus[lowerWord];
-                    }
-                } else {
-                    translated = '[tidak ditemukan]';
-                }
-
+                // Buat item dulu agar UI responsif, lalu update setelah backend selesai.
                 var item = document.createElement('div');
                 item.className = 'kata-result-item';
                 item.innerHTML =
@@ -437,15 +441,51 @@ function testKata() {
                     '<div class="kata-result-content">' +
                     '<div class="kata-result-word">' + word + '</div>' +
                     '<div class="kata-result-arrow">↓</div>' +
-                    '<div class="kata-result-translated">' + translated + '</div>' +
+                    '<div class="kata-result-translated">...</div>' +
                     '</div>' +
-                    '<span class="kata-result-time">' + wordTime + 's</span>';
+                    '<span class="kata-result-time">...</span>';
 
                 listEl.appendChild(item);
-
                 requestAnimationFrame(function() {
                     item.classList.add('visible');
                 });
+
+                try {
+                    var res = await fetch(
+                        API_BASE + '/search?query=' + encodeURIComponent(lowerWord) +
+                        '&lang=' + encodeURIComponent(sourceLang)
+                    );
+                    var data = await res.json();
+
+                    if (res.ok && data && Array.isArray(data.results) && data.results.length > 0) {
+                        translated = data.results[0][targetKey];
+                        if (!translated) translated = '[tidak ditemukan]';
+                    } else {
+                        translated = '[tidak ditemukan]';
+                    }
+
+                    // Simulasi "wrong" untuk konsistensi tampilan lama.
+                    if (translated !== '[tidak ditemukan]' && Math.random() < variation.wrong) {
+                        translated = '[' + translated + ']';
+                    }
+                } catch (e) {
+                    // Fallback: kalau backend gagal, gunakan kamus lokal.
+                    if (kamus[lowerWord]) {
+                        if (Math.random() < variation.wrong) {
+                            translated = '[' + kamus[lowerWord] + ']';
+                        } else {
+                            translated = kamus[lowerWord];
+                        }
+                    } else {
+                        translated = '[tidak ditemukan]';
+                    }
+                }
+
+                var wordEnd = performance.now();
+                var wordTime = ((wordEnd - wordStart) / 1000).toFixed(2);
+
+                item.querySelector('.kata-result-translated').innerHTML = translated;
+                item.querySelector('.kata-result-time').textContent = wordTime + 's';
 
                 finishedCount++;
 
@@ -613,7 +653,7 @@ async function startTesting() {
     } catch (err) {
         bar.classList.remove('running');
         setStatus('idle');
-        text.textContent = 'Gagal terhubung ke backend testing';
+        text.textContent = 'Gagal terhubung ke backend testing: ' + (err && err.message ? err.message : 'error');
         btn.disabled = false;
         isRunning = false;
         alert(err.message || 'Gagal menjalankan testing backend.');
@@ -646,10 +686,10 @@ function finishTesting(result, direction) {
     var precision = Number(result.precision_macro || 0) * 100;
     var recall = Number(result.recall_macro || 0) * 100;
     var f1 = Number(result.f1_macro || 0) * 100;
-    var mcc = 0;
-    var roc = 0;
-    var std = 0;
-    var weighted = f1;
+    var mcc = Number(result.mcc || 0) * 100; // MCC 0..1 diubah ke persen agar konsisten UI
+    var roc = Number(result.roc_auc || 0) * 100;
+    var std = Number(result.std_deviation || 0) * 100;
+    var weighted = Number(result.weighted_avg || 0) * 100;
     var macro = f1;
 
     var r = {

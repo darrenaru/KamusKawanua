@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.Chart === 'undefined') {
+        console.error('Chart.js belum termuat. Cek akses CDN.');
+        var main = document.querySelector('main.main') || document.body;
+        var p = document.createElement('p');
+        p.style.color = '#c62828';
+        p.style.fontWeight = '600';
+        p.style.margin = '0 0 12px';
+        p.textContent = 'Gagal memuat Chart.js.';
+        main.prepend(p);
+        return;
+    }
 
     var metricNames = ['Accuracy','Precision','Recall','F1-Score','Macro Avg','Weighted Avg','MCC','ROC-AUC'];
 
@@ -113,46 +124,54 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /* ===== TRANSFORMER CHART ===== */
-    new Chart(document.getElementById('chartTransformer'), {
-        type: 'bar',
-        data: {
-            labels: ['XLM-R', 'IndoBERT', 'mBERT'],
-            datasets: [
-                ds('Accuracy',     [94, 91, 89], 0),
-                ds('Precision',    [93, 90, 88], 1),
-                ds('Recall',       [89, 86, 84], 2),
-                ds('F1-Score',     [93, 91, 88], 3),
-                ds('Macro Avg',    [92, 90, 87], 4),
-                ds('Weighted Avg', [93, 91, 88], 5),
-                ds('MCC',          [88, 85, 82], 6),
-                ds('ROC-AUC',      [97, 95, 94], 7)
-            ]
-        },
-        plugins: [topLabelPlugin()],
-        options: JSON.parse(JSON.stringify(baseOpts))
-    });
+    try {
+        new Chart(document.getElementById('chartTransformer'), {
+            type: 'bar',
+            data: {
+                labels: ['XLM-R', 'IndoBERT', 'mBERT'],
+                datasets: [
+                    ds('Accuracy',     [94, 91, 89], 0),
+                    ds('Precision',    [93, 90, 88], 1),
+                    ds('Recall',       [89, 86, 84], 2),
+                    ds('F1-Score',     [93, 91, 88], 3),
+                    ds('Macro Avg',    [92, 90, 87], 4),
+                    ds('Weighted Avg', [93, 91, 88], 5),
+                    ds('MCC',          [88, 85, 82], 6),
+                    ds('ROC-AUC',      [97, 95, 94], 7)
+                ]
+            },
+            plugins: [topLabelPlugin()],
+            options: JSON.parse(JSON.stringify(baseOpts))
+        });
+    } catch (e) {
+        console.error('Gagal render chartTransformer:', e);
+    }
 
     buildLegend('legendTransformer', colors, metricNames);
 
     /* ===== CLASSIC CHART ===== */
-    new Chart(document.getElementById('chartClassic'), {
-        type: 'bar',
-        data: {
-            labels: ['Word2Vec', 'GloVe'],
-            datasets: [
-                ds('Accuracy',     [87, 81], 0),
-                ds('Precision',    [85, 79], 1),
-                ds('Recall',       [72, 65], 2),
-                ds('F1-Score',     [86, 80], 3),
-                ds('Macro Avg',    [83, 77], 4),
-                ds('Weighted Avg', [86, 80], 5),
-                ds('MCC',          [74, 65], 6),
-                ds('ROC-AUC',      [91, 85], 7)
-            ]
-        },
-        plugins: [topLabelPlugin()],
-        options: JSON.parse(JSON.stringify(baseOpts))
-    });
+    try {
+        new Chart(document.getElementById('chartClassic'), {
+            type: 'bar',
+            data: {
+                labels: ['Word2Vec', 'GloVe'],
+                datasets: [
+                    ds('Accuracy',     [87, 81], 0),
+                    ds('Precision',    [85, 79], 1),
+                    ds('Recall',       [72, 65], 2),
+                    ds('F1-Score',     [86, 80], 3),
+                    ds('Macro Avg',    [83, 77], 4),
+                    ds('Weighted Avg', [86, 80], 5),
+                    ds('MCC',          [74, 65], 6),
+                    ds('ROC-AUC',      [91, 85], 7)
+                ]
+            },
+            plugins: [topLabelPlugin()],
+            options: JSON.parse(JSON.stringify(baseOpts))
+        });
+    } catch (e) {
+        console.error('Gagal render chartClassic:', e);
+    }
 
     buildLegend('legendClassic', colors, metricNames);
 });

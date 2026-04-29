@@ -3,8 +3,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import (
+    accuracy_score,
+    matthews_corrcoef,
+    precision_recall_fscore_support,
+    roc_auc_score,
+)
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from backend.processing.service import _build_text, _fetch_preprocessed_rows, _safe_name
@@ -22,6 +28,9 @@ def get_available_testing_models() -> list[dict]:
         models = models_res.data or []
     except Exception as e:
         raise ValueError(f"Gagal mengambil data model: {e}")
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
 
     dataset_ids = sorted(
         {
@@ -57,10 +66,18 @@ def get_available_testing_models() -> list[dict]:
         dataset_id_raw = row.get("dataset_id")
         dataset_id = int(dataset_id_raw) if dataset_id_raw is not None else None
 
+        model_name = str(row.get("nama_model") or "").strip()
+        # Testing butuh dataset_id dan model harus benar-benar ada di disk.
+        if dataset_id is None or not model_name:
+            continue
+        model_dir = os.path.join(model_root, _safe_name(model_name))
+        if not os.path.isdir(model_dir):
+            continue
+
         items.append(
             {
                 "id": int(model_id),
-                "nama_model": str(row.get("nama_model") or "").strip(),
+                "nama_model": model_name,
                 "algoritma": str(row.get("algoritma") or "Tidak Diketahui").strip() or "Tidak Diketahui",
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
@@ -69,7 +86,7 @@ def get_available_testing_models() -> list[dict]:
             }
         )
 
-    return [item for item in items if item["nama_model"]]
+    return items
 
 
 def _get_dataset_name(dataset_id: int) -> str | None:
@@ -146,20 +163,58 @@ def test_indobert_model(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()
+    if device.type == "cuda":
+        # Optimisasi minor untuk GPU
+        torch.backends.cudnn.benchmark = True
 
     id2label_cfg = model.config.id2label or {}
 
+    # Siapkan data teks + label sekali saja supaya tidak rebuild berulang.
+    batch_size = 16
     actual_labels: list[str] = []
     predicted_labels: list[str] = []
     sample_results: list[dict] = []
+    all_probs: list[np.ndarray] = []
+
+    # Mapping kelas output model -> label (berdasarkan id2label di config).
+    # Proba dari model disusun sesuai urutan index kelas tersebut.
+    num_labels = int(getattr(model.config, "num_labels", 0) or 0)
+    id2label_int_to_str: dict[int, str] = {}
+    for k, v in id2label_cfg.items():
+        try:
+            idx = int(k)
+        except Exception:
+            continue
+        id2label_int_to_str[idx] = str(v)
+    labels_in_order: list[str] = []
+    label_to_idx: dict[str, int] = {}
+    if num_labels > 0:
+        labels_in_order = [
+            id2label_int_to_str.get(i, str(i)) for i in range(num_labels)
+        ]
+        label_to_idx = {lab: i for i, lab in enumerate(labels_in_order)}
+
+    items: list[dict] = []
+    for row in valid_rows:
+        text = _build_text(row)
+        actual = str(row.get("jenis") or "").strip()
+        if not actual or not text:
+            continue
+        items.append(
+            {
+                "row": row,
+                "text": text,
+                "actual": actual,
+            }
+        )
 
     with torch.no_grad():
-        for row in valid_rows:
-            text = _build_text(row)
-            actual = str(row.get("jenis") or "").strip()
+        for start in range(0, len(items), batch_size):
+            chunk = items[start : start + batch_size]
+            texts = [it["text"] for it in chunk]
 
             enc = tokenizer(
-                text,
+                texts,
                 truncation=True,
                 padding="max_length",
                 max_length=max_length,
@@ -167,28 +222,39 @@ def test_indobert_model(
             )
             enc = {k: v.to(device) for k, v in enc.items()}
 
-            logits = model(**enc).logits.squeeze(0)
-            probs = torch.softmax(logits, dim=-1)
-            pred_idx = int(torch.argmax(probs).item())
-            pred_score = float(probs[pred_idx].item())
-            predicted = id2label_cfg.get(pred_idx, str(pred_idx))
+            logits = model(**enc).logits  # [bs, num_labels]
+            probs = torch.softmax(logits, dim=-1)  # [bs, num_labels]
+            pred_idx_tensor = torch.argmax(probs, dim=-1)  # [bs]
+            probs_cpu = probs.detach().cpu().numpy()
 
-            actual_labels.append(actual)
-            predicted_labels.append(predicted)
+            # Konversi mapping id->label dengan lebih robust.
+            for i in range(len(chunk)):
+                actual = chunk[i]["actual"]
+                pred_idx = int(pred_idx_tensor[i].item())
+                pred_score = float(probs[i, pred_idx].item())
 
-            if len(sample_results) < 100:
-                rid = row.get("id")
-                sample_results.append(
-                    {
-                        "id": int(rid) if rid is not None else 0,
-                        "id_kata": row.get("id_kata"),
-                        "text": text,
-                        "actual": actual,
-                        "predicted": predicted,
-                        "score": pred_score,
-                        "correct": predicted == actual,
-                    }
-                )
+                predicted = id2label_cfg.get(pred_idx)
+                if predicted is None:
+                    predicted = id2label_cfg.get(str(pred_idx), str(pred_idx))
+
+                actual_labels.append(actual)
+                predicted_labels.append(predicted)
+                all_probs.append(probs_cpu[i])
+
+                if len(sample_results) < 100:
+                    row = chunk[i]["row"]
+                    rid = row.get("id")
+                    sample_results.append(
+                        {
+                            "id": int(rid) if rid is not None else 0,
+                            "id_kata": row.get("id_kata"),
+                            "text": chunk[i]["text"],
+                            "actual": actual,
+                            "predicted": predicted,
+                            "score": pred_score,
+                            "correct": predicted == actual,
+                        }
+                    )
 
     total_data = len(actual_labels)
     if total_data == 0:
@@ -201,6 +267,53 @@ def test_indobert_model(
         average="macro",
         zero_division=0,
     )
+
+    # Weighted Avg (menggunakan F1 weighted).
+    _, _, f1_weighted, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average="weighted",
+        zero_division=0,
+    )
+
+    # Std Deviation (std dev F1 per kelas).
+    _, _, f1_per_class, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average=None,
+        zero_division=0,
+    )
+    std_deviation = float(np.std(f1_per_class)) if f1_per_class is not None else 0.0
+
+    # ROC-AUC (multi-class, menggunakan probabilitas model).
+    roc_auc = 0.0
+    try:
+        if all_probs:
+            probas_matrix = np.vstack(all_probs)
+            # Pastikan urutan label sesuai kolom probas_matrix.
+            num_labels_from_probs = probas_matrix.shape[1]
+            effective_labels_in_order = labels_in_order
+            if (not effective_labels_in_order) or (len(effective_labels_in_order) != num_labels_from_probs):
+                effective_labels_in_order = [
+                    id2label_int_to_str.get(i, str(i)) for i in range(num_labels_from_probs)
+                ]
+
+            roc_auc = float(
+                roc_auc_score(
+                    actual_labels,
+                    probas_matrix,
+                    multi_class="ovr",
+                    average="weighted",
+                    labels=effective_labels_in_order,
+                )
+            )
+    except Exception:
+        roc_auc = 0.0
+    # Matthews correlation coefficient untuk evaluasi klasifikasi multi-kelas.
+    try:
+        mcc = float(matthews_corrcoef(actual_labels, predicted_labels))
+    except Exception:
+        mcc = 0.0
 
     dataset_name = _get_dataset_name(dataset_id)
     testing_result_id: int | None = None
@@ -233,5 +346,9 @@ def test_indobert_model(
         "precision_macro": float(precision_macro),
         "recall_macro": float(recall_macro),
         "f1_macro": float(f1_macro),
+        "std_deviation": float(std_deviation),
+        "weighted_avg": float(f1_weighted),
+        "roc_auc": float(roc_auc),
+        "mcc": float(mcc),
         "results": sample_results,
     }

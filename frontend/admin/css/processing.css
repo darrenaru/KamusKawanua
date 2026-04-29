@@ -26,6 +26,14 @@
   --warning: #f57c00;
 }
 
+/* =========================
+   SCROLLBAR (SAMA SEPERTI EVALUASI)
+========================= */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(44, 31, 14, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(44, 31, 14, 0.35); }
+
 * {
   margin: 0;
   padding: 0;
@@ -133,7 +141,7 @@ body::before {
 .sidebar li.active {
   background: rgba(200, 169, 110, 0.4);
   border-left: 0;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--accent);
 }
 

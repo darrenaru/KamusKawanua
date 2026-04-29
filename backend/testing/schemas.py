@@ -32,6 +32,10 @@ class IndoBertTestingResponse(BaseModel):
     precision_macro: float
     recall_macro: float
     f1_macro: float
+    std_deviation: float
+    weighted_avg: float
+    roc_auc: float
+    mcc: float
     results: list[IndoBertTestingResultItem]
 
 
