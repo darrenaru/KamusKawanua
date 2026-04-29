@@ -1,20 +1,7 @@
 /* =============================
    DATA
 ============================= */
-var modelResults = {
-    xlmr: {
-        m2i: { acc: 95, prec: 93, f1: 92, macro: 95, rec: 93, std: 95, weighted: 95, roc: 95, mcc: 95 },
-        i2m: { acc: 93, prec: 91, f1: 90, macro: 92, rec: 91, std: 93, weighted: 92, roc: 93, mcc: 92 }
-    },
-    mbert: {
-        m2i: { acc: 88, prec: 86, f1: 85, macro: 87, rec: 86, std: 89, weighted: 87, roc: 90, mcc: 88 },
-        i2m: { acc: 86, prec: 84, f1: 83, macro: 85, rec: 84, std: 87, weighted: 85, roc: 88, mcc: 85 }
-    },
-    indobert: {
-        m2i: { acc: 91, prec: 89, f1: 88, macro: 90, rec: 89, std: 92, weighted: 90, roc: 93, mcc: 91 },
-        i2m: { acc: 89, prec: 87, f1: 86, macro: 88, rec: 87, std: 90, weighted: 88, roc: 91, mcc: 88 }
-    }
-};
+var API_BASE = 'http://127.0.0.1:8000';
 
 var kamusM2I = {
     'torang': 'kita',
@@ -85,9 +72,13 @@ for (var k = 0; k < kI2M.length; k++) {
 }
 
 var modelVariation = {
-    xlmr: { wrong: 0.05 },
-    mbert: { wrong: 0.15 },
-    indobert: { wrong: 0.10 }
+    default: { wrong: 0.10 }
+};
+
+var algorithmModelMap = {
+    transformer: [
+        { value: '', label: 'Belum ada model tersimpan' }
+    ]
 };
 
 var metricIds = ['acc', 'prec', 'f1', 'macro', 'rec', 'std', 'weighted', 'roc', 'mcc'];
@@ -99,6 +90,124 @@ var isTestingKata = false;
 var currentMode = 'upload';
 var uploadedFile = null;
 var kataValid = false;
+var selectedDatasetId = null;
+var selectedDatasetName = null;
+var selectedModelId = null;
+var selectedModelMaxLength = 64;
+var testingModels = [];
+
+function initAlgorithmModelSelect() {
+    var algorithmSelect = document.getElementById('selAlgorithm');
+    var modelSelect = document.getElementById('selModel');
+    if (!algorithmSelect || !modelSelect) return;
+
+    function toKey(str) {
+        return String(str || '')
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-');
+    }
+
+    function refreshSelectedModelMeta() {
+        var selectedModelName = modelSelect.value;
+        var found = null;
+        for (var i = 0; i < testingModels.length; i++) {
+            var item = testingModels[i];
+            if (item.nama_model === selectedModelName) {
+                found = item;
+                break;
+            }
+        }
+
+        if (found) {
+            selectedModelId = found.id || null;
+            selectedDatasetId = found.dataset_id || null;
+            selectedDatasetName = found.dataset_name || null;
+            selectedModelMaxLength = found.max_length || 64;
+            document.getElementById('dsTitle').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
+            document.getElementById('dsSubtitle').textContent = 'Dataset berdasarkan model terpilih';
+            document.getElementById('dsFile').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
+            document.getElementById('dsImporter').textContent = 'Model Registry';
+        } else {
+            selectedModelId = null;
+            selectedDatasetId = null;
+            selectedDatasetName = null;
+            selectedModelMaxLength = 64;
+        }
+    }
+
+    function populateModelOptions(algorithmKey) {
+        var models = algorithmModelMap[algorithmKey] || [];
+        modelSelect.innerHTML = '';
+
+        models.forEach(function(model) {
+            var option = document.createElement('option');
+            option.value = model.value;
+            option.textContent = model.label;
+            modelSelect.appendChild(option);
+        });
+
+        modelSelect.disabled = !models.length || models[0].value === '';
+        refreshSelectedModelMeta();
+    }
+
+    fetch(API_BASE + '/testing/models')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+                throw new Error('Model pada tabel models belum tersedia.');
+            }
+
+            testingModels = data.items;
+            var grouped = {};
+            for (var i = 0; i < testingModels.length; i++) {
+                var model = testingModels[i];
+                var algoName = model.algoritma || 'Tidak Diketahui';
+                var key = toKey(algoName);
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        label: algoName,
+                        models: []
+                    };
+                }
+                grouped[key].models.push({
+                    value: model.nama_model,
+                    label: model.nama_model
+                });
+            }
+
+            algorithmModelMap = {};
+            algorithmSelect.innerHTML = '';
+
+            var keys = Object.keys(grouped);
+            keys.forEach(function(key, idx) {
+                algorithmModelMap[key] = grouped[key].models;
+                var option = document.createElement('option');
+                option.value = key;
+                option.textContent = grouped[key].label;
+                if (idx === 0) option.selected = true;
+                algorithmSelect.appendChild(option);
+            });
+
+            populateModelOptions(algorithmSelect.value);
+        })
+        .catch(function(err) {
+            algorithmModelMap = {
+                unavailable: [{ value: '', label: 'Tidak dapat memuat model dari backend' }]
+            };
+            algorithmSelect.innerHTML = '<option value="unavailable">Tidak tersedia</option>';
+            populateModelOptions('unavailable');
+            alert(err.message || 'Gagal memuat data model testing.');
+        });
+
+    algorithmSelect.addEventListener('change', function() {
+        populateModelOptions(algorithmSelect.value);
+    });
+
+    modelSelect.addEventListener('change', function() {
+        refreshSelectedModelMeta();
+    });
+}
 
 /* =============================
    SWITCH MODE
@@ -286,7 +395,7 @@ function testKata() {
     var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
     var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
     var kamus = direction === 'm2i' ? kamusM2I : kamusI2M;
-    var variation = modelVariation[model];
+    var variation = modelVariation[model] || modelVariation.default;
 
     var listEl = document.getElementById('kataResultList');
     listEl.innerHTML = '';
@@ -409,17 +518,12 @@ function animateValue(el, target, duration) {
 /* =============================
    START TESTING
 ============================= */
-function startTesting() {
+async function startTesting() {
     if (isRunning) return;
 
     var kataVal = document.getElementById('inputKata').value.trim();
 
-    if (currentMode === 'upload') {
-        if (!uploadedFile) {
-            alert('Silakan unggah file dataset terlebih dahulu.');
-            return;
-        }
-    } else {
+    if (currentMode === 'input') {
         if (!kataVal) {
             alert('Silakan input kata terlebih dahulu.');
             return;
@@ -428,6 +532,11 @@ function startTesting() {
             alert('Input kata tidak boleh lebih dari 3 kata.');
             return;
         }
+    }
+
+    if (!selectedDatasetId || isNaN(selectedDatasetId)) {
+        alert('Dataset tidak ditemukan dari model terpilih. Pastikan kolom dataset_id pada tabel models terisi.');
+        return;
     }
 
     isRunning = true;
@@ -441,12 +550,18 @@ function startTesting() {
     document.getElementById('runBadge').textContent = '#' + runCount;
 
     var model = document.getElementById('selModel').value;
+    if (!model) {
+        alert('Model belum tersedia. Simpan model terlebih dahulu dari halaman Processing.');
+        btn.disabled = false;
+        isRunning = false;
+        return;
+    }
     var direction = document.getElementById('selDirection').value;
     var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
     var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
 
     if (currentMode === 'upload') {
-        document.getElementById('sumDataset').textContent = uploadedFile.name;
+        document.getElementById('sumDataset').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
         document.getElementById('sumKata').textContent = '—';
     } else {
         document.getElementById('sumDataset').textContent = 'Input Kata';
@@ -465,8 +580,8 @@ function startTesting() {
     var messages = [
         { at: 5, msg: 'Memuat data...' },
         { at: 15, msg: 'Data dimuat' },
-        { at: 25, msg: 'Mempersiapkan model...' },
-        { at: 35, msg: 'Model siap' },
+        { at: 25, msg: 'Menghubungkan ke backend testing...' },
+        { at: 35, msg: 'Menyiapkan model hasil training...' },
         { at: 45, msg: 'Memproses input...' },
         { at: 55, msg: 'Tokenisasi data uji...' },
         { at: 65, msg: 'Tokenisasi selesai' },
@@ -475,6 +590,35 @@ function startTesting() {
         { at: 92, msg: 'Menghitung metrik evaluasi...' },
         { at: 100, msg: 'Testing selesai' }
     ];
+
+    var backendResult = null;
+    try {
+        var res = await fetch(API_BASE + '/testing/indobert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_id: selectedDatasetId,
+                model_name: model,
+                model_id: selectedModelId,
+                max_length: selectedModelMaxLength || 64,
+                limit: null,
+                save_result: true
+            })
+        });
+        var data = await res.json();
+        if (!res.ok) {
+            throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Testing backend gagal.');
+        }
+        backendResult = data;
+    } catch (err) {
+        bar.classList.remove('running');
+        setStatus('idle');
+        text.textContent = 'Gagal terhubung ke backend testing';
+        btn.disabled = false;
+        isRunning = false;
+        alert(err.message || 'Gagal menjalankan testing backend.');
+        return;
+    }
 
     var interval = setInterval(function() {
         progress += 5;
@@ -492,13 +636,33 @@ function startTesting() {
             clearInterval(interval);
             bar.classList.remove('running');
             setStatus('tested');
-            finishTesting(model, direction);
+            finishTesting(backendResult, direction);
         }
     }, 120);
 }
 
-function finishTesting(model, direction) {
-    var r = modelResults[model][direction];
+function finishTesting(result, direction) {
+    var acc = Number(result.accuracy || 0) * 100;
+    var precision = Number(result.precision_macro || 0) * 100;
+    var recall = Number(result.recall_macro || 0) * 100;
+    var f1 = Number(result.f1_macro || 0) * 100;
+    var mcc = 0;
+    var roc = 0;
+    var std = 0;
+    var weighted = f1;
+    var macro = f1;
+
+    var r = {
+        acc: Math.round(acc),
+        prec: Math.round(precision),
+        f1: Math.round(f1),
+        macro: Math.round(macro),
+        rec: Math.round(recall),
+        std: Math.round(std),
+        weighted: Math.round(weighted),
+        roc: Math.round(roc),
+        mcc: Math.round(mcc)
+    };
 
     metricIds.forEach(function(id, i) {
         setTimeout(function() {
@@ -518,3 +682,4 @@ function finishTesting(model, direction) {
 ============================= */
 initUpload();
 initKataInput();
+initAlgorithmModelSelect();

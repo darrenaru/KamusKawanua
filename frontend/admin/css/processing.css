@@ -1148,6 +1148,40 @@ body::before {
   padding: 30px !important;
 }
 
+/* Confusion Matrix */
+.confusion-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 520px;
+  table-layout: fixed;
+}
+
+.confusion-matrix-table th,
+.confusion-matrix-table td {
+  border: 1px solid rgba(44, 31, 14, 0.12);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.confusion-matrix-table th {
+  background: rgba(200, 169, 110, 0.15);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.confusion-matrix-table td.diag {
+  background: rgba(90, 122, 58, 0.12);
+  font-weight: 700;
+  color: #2f4e24;
+}
+
+.confusion-matrix-table td {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .best-params-display {
   margin: 20px 0;
   padding: 15px;

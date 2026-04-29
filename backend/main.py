@@ -75,28 +75,26 @@ def clean_basic(text):
 # =========================
 # TOKEN PROCESSING
 # =========================
-def process_word(text, slang_dict):
+def process_word(text, slang_dict, tok):
+    """
+    Tokenisasi kata harus konsisten memakai tokenizer yang dipilih (mbert/indobert),
+    bukan hardcoded ke tokenizer mBERT.
+    """
     text = clean_basic(text)
-    tokens = tokenizer_pre_mbert.tokenize(text)
-
-    tokens = [slang_dict.get(t, t) for t in tokens]
-
-    return tokens
+    tokens = tok.tokenize(text)
+    return [slang_dict.get(t, t) for t in tokens]
 
 
-def process_sentence(text, slang_dict, stopwords):
+def process_sentence(text, slang_dict, stopwords, tok):
     text = clean_basic(text)
 
-    tokens = tokenizer_pre_mbert.tokenize(text)
+    tokens = tok.tokenize(text)
 
     # slang normalize
     tokens = [slang_dict.get(t, t) for t in tokens]
 
     # stopword remove
     tokens = [t for t in tokens if t not in stopwords]
-
-    # stemming
-    tokens = [stemmer.stem(t) for t in tokens]
 
     return tokens
 
@@ -180,7 +178,7 @@ model = BertModel.from_pretrained("bert-base-multilingual-cased")
 
 # Preprocess tokenizer bisa dipilih via query param (mbert/indobert)
 tokenizer_pre_mbert = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
-tokenizer_pre_indobert = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p1")
+tokenizer_pre_indobert = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p2")
 
 PREPROCESS_JOBS: dict[str, dict] = {}
 PREPROCESS_JOBS_LOCK = threading.Lock()
@@ -296,6 +294,13 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
         raw_from = 0
         raw_limit = 1000
         seed_rows: list[dict] = []
+        seed_seen_keys: set[str] = set()
+        # Filtering sederhana agar model tidak belajar dari data yang terlalu pendek/panjang
+        # atau duplikat yang identik.
+        min_combined_chars = 3
+        max_combined_chars = 400
+        min_word_count = 2
+        max_word_count = 250
         while True:
             raw_res = (
                 supabase.table("raw_data")
@@ -311,19 +316,54 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                 break
 
             for r in raw_data:
+                jenis = r.get("jenis")
+                manado_clean = clean_basic(r.get("manado"))
+                indonesia_clean = clean_basic(r.get("indonesia"))
+                kal_manado_clean = clean_basic(r.get("kalimat_manado"))
+                kal_indonesia_clean = clean_basic(r.get("kalimat_indonesia"))
+
+                combined = " ".join(
+                    [manado_clean, indonesia_clean, kal_manado_clean, kal_indonesia_clean]
+                ).strip()
+
+                if (
+                    not combined
+                    or len(combined) < min_combined_chars
+                    or len(combined) > max_combined_chars
+                ):
+                    continue
+
+                words = [w for w in combined.split() if w]
+                if len(words) < min_word_count or len(words) > max_word_count:
+                    continue
+
+                # Deduplikasi: hindari pasangan input yang benar-benar sama.
+                dedupe_key = "|".join(
+                    [
+                        str(jenis or "").strip().lower(),
+                        manado_clean,
+                        indonesia_clean,
+                        kal_manado_clean,
+                        kal_indonesia_clean,
+                    ]
+                )
+                if dedupe_key in seed_seen_keys:
+                    continue
+                seed_seen_keys.add(dedupe_key)
+
                 seed_rows.append(
                     {
                         "dataset_id": int(r.get("dataset_id") or dataset_id),
                         "id_kata": str(r.get("id_kata") or ""),
-                        "jenis": r.get("jenis"),
+                        "jenis": jenis,
                         "manado": r.get("manado"),
                         "indonesia": r.get("indonesia"),
                         "kalimat_manado": r.get("kalimat_manado"),
                         "kalimat_indonesia": r.get("kalimat_indonesia"),
-                        "manado_clean": clean_basic(r.get("manado")),
-                        "indonesia_clean": clean_basic(r.get("indonesia")),
-                        "kalimat_manado_clean": clean_basic(r.get("kalimat_manado")),
-                        "kalimat_indonesia_clean": clean_basic(r.get("kalimat_indonesia")),
+                        "manado_clean": manado_clean,
+                        "indonesia_clean": indonesia_clean,
+                        "kalimat_manado_clean": kal_manado_clean,
+                        "kalimat_indonesia_clean": kal_indonesia_clean,
                     }
                 )
 
@@ -398,8 +438,8 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             # =========================
             # WORD TOKEN
             # =========================
-            manado_tokens = process_word(row.get("manado_clean"), slang_dict)
-            indonesia_tokens = process_word(row.get("indonesia_clean"), slang_dict)
+            manado_tokens = process_word(row.get("manado_clean"), slang_dict, tok)
+            indonesia_tokens = process_word(row.get("indonesia_clean"), slang_dict, tok)
 
             # =========================
             # SENTENCE PIPELINE (FULL NLP)
@@ -424,9 +464,6 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                     # stopword remove
                     if t in stopwords:
                         continue
-
-                    # stemming
-                    t = stemmer.stem(t)
 
                     clean_tokens.append(t)
 

@@ -759,6 +759,27 @@
               </tfoot>
             </table>
           </div>
+
+          <!-- Confusion Matrix -->
+          <div
+            id="history-confusion-section"
+            style="margin-top: 18px; display: none; width: 100%"
+          >
+            <h4 style="margin: 0 0 12px 0">Confusion Matrix (Best Accuracy Epoch)</h4>
+            <div id="history-confusion-meta" style="color: #666; font-size: 12px; margin-bottom: 10px"></div>
+            <div style="overflow-x: auto">
+              <table
+                id="history-confusion-table"
+                class="confusion-matrix-table"
+              ></table>
+            </div>
+            <p
+              id="history-confusion-empty"
+              style="display: none; color: #999; text-align: center; padding: 12px 0; margin: 0"
+            >
+              Confusion matrix tidak tersedia untuk epoch ini.
+            </p>
+          </div>
         </div>
         <div class="modal-footer" style="margin-top: 20px">
           <button onclick="closeHistoryDetailModal()" class="btn-close-outline">

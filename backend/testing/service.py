@@ -11,6 +11,67 @@ from backend.processing.service import _build_text, _fetch_preprocessed_rows, _s
 from backend.supabase_client import supabase
 
 
+def get_available_testing_models() -> list[dict]:
+    try:
+        models_res = (
+            supabase.table("models")
+            .select("id,nama_model,algoritma,dataset_id,max_length,created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        models = models_res.data or []
+    except Exception as e:
+        raise ValueError(f"Gagal mengambil data model: {e}")
+
+    dataset_ids = sorted(
+        {
+            int(row.get("dataset_id"))
+            for row in models
+            if row.get("dataset_id") is not None
+        }
+    )
+
+    dataset_name_map: dict[int, str] = {}
+    if dataset_ids:
+        try:
+            ds_res = (
+                supabase.table("datasets")
+                .select("id,name,file_name")
+                .in_("id", dataset_ids)
+                .execute()
+            )
+            for row in ds_res.data or []:
+                ds_id = row.get("id")
+                if ds_id is None:
+                    continue
+                dataset_name_map[int(ds_id)] = row.get("name") or row.get("file_name") or f"Dataset {ds_id}"
+        except Exception:
+            dataset_name_map = {}
+
+    items: list[dict] = []
+    for row in models:
+        model_id = row.get("id")
+        if model_id is None:
+            continue
+
+        dataset_id_raw = row.get("dataset_id")
+        dataset_id = int(dataset_id_raw) if dataset_id_raw is not None else None
+
+        items.append(
+            {
+                "id": int(model_id),
+                "nama_model": str(row.get("nama_model") or "").strip(),
+                "algoritma": str(row.get("algoritma") or "Tidak Diketahui").strip() or "Tidak Diketahui",
+                "dataset_id": dataset_id,
+                "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
+                "max_length": row.get("max_length"),
+                "created_at": row.get("created_at"),
+            }
+        )
+
+    return [item for item in items if item["nama_model"]]
+
+
 def _get_dataset_name(dataset_id: int) -> str | None:
     try:
         res = (

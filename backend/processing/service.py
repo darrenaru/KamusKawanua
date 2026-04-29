@@ -23,7 +23,7 @@ from transformers import (
 from backend.supabase_client import supabase
 
 
-INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p1"
+INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p2"
 
 
 def _safe_name(name: str) -> str:
@@ -326,6 +326,22 @@ def train_indobert_softmax(
             y_true, y_pred, average="macro", zero_division=0
         )
         mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+
+        # Confusion matrix untuk validasi pada epoch ini.
+        confusion_matrix = None
+        confusion_labels = None
+        if y_true and y_pred:
+            num_labels = len(label2id)
+            if num_labels > 0:
+                conf = np.zeros((num_labels, num_labels), dtype=int)
+                for t, p in zip(y_true, y_pred):
+                    ti = int(t)
+                    pi = int(p)
+                    if 0 <= ti < num_labels and 0 <= pi < num_labels:
+                        conf[ti, pi] += 1
+                confusion_matrix = conf.tolist()
+                confusion_labels = [id2label[i] for i in range(len(label2id))]
+
         m = {
             "epoch": ep,
             "train_loss": float(np.mean(train_losses)) if train_losses else 0.0,
@@ -335,6 +351,8 @@ def train_indobert_softmax(
             "recall_macro": float(rec),
             "f1_macro": float(f1),
             "mcc": float(mcc),
+            "confusion_matrix": confusion_matrix,
+            "confusion_labels": confusion_labels,
         }
         metrics.append(m)
         if on_epoch_end:

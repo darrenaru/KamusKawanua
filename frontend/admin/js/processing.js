@@ -2096,6 +2096,8 @@
             f1,
             loss: parseFloat(loss),
             mcc,
+            confusion_matrix: m.confusion_matrix || null,
+            confusion_labels: m.confusion_labels || null,
           });
           appendProgressLog(
             card,
@@ -2446,6 +2448,8 @@
           f1: r.f1,
           loss: r.loss,
           mcc: r.mcc,
+          confusion_matrix: r.confusion_matrix || null,
+          confusion_labels: r.confusion_labels || null,
         })),
       };
 
@@ -2754,6 +2758,7 @@
       nama_model: modelName,
       algoritma: params.algo || currentAlgo,
       mode: card.dataset.mode,
+      dataset_id: selectedDatasetId,
       split_ratio: params.splitRatio,
       k_fold: params.kFold || null,
       learning_rate: params.lr,
@@ -3025,12 +3030,13 @@
     if (data.hasil && data.hasil.length > 0) {
       const results = data.hasil;
 
-      // 🔧 Cari epoch dengan F1 tertinggi
-      let bestF1 = -1;
+      // 🔧 Cari epoch dengan Accuracy tertinggi (untuk confusion matrix)
+      let bestAcc = -Infinity;
       let bestEpoch = -1;
       results.forEach((r) => {
-        if (r.f1 > bestF1) {
-          bestF1 = r.f1;
+        const acc = Number(r.accuracy ?? -Infinity);
+        if (acc > bestAcc) {
+          bestAcc = acc;
           bestEpoch = r.epoch;
         }
       });
@@ -3079,10 +3085,66 @@
         <td>${(sum.mcc / count).toFixed(4)}</td>
       </tr>
     `;
+
+      // Confusion Matrix (ambil epoch dengan Accuracy tertinggi)
+      const confusionSection = document.getElementById("history-confusion-section");
+      const confusionMeta = document.getElementById("history-confusion-meta");
+      const confusionTable = document.getElementById("history-confusion-table");
+      const confusionEmpty = document.getElementById("history-confusion-empty");
+
+      if (confusionSection && confusionTable && confusionMeta && confusionEmpty) {
+        const bestResult = results.find((r) => r.epoch === bestEpoch);
+        const cm = bestResult?.confusion_matrix;
+        const labels = bestResult?.confusion_labels;
+
+        if (
+          cm &&
+          labels &&
+          Array.isArray(cm) &&
+          Array.isArray(labels) &&
+          cm.length === labels.length
+        ) {
+          const size = labels.length;
+          confusionSection.style.display = "block";
+          confusionEmpty.style.display = "none";
+          confusionMeta.innerText = `Best epoch: ${bestEpoch} | Accuracy: ${Number(bestAcc).toFixed(2)}%`;
+
+          const header =
+            `<tr><th></th>` +
+            labels.map((l) => `<th>${l}</th>`).join("") +
+            `</tr>`;
+
+          const body = cm
+            .slice(0, size)
+            .map((row, i) => {
+              const cells = labels
+                .slice(0, size)
+                .map((_, j) => {
+                  const v = row?.[j] ?? 0;
+                  const cls = i === j ? "diag" : "";
+                  return `<td class="${cls}">${v}</td>`;
+                })
+                .join("");
+              return `<tr><th>${labels[i]}</th>${cells}</tr>`;
+            })
+            .join("");
+
+          confusionTable.innerHTML = header + body;
+        } else {
+          confusionSection.style.display = "none";
+          confusionEmpty.style.display = "block";
+          confusionTable.innerHTML = "";
+        }
+      }
     } else {
       tbody.innerHTML =
         '<tr><td colspan="7" style="text-align:center; color:#999;">Result data not available</td></tr>';
       avgFoot.innerHTML = "";
+
+      const confusionSection = document.getElementById(
+        "history-confusion-section",
+      );
+      if (confusionSection) confusionSection.style.display = "none";
     }
 
     // 🔧 Tampilkan modal

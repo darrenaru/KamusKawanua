@@ -159,7 +159,7 @@ function parseCSVStrict(text) {
     // 🔥 HANDLE HEADER
     const header = parseCSVLine(lines[0]);
 
-    const expected = [
+    const expected8 = [
         "id_kata",
         "jenis",
         "manado",
@@ -169,17 +169,41 @@ function parseCSVStrict(text) {
         "kalimat_indonesia",
         "kalimat_inggris"
     ];
+    const expected6 = [
+        "id_kata",
+        "jenis",
+        "manado",
+        "indonesia",
+        "kalimat_manado",
+        "kalimat_indonesia"
+    ];
 
-    for (let i = 0; i < expected.length; i++) {
-        if (header[i]?.trim() !== expected[i]) {
-            console.log("HEADER:", header);
-            throw new Error("Format CSV tidak sesuai!");
-        }
+    const normalizedHeader = header.map(h => (h || "").trim().toLowerCase());
+    const isHeader8 = expected8.every((col, i) => normalizedHeader[i] === col);
+    const isHeader6 = expected6.every((col, i) => normalizedHeader[i] === col);
+
+    if (!isHeader8 && !isHeader6) {
+        console.log("HEADER:", header);
+        throw new Error("Format CSV tidak sesuai! Gunakan header 6 atau 8 kolom yang didukung.");
     }
 
     // 🔥 PARSE DATA
     return lines.slice(1).map(line => {
         const c = parseCSVLine(line);
+
+        // Format 6 kolom: otomatis isi data Inggris dengan string kosong.
+        if (isHeader6) {
+            return {
+                id_kata: c[0],
+                jenis: c[1],
+                manado: c[2],
+                indonesia: c[3],
+                inggris: "",
+                kalimat_manado: c[4],
+                kalimat_indonesia: c[5],
+                kalimat_inggris: ""
+            };
+        }
 
         return {
             id_kata: c[0],

@@ -56,6 +56,8 @@ function renderTable() {
         return;
     }
 
+    const selectedId = selectedDataset?.id;
+
     datasets.forEach(ds => {
         const tr = document.createElement("tr");
 
@@ -78,6 +80,10 @@ function renderTable() {
             tr.classList.add("selected");
             selectDataset(ds);
         });
+
+        if (selectedId && ds.id === selectedId) {
+            tr.classList.add("selected");
+        }
 
         body.appendChild(tr);
     });
@@ -310,6 +316,12 @@ async function startPreprocessing() {
         alert("Preprocessing + Tokenisasi selesai");
 
         await loadDatasets();
+
+        // Pastikan card/detail tetap sinkron dengan data terbaru (status is_preprocessed).
+        if (selectedDataset?.id) {
+            const refreshed = datasets.find(d => d.id === selectedDataset.id);
+            if (refreshed) selectDataset(refreshed);
+        }
 
     } catch (err) {
         console.error(err);
