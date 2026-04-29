@@ -114,7 +114,7 @@
     let testVal = parseInt(testInput.value);
 
     if (isNaN(trainVal) || trainVal < 1 || trainVal > 99) {
-      showToast("Masukkan nilai Train yang valid (1-99)", "error");
+      showToast("Enter a valid Train value (1-99)", "error");
       trainInput.classList.add("error");
       return;
     }
@@ -125,14 +125,14 @@
     }
 
     if (testVal < 1 || testVal > 99) {
-      showToast("Nilai Test harus antara 1-99", "error");
+      showToast("Test value must be between 1-99", "error");
       testInput.classList.add("error");
       return;
     }
 
     if (trainVal + testVal !== 100) {
       showToast(
-        `Total Train + Test harus 100 (saat ini ${trainVal + testVal})`,
+        `Train + Test must total 100 (currently ${trainVal + testVal})`,
         "error",
       );
       trainInput.classList.add("error");
@@ -148,7 +148,7 @@
     );
 
     if (isDuplicate) {
-      showToast("Rasio ini sudah ada di tabel", "error");
+      showToast("This rasio already exists in the table", "error");
       return;
     }
 
@@ -157,12 +157,12 @@
 
     if (editingIndex >= 0) {
       ratioData[editingIndex] = { train: trainVal, test: testVal };
-      showToast(`Rasio ${trainVal}:${testVal} berhasil diperbarui`);
+      showToast(`Rasio ${trainVal}:${testVal} was updated successfully`);
       editingIndex = -1;
       document.getElementById("btn-add-ratio").innerHTML = "➕ Tambah";
     } else {
       ratioData.push({ train: trainVal, test: testVal });
-      showToast(`Rasio ${trainVal}:${testVal} berhasil ditambahkan`);
+      showToast(`Rasio ${trainVal}:${testVal} was added successfully`);
     }
 
     trainInput.value = "";
@@ -239,7 +239,7 @@
     const item = ratioData[index];
 
     const modalP = confirmModal.querySelector("p");
-    modalP.innerHTML = `Apakah Anda yakin ingin menghapus rasio <strong>${item.train}:${item.test}</strong>?`;
+    modalP.innerHTML = `Are you sure you want to delete rasio <strong>${item.train}:${item.test}</strong>?`;
     confirmModal.style.display = "flex";
   }
 
@@ -253,7 +253,7 @@
       updateRatioDropdown();
       updateRatioTableVisibility();
 
-      showToast(`Rasio ${deleted.train}:${deleted.test} dihapus`);
+      showToast(`Rasio ${deleted.train}:${deleted.test} deleted`);
 
       if (editingIndex === index) {
         document.getElementById("train-input").value = "";
@@ -273,7 +273,7 @@
 
     const currentValue = splitSelect.value;
     let options =
-      '<option value="" disabled selected>-- Pilih Rasio --</option>';
+      '<option value="" disabled selected>-- Select Rasio --</option>';
 
     ratioData.forEach((item) => {
       const ratioString = `${item.train}:${item.test}`;
@@ -317,10 +317,10 @@
     confirmModal.className = "modal-confirm-overlay";
     confirmModal.innerHTML = `
       <div class="modal-confirm">
-        <h4>⚠️ Konfirmasi Hapus</h4>
+        <h4>Delete Confirmation</h4>
         <p>Apakah Anda yakin ingin menghapus rasio ini?</p>
         <div class="modal-confirm-actions">
-          <button class="btn-confirm-cancel" id="btn-confirm-cancel">Batal</button>
+          <button class="btn-confirm-cancel" id="btn-confirm-cancel">Cancel</button>
           <button class="btn-confirm-delete" id="btn-confirm-delete">Hapus</button>
         </div>
       </div>
@@ -445,7 +445,7 @@
           const card = e.target.closest(".training-card");
           if (card) {
             card.remove();
-            showToast("🗑️ Hasil training dihapus");
+            showToast("Training result deleted");
           }
         }
 
@@ -545,7 +545,7 @@
     const namaModel = namaModelInput.value.trim();
 
     if (!namaModel) {
-      showToast("⚠️ Masukkan nama model terlebih dahulu");
+      showToast("Please enter a model name first.");
       return;
     }
 
@@ -563,7 +563,7 @@
       .addEventListener("click", function () {
         nameCard.innerHTML = `
         <p class="file-card-label">📝 Nama Model Baru</p>
-        <input type="text" id="new-model-name" placeholder="Masukkan nama model baru" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px;" value="${namaModel}">
+        <input type="text" id="new-model-name" placeholder="Enter new model name" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px;" value="${namaModel}">
         <button class="btn-small" id="btn-simpan-nama" style="padding:8px 16px; margin-left:10px; background:#2c1f0e; color:white; border:none; border-radius:6px; cursor:pointer;">Simpan</button>
       `;
         document
@@ -572,7 +572,7 @@
         modelNameSaved = false;
       });
 
-    showToast("✅ Nama model berhasil disimpan");
+    showToast("Model name was saved successfully.");
   }
 
   function onAlgoChange(e) {
@@ -742,7 +742,7 @@
 
     if (!currentAlgo) {
       container.innerHTML =
-        '<p style="color:#999; text-align:center; padding:20px;">Pilih algoritma terlebih dahulu</p>';
+        '<p style="color:#999; text-align:center; padding:20px;">Select an algorithm first</p>';
       if (callback) setTimeout(callback, 150);
       return;
     }
@@ -781,7 +781,7 @@
     if (!globalBestParams) return;
     const params = globalBestParams;
 
-    // ✅ FIX: Scope ke container mode yang sedang aktif
+    // Scope to the active mode container
     const activeContainerId =
       currentMode === "training-final"
         ? "dynamic-params-training-final"
@@ -850,9 +850,9 @@
       const splitSelect = getField("split-ratio-select");
       if (splitSelect) {
         splitSelect.value = modelData.ratio;
-        console.log(`✅ split-ratio-select diisi: ${modelData.ratio}`);
+        console.log(`split-ratio-select set: ${modelData.ratio}`);
       } else {
-        console.log("❌ split-ratio-select tidak ditemukan");
+        console.log("split-ratio-select not found");
       }
     }
 
@@ -884,11 +884,11 @@
 
       if (element && value !== undefined && value !== null && value !== "") {
         element.value = value;
-        console.log(`✅ ${mapping.id} diisi: ${value}`);
+        console.log(`${mapping.id} set: ${value}`);
       } else if (element) {
-        console.log(`⚠️ ${mapping.id} value kosong:`, value);
+        console.log(`${mapping.id} has empty value:`, value);
       } else {
-        console.log(`❌ ${mapping.id} tidak ditemukan`);
+        console.log(`${mapping.id} not found`);
       }
     });
   }
@@ -899,7 +899,7 @@
       <div class="param-group" style="grid-column: span 2;">
         ${renderLabelWithTooltip("Rasio Data Split", "split_ratio")}
         <select id="split-ratio-select" class="split-select">
-          <option value="" disabled selected>-- Pilih Rasio --</option>
+          <option value="" disabled selected>-- Select Rasio --</option>
         </select>
       </div>
     </div>
@@ -920,45 +920,45 @@
 
   const PARAM_TOOLTIPS = {
     default:
-      "<strong>Fungsi:</strong> Mengatur proses training.<br><strong>Dampak:</strong> Nilai mempengaruhi kecepatan dan kualitas model.<br><strong>Risiko:</strong> Nilai yang tidak seimbang bisa membuat model kurang optimal.",
+      "<strong>Function:</strong> Controls the training process.<br><strong>Impact:</strong> Values affect model speed and quality.<br><strong>Risk:</strong> Unbalanced values can reduce model performance.",
     split_ratio:
-      "<strong>Fungsi:</strong> Membagi data jadi train dan test.<br><strong>Dampak:</strong> Train lebih besar biasanya membuat model lebih belajar.<br><strong>Risiko:</strong> Test terlalu kecil membuat evaluasi kurang akurat.",
+      "<strong>Function:</strong> Splits data into train and test sets.<br><strong>Impact:</strong> Larger train portions usually improve learning.<br><strong>Risk:</strong> Very small test portions reduce evaluation reliability.",
     lr:
-      "<strong>Fungsi:</strong> Mengatur besar langkah update bobot.<br><strong>Dampak:</strong> Nilai kecil lebih stabil, nilai besar lebih cepat.<br><strong>Risiko:</strong> Terlalu besar bisa tidak konvergen, terlalu kecil training sangat lama.",
+      "<strong>Function:</strong> Sets the update step size for model weights.<br><strong>Impact:</strong> Smaller values are more stable, larger values are faster.<br><strong>Risk:</strong> Too large may not converge, too small makes training very slow.",
     epoch:
-      "<strong>Fungsi:</strong> Jumlah putaran model membaca data train.<br><strong>Dampak:</strong> Epoch lebih banyak bisa meningkatkan performa.<br><strong>Risiko:</strong> Terlalu tinggi bisa overfitting, terlalu rendah model belum belajar cukup.",
+      "<strong>Function:</strong> Number of passes over train data.<br><strong>Impact:</strong> More epochs may improve performance.<br><strong>Risk:</strong> Too high may overfit, too low may undertrain.",
     batch_size:
-      "<strong>Fungsi:</strong> Jumlah data yang diproses per langkah.<br><strong>Dampak:</strong> Batch besar lebih stabil, batch kecil lebih hemat memori.<br><strong>Risiko:</strong> Terlalu besar bisa OOM, terlalu kecil training berisik/tidak stabil.",
+      "<strong>Function:</strong> Number of samples processed per step.<br><strong>Impact:</strong> Larger batches are more stable, smaller batches use less memory.<br><strong>Risk:</strong> Too large may cause OOM, too small may be noisy or unstable.",
     max_length:
-      "<strong>Fungsi:</strong> Batas panjang token per teks.<br><strong>Dampak:</strong> Nilai besar menangkap konteks lebih panjang.<br><strong>Risiko:</strong> Terlalu kecil memotong informasi, terlalu besar lebih lambat dan boros memori.",
+      "<strong>Function:</strong> Maximum token length per text.<br><strong>Impact:</strong> Higher values capture longer context.<br><strong>Risk:</strong> Too low cuts information, too high is slower and memory-heavy.",
     optimizer:
-      "<strong>Fungsi:</strong> Metode update bobot model.<br><strong>Dampak:</strong> Mempengaruhi stabilitas dan kecepatan konvergensi.<br><strong>Risiko:</strong> Optimizer kurang cocok bisa membuat hasil sulit naik.",
+      "<strong>Function:</strong> Model weight update method.<br><strong>Impact:</strong> Affects stability and convergence speed.<br><strong>Risk:</strong> An unsuitable optimizer can prevent metric improvement.",
     weight_decay:
-      "<strong>Fungsi:</strong> Regularisasi untuk menahan bobot terlalu besar.<br><strong>Dampak:</strong> Membantu generalisasi model.<br><strong>Risiko:</strong> Terlalu tinggi bisa underfitting, terlalu rendah bisa overfitting.",
+      "<strong>Function:</strong> Regularization to limit oversized weights.<br><strong>Impact:</strong> Helps model generalization.<br><strong>Risk:</strong> Too high may underfit, too low may overfit.",
     scheduler:
-      "<strong>Fungsi:</strong> Mengatur perubahan learning rate selama training.<br><strong>Dampak:</strong> Membuat training lebih stabil di akhir epoch.<br><strong>Risiko:</strong> Jadwal tidak cocok bisa memperlambat atau merusak konvergensi.",
+      "<strong>Function:</strong> Controls learning rate changes during training.<br><strong>Impact:</strong> Improves stability in later epochs.<br><strong>Risk:</strong> An unsuitable schedule may slow or disrupt convergence.",
     warmup:
-      "<strong>Fungsi:</strong> Fase awal menaikkan learning rate perlahan.<br><strong>Dampak:</strong> Mengurangi lonjakan update di awal training.<br><strong>Risiko:</strong> Terlalu besar membuat training lambat, terlalu kecil bisa tidak stabil di awal.",
+      "<strong>Function:</strong> Initial phase that increases learning rate gradually.<br><strong>Impact:</strong> Reduces sudden updates at early training stages.<br><strong>Risk:</strong> Too high slows training, too low may remain unstable initially.",
     dropout:
-      "<strong>Fungsi:</strong> Menonaktifkan neuron acak saat training.<br><strong>Dampak:</strong> Mengurangi overfitting.<br><strong>Risiko:</strong> Terlalu tinggi membuat model sulit belajar, terlalu rendah overfitting lebih mudah terjadi.",
+      "<strong>Function:</strong> Randomly disables neurons during training.<br><strong>Impact:</strong> Reduces overfitting.<br><strong>Risk:</strong> Too high makes learning difficult, too low increases overfitting risk.",
     early_stopping:
-      "<strong>Fungsi:</strong> Menghentikan training jika performa validasi tidak membaik.<br><strong>Dampak:</strong> Menghemat waktu dan mencegah overfitting.<br><strong>Risiko:</strong> Terlalu kecil bisa berhenti terlalu cepat, terlalu besar bisa terlambat berhenti.",
+      "<strong>Function:</strong> Stops training when validation performance no longer improves.<br><strong>Impact:</strong> Saves time and reduces overfitting risk.<br><strong>Risk:</strong> Too low may stop too early, too high may stop too late.",
     grad_accum:
-      "<strong>Fungsi:</strong> Menggabungkan beberapa langkah gradien sebelum update.<br><strong>Dampak:</strong> Simulasi batch lebih besar tanpa tambah banyak memori.<br><strong>Risiko:</strong> Terlalu tinggi bisa membuat update lambat terasa.",
+      "<strong>Function:</strong> Accumulates gradient steps before each update.<br><strong>Impact:</strong> Simulates larger batches without major memory increase.<br><strong>Risk:</strong> Too high can make updates feel slow.",
     vector_size:
-      "<strong>Fungsi:</strong> Dimensi vektor kata (Word2Vec/GloVe).<br><strong>Dampak:</strong> Lebih besar bisa menyimpan fitur lebih kaya.<br><strong>Risiko:</strong> Terlalu besar overfitting/lambat, terlalu kecil informasi kurang.",
+      "<strong>Function:</strong> Vector dimension for kata embeddings (Word2Vec/GloVe).<br><strong>Impact:</strong> Higher dimensions can capture richer features.<br><strong>Risk:</strong> Too high may overfit/slow down, too low may lose information.",
     window_size:
-      "<strong>Fungsi:</strong> Jangkauan kata sekitar yang dilihat model.<br><strong>Dampak:</strong> Window besar menangkap konteks lebih luas.<br><strong>Risiko:</strong> Terlalu besar bisa menambah noise, terlalu kecil konteks kurang.",
+      "<strong>Function:</strong> Context window size observed by the model.<br><strong>Impact:</strong> Larger windows capture broader context.<br><strong>Risk:</strong> Too large may add noise, too small may miss context.",
     min_count:
-      "<strong>Fungsi:</strong> Batas frekuensi minimal kata agar ikut training.<br><strong>Dampak:</strong> Menyaring kata sangat jarang/noise.<br><strong>Risiko:</strong> Terlalu tinggi buang banyak kata penting, terlalu rendah banyak noise.",
+      "<strong>Function:</strong> Minimum kata frequency to be included in training.<br><strong>Impact:</strong> Filters very rare/noisy kata.<br><strong>Risk:</strong> Too high removes important kata, too low retains noise.",
     model_type:
-      "<strong>Fungsi:</strong> Memilih arsitektur Word2Vec (CBOW/Skip-gram).<br><strong>Dampak:</strong> Skip-gram biasanya bagus untuk kata jarang, CBOW lebih cepat.<br><strong>Risiko:</strong> Salah pilih bisa menurunkan kualitas embedding.",
+      "<strong>Function:</strong> Chooses Word2Vec architecture (CBOW/Skip-gram).<br><strong>Impact:</strong> Skip-gram is usually better for rare kata, CBOW is faster.<br><strong>Risk:</strong> Wrong selection may reduce embedding quality.",
     negative:
-      "<strong>Fungsi:</strong> Jumlah sampel negatif saat training embedding.<br><strong>Dampak:</strong> Membantu model membedakan konteks benar/salah.<br><strong>Risiko:</strong> Terlalu tinggi membuat training berat, terlalu rendah kurang efektif.",
+      "<strong>Function:</strong> Number of negative samples for embedding training.<br><strong>Impact:</strong> Helps the model distinguish correct/incorrect context.<br><strong>Risk:</strong> Too high is computationally heavy, too low is less effective.",
     x_max:
-      "<strong>Fungsi:</strong> Batas pembobotan frekuensi pada GloVe.<br><strong>Dampak:</strong> Mengontrol pengaruh pasangan kata sangat sering.<br><strong>Risiko:</strong> Terlalu kecil/tinggi bisa membuat pembobotan tidak seimbang.",
+      "<strong>Function:</strong> Frequency weighting cap in GloVe.<br><strong>Impact:</strong> Controls the influence of very frequent kata pairs.<br><strong>Risk:</strong> Too low/high may cause unbalanced weighting.",
     alpha:
-      "<strong>Fungsi:</strong> Eksponen pembobotan frekuensi pada GloVe.<br><strong>Dampak:</strong> Menentukan sensitivitas model terhadap frekuensi kata.<br><strong>Risiko:</strong> Nilai ekstrem bisa membuat embedding kurang stabil.",
+      "<strong>Function:</strong> Frequency weighting exponent in GloVe.<br><strong>Impact:</strong> Determines sensitivity to kata frequency.<br><strong>Risk:</strong> Extreme values may destabilize embeddings.",
   };
 
   // ==================== INDOBERT PARAMETERS (DROPDOWN) ====================
@@ -972,7 +972,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Batch Size", "batch_size")}
-          <input type="text" id="batch-size" list="batch-size-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="batch-size" list="batch-size-options" placeholder="Select or type manually" value="">
           <datalist id="batch-size-options">
             <option value="8">8</option>
             <option value="16">16 (Recommended)</option>
@@ -981,7 +981,7 @@
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Max Length", "max_length")}
-          <input type="text" id="max-length" list="max-length-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="max-length" list="max-length-options" placeholder="Select or type manually" value="">
           <datalist id="max-length-options">
             <option value="8">8</option>
             <option value="16">16</option>
@@ -1012,7 +1012,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Learning Rate", "lr")}
-          <input type="text" id="lr" list="lr-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="lr" list="lr-options" placeholder="Select or type manually" value="">
           <datalist id="lr-options">
             <option value="1e-5">1e-5</option>
             <option value="2e-5">2e-5 (Recommended)</option>
@@ -1028,7 +1028,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Optimizer", "optimizer")}
-          <input type="text" id="optimizer" list="optimizer-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="optimizer" list="optimizer-options" placeholder="Select or type manually" value="">
           <datalist id="optimizer-options">
             <option value="AdamW">AdamW (Recommended)</option>
             <option value="Adam">Adam</option>
@@ -1038,7 +1038,7 @@
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-          <input type="text" id="weight-decay" list="weight-decay-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="weight-decay" list="weight-decay-options" placeholder="Select or type manually" value="">
           <datalist id="weight-decay-options">
             <option value="0.0">0.0</option>
             <option value="0.01">0.01 (Recommended)</option>
@@ -1049,7 +1049,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Scheduler", "scheduler")}
-          <input type="text" id="scheduler" list="scheduler-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="scheduler" list="scheduler-options" placeholder="Select or type manually" value="">
           <datalist id="scheduler-options">
             <option value="linear">Linear (Recommended)</option>
             <option value="cosine">Cosine</option>
@@ -1060,7 +1060,7 @@
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Warmup Ratio", "warmup")}
-          <input type="text" id="warmup" list="warmup-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="warmup" list="warmup-options" placeholder="Select or type manually" value="">
           <datalist id="warmup-options">
             <option value="0.0">0.0</option>
             <option value="0.1">0.1 (Recommended)</option>
@@ -1072,7 +1072,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Dropout", "dropout")}
-          <input type="text" id="dropout" list="dropout-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="dropout" list="dropout-options" placeholder="Select or type manually" value="">
           <datalist id="dropout-options">
             <option value="0.1">0.1 (Recommended)</option>
             <option value="0.2">0.2</option>
@@ -1082,7 +1082,7 @@
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-          <input type="text" id="grad-accum" list="grad-accum-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="grad-accum" list="grad-accum-options" placeholder="Select or type manually" value="">
           <datalist id="grad-accum-options">
             <option value="1">1 (Recommended)</option>
             <option value="2">2</option>
@@ -1112,7 +1112,7 @@
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-          <input type="text" id="early-stopping" list="early-stopping-options" placeholder="Pilih atau ketik manual" value="">
+          <input type="text" id="early-stopping" list="early-stopping-options" placeholder="Select or type manually" value="">
           <datalist id="early-stopping-options">
             <option value="0">Nonaktif</option>
             <option value="2">Aktif (patience 2) (Recommended)</option>
@@ -1136,7 +1136,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="lr" list="lr-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="lr-options-mbert">
           <option value="1e-5">1e-5</option>
           <option value="2e-5">2e-5 (Recommended)</option>
@@ -1152,7 +1152,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Batch Size", "batch_size")}
-        <input type="text" id="batch-size" list="batch-size-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="batch-size" list="batch-size-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="batch-size-options-mbert">
           <option value="8">8</option>
           <option value="16">16 (Recommended)</option>
@@ -1161,7 +1161,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Max Length", "max_length")}
-        <input type="text" id="max-length" list="max-length-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="max-length" list="max-length-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="max-length-options-mbert">
           <option value="8">8</option>
           <option value="16">16</option>
@@ -1174,7 +1174,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Optimizer", "optimizer")}
-        <input type="text" id="optimizer" list="optimizer-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="optimizer" list="optimizer-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="optimizer-options-mbert">
           <option value="AdamW">AdamW (Recommended)</option>
           <option value="Adam">Adam</option>
@@ -1184,7 +1184,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-        <input type="text" id="weight-decay" list="weight-decay-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="weight-decay" list="weight-decay-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="weight-decay-options-mbert">
           <option value="0.0">0.0</option>
           <option value="0.01">0.01 (Recommended)</option>
@@ -1196,7 +1196,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Scheduler", "scheduler")}
-        <input type="text" id="scheduler" list="scheduler-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="scheduler" list="scheduler-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="scheduler-options-mbert">
           <option value="linear">Linear (Recommended)</option>
           <option value="cosine">Cosine</option>
@@ -1207,7 +1207,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Warmup Ratio", "warmup")}
-        <input type="text" id="warmup" list="warmup-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="warmup" list="warmup-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="warmup-options-mbert">
           <option value="0.0">0.0</option>
           <option value="0.1">0.1 (Recommended)</option>
@@ -1219,7 +1219,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Dropout", "dropout")}
-        <input type="text" id="dropout" list="dropout-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="dropout" list="dropout-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="dropout-options-mbert">
           <option value="0.0">0.0</option>
           <option value="0.1">0.1 (Recommended)</option>
@@ -1230,7 +1230,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-        <input type="text" id="early-stopping" list="early-stopping-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="early-stopping" list="early-stopping-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="early-stopping-options-mbert">
           <option value="0">Nonaktif</option>
           <option value="2">2</option>
@@ -1242,7 +1242,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-        <input type="text" id="grad-accum" list="grad-accum-options-mbert" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="grad-accum" list="grad-accum-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="grad-accum-options-mbert">
           <option value="1">1 (Recommended)</option>
           <option value="2">2</option>
@@ -1260,7 +1260,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="lr" list="lr-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="lr-options-xlmr">
           <option value="1e-5">1e-5 (Recommended)</option>
           <option value="1.5e-5">1.5e-5</option>
@@ -1275,7 +1275,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Batch Size", "batch_size")}
-        <input type="text" id="batch-size" list="batch-size-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="batch-size" list="batch-size-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="batch-size-options-xlmr">
           <option value="8">8 (Recommended)</option>
           <option value="16">16</option>
@@ -1284,7 +1284,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Max Length", "max_length")}
-        <input type="text" id="max-length" list="max-length-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="max-length" list="max-length-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="max-length-options-xlmr">
           <option value="8">8</option>
           <option value="16">16</option>
@@ -1297,7 +1297,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Optimizer", "optimizer")}
-        <input type="text" id="optimizer" list="optimizer-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="optimizer" list="optimizer-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="optimizer-options-xlmr">
           <option value="AdamW">AdamW (Recommended)</option>
           <option value="Adam">Adam</option>
@@ -1307,7 +1307,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-        <input type="text" id="weight-decay" list="weight-decay-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="weight-decay" list="weight-decay-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="weight-decay-options-xlmr">
           <option value="0.0">0.0</option>
           <option value="0.01">0.01 (Recommended)</option>
@@ -1318,7 +1318,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Scheduler", "scheduler")}
-        <input type="text" id="scheduler" list="scheduler-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="scheduler" list="scheduler-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="scheduler-options-xlmr">
           <option value="linear">Linear (Recommended)</option>
           <option value="cosine">Cosine</option>
@@ -1329,7 +1329,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Warmup Steps", "warmup")}
-        <input type="text" id="warmup" list="warmup-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="warmup" list="warmup-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="warmup-options-xlmr">
           <option value="0.0">0.0</option>
           <option value="0.1">0.1 (Recommended)</option>
@@ -1340,7 +1340,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Dropout", "dropout")}
-        <input type="text" id="dropout" list="dropout-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="dropout" list="dropout-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="dropout-options-xlmr">
           <option value="0.0">0.0</option>
           <option value="0.1">0.1 (Recommended)</option>
@@ -1350,7 +1350,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-        <input type="text" id="early-stopping" list="early-stopping-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="early-stopping" list="early-stopping-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="early-stopping-options-xlmr">
           <option value="0">Nonaktif</option>
           <option value="2">2 (Recommended)</option>
@@ -1362,7 +1362,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-        <input type="text" id="grad-accum" list="grad-accum-options-xlmr" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="grad-accum" list="grad-accum-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="grad-accum-options-xlmr">
           <option value="1">1 (Recommended)</option>
           <option value="2">2</option>
@@ -1379,7 +1379,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Vector Size", "vector_size")}
-        <input type="text" id="vector-size" list="vector-size-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="vector-size" list="vector-size-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="vector-size-options-w2v">
           <option value="100">100 (Recommended)</option>
           <option value="150">150</option>
@@ -1389,7 +1389,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Window Size", "window_size")}
-        <input type="text" id="window-size" list="window-size-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="window-size" list="window-size-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="window-size-options-w2v">
           <option value="3">3</option>
           <option value="5">5 (Recommended)</option>
@@ -1401,7 +1401,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Min Count", "min_count")}
-        <input type="text" id="min-count" list="min-count-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="min-count" list="min-count-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="min-count-options-w2v">
           <option value="1">1 (Recommended)</option>
           <option value="3">3</option>
@@ -1411,7 +1411,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="lr" list="lr-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="lr-options-w2v">
           <option value="0.01">0.01</option>
           <option value="0.025">0.025 (Recommended)</option>
@@ -1426,7 +1426,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Model Type", "model_type")}
-        <input type="text" id="model-type" list="model-type-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="model-type" list="model-type-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="model-type-options-w2v">
           <option value="skip-gram">Skip-gram (Recommended)</option>
           <option value="cbow">CBOW</option>
@@ -1436,7 +1436,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Negative Sampling", "negative")}
-        <input type="text" id="negative" list="negative-options-w2v" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="negative" list="negative-options-w2v" placeholder="Select or type manually" value="">
         <datalist id="negative-options-w2v">
           <option value="3">3</option>
           <option value="5">5 (Recommended)</option>
@@ -1455,7 +1455,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Vector Size", "vector_size")}
-        <input type="text" id="vector-size" list="vector-size-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="vector-size" list="vector-size-options-glove" placeholder="Select or type manually" value="">
         <datalist id="vector-size-options-glove">
           <option value="100">100 (Recommended)</option>
           <option value="150">150</option>
@@ -1465,7 +1465,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Window Size", "window_size")}
-        <input type="text" id="window-size" list="window-size-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="window-size" list="window-size-options-glove" placeholder="Select or type manually" value="">
         <datalist id="window-size-options-glove">
           <option value="3">3</option>
           <option value="5">5 (Recommended)</option>
@@ -1477,7 +1477,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Min Count", "min_count")}
-        <input type="text" id="min-count" list="min-count-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="min-count" list="min-count-options-glove" placeholder="Select or type manually" value="">
         <datalist id="min-count-options-glove">
           <option value="1">1 (Recommended)</option>
           <option value="3">3</option>
@@ -1487,7 +1487,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="lr" list="lr-options-glove" placeholder="Select or type manually" value="">
         <datalist id="lr-options-glove">
           <option value="0.01">0.01</option>
           <option value="0.05">0.05 (Recommended)</option>
@@ -1502,7 +1502,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("X_max", "x_max")}
-        <input type="text" id="x-max" list="x-max-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="x-max" list="x-max-options-glove" placeholder="Select or type manually" value="">
         <datalist id="x-max-options-glove">
           <option value="50">50</option>
           <option value="100">100 (Recommended)</option>
@@ -1513,7 +1513,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Alpha", "alpha")}
-        <input type="text" id="alpha" list="alpha-options-glove" placeholder="Pilih atau ketik manual" value="">
+        <input type="text" id="alpha" list="alpha-options-glove" placeholder="Select or type manually" value="">
         <datalist id="alpha-options-glove">
           <option value="0.5">0.5</option>
           <option value="0.75">0.75 (Recommended)</option>
@@ -1538,7 +1538,7 @@
     const selected = document.querySelector("#dataset-list li.selected");
 
     if (!selected) {
-      showToast("⚠️ Pilih dataset terlebih dahulu");
+      showToast("Please select a dataset first.");
       return;
     }
 
@@ -1562,7 +1562,7 @@
     }, 100);
 
     closeModalDataset();
-    showToast("✅ Dataset berhasil dipilih");
+    showToast("Dataset was selected successfully.");
   };
 
   window.closeModalDataset = function () {
@@ -1629,7 +1629,7 @@
               if (splitSelect) splitSelect.value = modelData.ratio;
             }
 
-            showToast(`✅ Model "${modelName}" berhasil dimuat!`, "success");
+            showToast(`Model "${modelName}" was loaded successfully.`, "success");
           }, 150);
         });
       }
@@ -1674,7 +1674,7 @@
         // Mode training-final
         const trainingName =
           document.getElementById("training-name")?.value || "Training";
-        title.innerHTML = `🎯 ${trainingName} - Final Training`;
+        title.innerHTML = `${trainingName} - Final Training`;
       }
     }
 
@@ -1718,7 +1718,7 @@
 
   function startTraining(mode) {
     if (mode === "training-final" && !globalBestParams) {
-      showToast("⚠️ Jalankan Find the Best Ratio terlebih dahulu");
+      showToast("Please run Find the Best Ratio first.");
       return;
     }
 
@@ -1726,12 +1726,12 @@
     const splitRatio = splitSelect?.value;
 
     if (!splitRatio) {
-      showToast("⚠️ Pilih rasio data split terlebih dahulu");
+      showToast("Please select a split rasio first.");
       return;
     }
 
     if (!currentAlgo) {
-      showToast("⚠️ Pilih algoritma terlebih dahulu");
+      showToast("Please select an algorithm first.");
       return;
     }
 
@@ -1739,7 +1739,7 @@
     for (let field of requiredFields) {
       const element = document.getElementById(field);
       if (element && !element.value) {
-        showToast(`⚠️ ${field.replace("-", " ")} harus dipilih`);
+        showToast(`Please provide ${field.replace("-", " ")}.`);
         return;
       }
     }
@@ -1752,7 +1752,7 @@
       document.getElementById("new-model-name-card").style.display === "flex";
 
     if (mode !== "training-final" && !datasetSelected) {
-      showToast("⚠️ Pilih dataset terlebih dahulu");
+      showToast("Please select a dataset first.");
       return;
     }
 
@@ -1762,17 +1762,17 @@
         .getElementById("training-name")
         ?.value.trim();
       if (!trainingName) {
-        showToast("⚠️ Masukkan nama training terlebih dahulu");
+        showToast("Please enter a training name first.");
         return;
       }
 
       if (!modelSelected && !modelNameCardShown) {
-        showToast("⚠️ Pilih model lama atau buat model baru terlebih dahulu");
+        showToast("Please select an existing model or create a new model first.");
         return;
       }
 
       if (modelNameCardShown && !modelNameSaved) {
-        showToast("⚠️ Simpan nama model terlebih dahulu");
+        showToast("Please save the model name first.");
         return;
       }
     }
@@ -1955,7 +1955,7 @@
   }
 
   function simulateTrainingInCard(card, mode, params) {
-    // ✅ Real training via backend untuk IndoBERT
+    // Real training via backend for IndoBERT
     if ((params.algo || currentAlgo) === "indobert") {
       runBackendIndoBertTraining(card, mode, params);
       return;
@@ -1991,7 +1991,7 @@
         epochResults.push(result); // TAMBAHKAN: Simpan hasil
         appendProgressLog(
           card,
-          `Epoch ${currentEpoch}/${totalEpochs} selesai (F1 ${result.f1.toFixed(2)}%)`,
+          `Epoch ${currentEpoch}/${totalEpochs} completed (F1 ${result.f1.toFixed(2)}%)`,
           "info",
         );
       }
@@ -2000,7 +2000,7 @@
         progress = 100;
         clearInterval(interval);
         setLoadingVisual(card, false);
-        appendProgressLog(card, "Semua epoch selesai, merangkum hasil...", "success");
+        appendProgressLog(card, "All epochs completed, summarizing results...", "success");
         setProcessingStep(card, "metrics");
         finishTrainingInCard(card, mode, params, epochResults); // KIRIM epochResults
       }
@@ -2016,7 +2016,7 @@
     const tableBody = card.querySelector(".results-table tbody");
 
     if (!selectedDatasetId) {
-      showToast("⚠️ Pilih dataset preprocessed terlebih dahulu", "error");
+      showToast("Please select a preprocessed dataset first.", "error");
       return;
     }
 
@@ -2079,7 +2079,7 @@
 
       const startResult = await res.json();
       if (!res.ok) {
-        throw new Error(startResult?.detail || "Training gagal");
+        throw new Error(startResult?.detail || "Training failed");
       }
 
       const jobId = startResult.job_id;
@@ -2101,11 +2101,11 @@
       const poll = async () => {
         const stRes = await fetch(`${API_BASE}/processing/train/status/${jobId}`);
         const st = await stRes.json();
-        if (!stRes.ok) throw new Error(st?.detail || "Gagal ambil status");
+        if (!stRes.ok) throw new Error(st?.detail || "Failed to fetch status");
 
         if (st.status !== lastStatus) {
           lastStatus = st.status;
-          if (st.status === "queued") appendProgressLog(card, "Job masih dalam antrean...", "warning");
+          if (st.status === "queued") appendProgressLog(card, "Job is still in the queue...", "warning");
           if (st.status === "running") {
             appendProgressLog(card, "Training sedang berjalan di backend", "info");
             setProcessingStep(card, "train");
@@ -2171,25 +2171,25 @@
           setProcessingStep(card, "metrics");
           appendProgressLog(
             card,
-            `Training selesai (${st.result?.device || "device"})`,
+            `Training completed (${st.result?.device || "device"})`,
             "success",
           );
 
           finishTrainingInCard(card, mode, params, epochResults);
           showToast(
-            `✅ IndoBERT training selesai (${st.result?.device || "device"})`,
+            `IndoBERT training completed (${st.result?.device || "device"})`,
             "success",
           );
           return;
         }
 
         if (st.status === "error") {
-          progressText.innerText = "100% — Gagal";
+          progressText.innerText = "100% — Failed";
           progressBar.classList.remove("running");
           setLoadingVisual(card, false);
           stopProcessingElapsed(card);
           appendProgressLog(card, `Training gagal: ${st.error || "-"}`, "error");
-          showToast(st.error || "Training gagal", "error");
+          showToast(st.error || "Training failed", "error");
           return;
         }
 
@@ -2200,12 +2200,12 @@
     } catch (err) {
       console.error(err);
       progressBar.style.width = "100%";
-      progressText.innerText = "100% — Gagal";
+      progressText.innerText = "100% — Failed";
       progressBar.classList.remove("running");
       setLoadingVisual(card, false);
       stopProcessingElapsed(card);
-      appendProgressLog(card, `Error: ${err.message || "training gagal"}`, "error");
-      showToast(err.message || "Training gagal", "error");
+      appendProgressLog(card, `Error: ${err.message || "training failed"}`, "error");
+      showToast(err.message || "Training failed", "error");
     }
   }
 
@@ -2225,7 +2225,7 @@
         const result = generateEpochResult(currentEpoch, params);
         epochResults.push(result);
         showToast(
-          `🔄 Training Final: Epoch ${currentEpoch}/${totalEpochs} selesai`,
+          `Final Training: Epoch ${currentEpoch}/${totalEpochs} completed`,
           "info",
         );
       }
@@ -2281,7 +2281,7 @@
           epochResults.reduce((sum, r) => sum + r.f1, 0) / epochResults.length;
 
         showToast(
-          `✅ Training Final selesai! Avg F1: ${avgF1.toFixed(2)}%`,
+          `Final Training completed. Average F1: ${avgF1.toFixed(2)}%`,
           "success",
         );
 
@@ -2414,12 +2414,12 @@
 
     progressBar.style.width = "100%";
     progressBar.classList.remove("running");
-    progressText.innerText = "100% — Selesai";
+    progressText.innerText = "100% — Completed";
     setProcessingStep(card, "finish");
     stopProcessingElapsed(card);
     appendProgressLog(
       card,
-      `Ringkasan selesai. Total epoch tercatat: ${epochResults.length}`,
+      `Summary completed. Total recorded epochs: ${epochResults.length}`,
       "success",
     );
 
@@ -2518,7 +2518,7 @@
 
       saveTrainingHistory(historyEntry);
       renderHistoryTable();
-      showToast("✅ Final training saved to history!", "success");
+      showToast("Final training was saved to history.", "success");
     }
 
     // Fungsi untuk update tabel perbandingan
@@ -2532,7 +2532,7 @@
 
       if (entries.length === 0) {
         tbody.innerHTML =
-          '<tr class="empty-row"><td colspan="7" style="text-align:center; color:#999; padding: 30px;">📭 Belum ada data perbandingan. Lakukan training untuk melihat hasil.</td></tr>';
+          '<tr class="empty-row"><td colspan="7" style="text-align:center; color:#999; padding: 30px;">No comparison data is available yet. Run training to view results.</td></tr>';
         section.style.display = "none";
         return;
       }
@@ -2559,7 +2559,7 @@
         <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.2); font-weight: 600;" : ""}">
           <td style="padding: 12px 15px; text-align: center;">
             <strong>${ratio}</strong>
-            ${isBest ? " 🏆" : ""}
+            ${isBest ? " (Best)" : ""}
           </td>
           <td style="padding: 12px 15px; text-align: center;">${data.accuracy.toFixed(2)}%</td>
           <td style="padding: 12px 15px; text-align: center;">${data.precision.toFixed(2)}%</td>
@@ -2599,12 +2599,12 @@
 
       if (bestParamsContent) {
         bestParamsContent.innerHTML = `
-        <p><strong>📊 Split Ratio:</strong> ${params.splitRatio}</p>
-        <p><strong>📈 Learning Rate:</strong> ${params.lr}</p>
-        <p><strong>🔄 Epoch:</strong> ${params.epoch}</p>
-        <p><strong>📦 Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>📏 Max Length:</strong> ${params.maxLength}</p>
-        <p><strong>🏆 Best F1-Score:</strong> ${bestF1.toFixed(2)}%</p>
+        <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
+        <p><strong>Learning Rate:</strong> ${params.lr}</p>
+        <p><strong>Epoch:</strong> ${params.epoch}</p>
+        <p><strong>Batch Size:</strong> ${params.batchSize}</p>
+        <p><strong>Max Length:</strong> ${params.maxLength}</p>
+        <p><strong>Best F1-Score:</strong> ${bestF1.toFixed(2)}%</p>
       `;
       }
 
@@ -2636,19 +2636,19 @@
         );
         if (globalBestContent) {
           globalBestContent.innerHTML = `
-          <p><strong>📊 Split Ratio:</strong> ${params.splitRatio}</p>
-          <p><strong>📈 Learning Rate:</strong> ${params.lr}</p>
-          <p><strong>🔄 Epoch:</strong> ${params.epoch}</p>
-          <p><strong>📦 Batch Size:</strong> ${params.batchSize}</p>
-          <p><strong>📏 Max Length:</strong> ${params.maxLength}</p>
-          <p><strong>🏆 Best F1-Score:</strong> ${avgData.f1.toFixed(2)}%</p>
+          <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
+          <p><strong>Learning Rate:</strong> ${params.lr}</p>
+          <p><strong>Epoch:</strong> ${params.epoch}</p>
+          <p><strong>Batch Size:</strong> ${params.batchSize}</p>
+          <p><strong>Max Length:</strong> ${params.maxLength}</p>
+          <p><strong>Best F1-Score:</strong> ${avgData.f1.toFixed(2)}%</p>
         `;
         }
         document.getElementById("best-params-display").style.display = "block";
       }
 
       showToast(
-        "✅ Find Best Ratio selesai. Klik 'Use Best Model' pada card yang ingin dipakai untuk lanjut ke Final Training.",
+        "Find Best Ratio completed. Click 'Use Best Model' on the card you want to use for Final Training.",
         "success",
       );
     }
@@ -2666,7 +2666,7 @@
   function gunakanRasioTerbaik(card) {
     const paramsStr = card.dataset.bestParams || card.dataset.params;
     if (!paramsStr) {
-      showToast("⚠️ No parameters saved");
+      showToast("No parameters were saved.");
       return;
     }
 
@@ -2754,19 +2754,19 @@
       );
       if (globalBestContent) {
         globalBestContent.innerHTML = `
-        <p><strong>📊 Split Ratio:</strong> ${params.splitRatio}</p>
-        <p><strong>📈 Learning Rate:</strong> ${params.lr}</p>
-        <p><strong>🔄 Epoch:</strong> ${params.epoch}</p>
-        <p><strong>📦 Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>📏 Max Length:</strong> ${params.maxLength}</p>
-        <p><strong>⚙️ Optimizer:</strong> ${params.optimizer || "-"}</p>
+        <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
+        <p><strong>Learning Rate:</strong> ${params.lr}</p>
+        <p><strong>Epoch:</strong> ${params.epoch}</p>
+        <p><strong>Batch Size:</strong> ${params.batchSize}</p>
+        <p><strong>Max Length:</strong> ${params.maxLength}</p>
+        <p><strong>Optimizer:</strong> ${params.optimizer || "-"}</p>
       `;
       }
       // Jangan tampilkan best params display
       // document.getElementById('best-params-display').style.display = 'block';
 
       showToast(
-        `✅ Best model dari ratio ${params.splitRatio} diterapkan. Masuk ke tahap Final Training.`,
+        `The best model from rasio ${params.splitRatio} was applied. Proceeding to Final Training.`,
         "success",
       );
 
@@ -2848,14 +2848,14 @@
         .then(({ error }) => {
           if (error) {
             console.error("Error saving:", error);
-            showToast("✅ Model berhasil tersimpan secara lokal!");
+            showToast("Model was saved locally.");
             saveToLocalStorage(modelData);
           } else {
-            showToast("✅ Model berhasil tersimpan ke database!");
+            showToast("Model was saved to the database.");
           }
         });
     } else {
-      showToast("✅ Model berhasil tersimpan!");
+      showToast("Model was saved successfully.");
       saveToLocalStorage(modelData);
     }
 
@@ -2863,7 +2863,7 @@
   }
 
   function saveModel() {
-    showToast("✅ Gunakan tombol Simpan pada card training");
+    showToast("Please use the Save button on the training card.");
   }
 
   function saveToLocalStorage(modelData) {
@@ -2960,7 +2960,7 @@
     const history = loadTrainingHistory();
     const data = history[index];
     if (!data) {
-      showToast("⚠️ History data not found", "error");
+      showToast("History data was not found.", "error");
       return;
     }
 
@@ -3110,7 +3110,7 @@
           const isBest = r.epoch === bestEpoch;
           return `
         <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.3); font-weight: 600;" : ""}">
-          <td>${isBest ? "🏆 " : ""}${r.epoch}</td>
+          <td>${isBest ? "Best " : ""}${r.epoch}</td>
           <td>${r.accuracy.toFixed(2)}%</td>
           <td>${r.precision.toFixed(2)}%</td>
           <td>${r.recall.toFixed(2)}%</td>

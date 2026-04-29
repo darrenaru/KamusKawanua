@@ -453,7 +453,7 @@ tbody tr.selected {
 
 /* FILE NAME KHUSUS */
 #fileName {
-  max-width: 140px;          /* 🔥 batasi panjang */
+  max-width: 140px;          /* limit length */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;   /* ... */

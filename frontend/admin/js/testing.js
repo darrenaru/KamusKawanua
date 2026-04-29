@@ -89,7 +89,7 @@ var modelVariation = {
 
 var algorithmModelMap = {
     transformer: [
-        { value: '', label: 'Belum ada model tersimpan' }
+        { value: '', label: 'No saved model available yet' }
     ]
 };
 
@@ -181,7 +181,7 @@ function initAlgorithmModelSelect() {
             selectedDatasetName = found.dataset_name || null;
             selectedModelMaxLength = found.max_length || 64;
             document.getElementById('dsTitle').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
-            document.getElementById('dsSubtitle').textContent = 'Dataset berdasarkan model terpilih';
+            document.getElementById('dsSubtitle').textContent = 'Dataset based on the selected model';
             document.getElementById('dsFile').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
             document.getElementById('dsImporter').textContent = 'Model Registry';
         } else {
@@ -211,14 +211,14 @@ function initAlgorithmModelSelect() {
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (!data || !Array.isArray(data.items) || data.items.length === 0) {
-                throw new Error('Model pada tabel models belum tersedia.');
+                throw new Error('No model is available in the models table.');
             }
 
             testingModels = data.items;
             var grouped = {};
             for (var i = 0; i < testingModels.length; i++) {
                 var model = testingModels[i];
-                var algoName = model.algoritma || 'Tidak Diketahui';
+                var algoName = model.algoritma || 'Unknown';
                 var key = toKey(algoName);
                 if (!grouped[key]) {
                     grouped[key] = {
@@ -249,11 +249,11 @@ function initAlgorithmModelSelect() {
         })
         .catch(function(err) {
             algorithmModelMap = {
-                unavailable: [{ value: '', label: 'Tidak dapat memuat model dari backend' }]
+                unavailable: [{ value: '', label: 'Unable to load model list from backend' }]
             };
-            algorithmSelect.innerHTML = '<option value="unavailable">Tidak tersedia</option>';
+            algorithmSelect.innerHTML = '<option value="unavailable">Unavailable</option>';
             populateModelOptions('unavailable');
-            showTestingError(err.message || 'Gagal memuat data model testing.');
+            showTestingError(err.message || 'Failed to load testing model data.');
         });
 
     algorithmSelect.addEventListener('change', function() {
@@ -319,7 +319,7 @@ function initUpload() {
 
 function handleFile(file) {
     if (!file.name.toLowerCase().endsWith('.csv')) {
-        showTestingError('Hanya file .csv yang diizinkan.');
+        showTestingError('Only .csv files are allowed.');
         return;
     }
 
@@ -347,14 +347,14 @@ function handleFile(file) {
     }
 
     document.getElementById('dsTitle').textContent = file.name;
-    document.getElementById('dsSubtitle').textContent = 'Dataset yang diunggah';
+    document.getElementById('dsSubtitle').textContent = 'Uploaded dataset';
     document.getElementById('dsFile').textContent = file.name + ' (' + sizeStr + ')';
-    document.getElementById('dsTotal').textContent = fmt(basePairs) + ' pasangan';
+    document.getElementById('dsTotal').textContent = fmt(basePairs) + ' pairs';
     document.getElementById('katVerb').textContent = fmt(verb);
     document.getElementById('katNoun').textContent = fmt(noun);
     document.getElementById('katAdj').textContent = fmt(adj);
     document.getElementById('katAdv').textContent = fmt(adv);
-    document.getElementById('dsImporter').textContent = 'Pengguna';
+    document.getElementById('dsImporter').textContent = 'User';
 
     var today = new Date();
     var dateStr = today.getFullYear() + '-' +
@@ -396,14 +396,14 @@ function initKataInput() {
 
         if (count > 0 && count <= 2) {
             document.getElementById('dsTitle').textContent = '"' + val + '"';
-            document.getElementById('dsSubtitle').textContent = 'Input kata manual';
+            document.getElementById('dsSubtitle').textContent = 'Manual kata input';
             document.getElementById('dsFile').textContent = 'Input langsung';
             document.getElementById('dsTotal').textContent = count + ' kata';
             document.getElementById('katVerb').textContent = '0';
             document.getElementById('katNoun').textContent = '0';
             document.getElementById('katAdj').textContent = '0';
             document.getElementById('katAdv').textContent = '0';
-            document.getElementById('dsImporter').textContent = 'Pengguna';
+            document.getElementById('dsImporter').textContent = 'User';
 
             var today = new Date();
             var dateStr = today.getFullYear() + '-' +
@@ -413,8 +413,8 @@ function initKataInput() {
 
             setStatus('idle');
         } else if (count === 0) {
-            document.getElementById('dsTitle').textContent = 'Belum ada dataset';
-            document.getElementById('dsSubtitle').textContent = 'Unggah file atau input kata untuk memulai';
+            document.getElementById('dsTitle').textContent = 'No dataset selected yet';
+            document.getElementById('dsSubtitle').textContent = 'Upload a file or input kata to start';
             document.getElementById('dsFile').textContent = '—';
             document.getElementById('dsTotal').textContent = '—';
             document.getElementById('katVerb').textContent = '0';
@@ -439,7 +439,7 @@ function testKata() {
     isTestingKata = true;
     var btnTest = document.getElementById('btnTestKata');
     btnTest.disabled = true;
-    btnTest.textContent = 'Menguji...';
+    btnTest.textContent = 'Testing...';
 
     var words = val.split(/\s+/);
     var direction = document.getElementById('selDirection').value;
@@ -471,7 +471,7 @@ function testKata() {
                 var wordStart = performance.now();
 
                 var lowerWord = String(word).toLowerCase();
-                var translated = '[tidak ditemukan]';
+                var translated = '[not found]';
 
                 // Buat item dulu agar UI responsif, lalu update setelah backend selesai.
                 var item = document.createElement('div');
@@ -499,13 +499,13 @@ function testKata() {
 
                     if (res.ok && data && Array.isArray(data.results) && data.results.length > 0) {
                         translated = data.results[0][targetKey];
-                        if (!translated) translated = '[tidak ditemukan]';
+                        if (!translated) translated = '[not found]';
                     } else {
-                        translated = '[tidak ditemukan]';
+                        translated = '[not found]';
                     }
 
                     // Simulasi "wrong" untuk konsistensi tampilan lama.
-                    if (translated !== '[tidak ditemukan]' && Math.random() < variation.wrong) {
+                    if (translated !== '[not found]' && Math.random() < variation.wrong) {
                         translated = '[' + translated + ']';
                     }
                 } catch (e) {
@@ -517,7 +517,7 @@ function testKata() {
                             translated = kamus[lowerWord];
                         }
                     } else {
-                        translated = '[tidak ditemukan]';
+                        translated = '[not found]';
                     }
                 }
 
@@ -537,10 +537,10 @@ function testKata() {
                     document.getElementById('kataResultSummary').style.display = 'flex';
                     document.getElementById('krModel').textContent = modelLabel;
                     document.getElementById('krDir').textContent = dirLabel;
-                    document.getElementById('krTime').textContent = totalTime + ' detik';
+                    document.getElementById('krTime').textContent = totalTime + ' seconds';
 
                     btnTest.disabled = false;
-                    btnTest.textContent = 'Uji Kata';
+                    btnTest.textContent = 'Test Kata';
                     isTestingKata = false;
                 }
             }, delay);
@@ -571,8 +571,8 @@ function resetMetrics() {
     });
     document.getElementById('progressBar').style.width = '0%';
     document.getElementById('progressBar').classList.remove('running');
-    document.getElementById('progressText').textContent = 'Menunggu...';
-    document.getElementById('progressElapsed').textContent = 'Waktu berjalan: 00:00';
+    document.getElementById('progressText').textContent = 'Waiting...';
+    document.getElementById('progressElapsed').textContent = 'Elapsed time: 00:00';
     document.getElementById('progressSummary').classList.remove('show');
     resetProgressSteps();
 }
@@ -624,7 +624,7 @@ function startProgressElapsedTimer() {
         var diffSec = Math.floor((Date.now() - progressStartedAt) / 1000);
         var mm = String(Math.floor(diffSec / 60)).padStart(2, '0');
         var ss = String(diffSec % 60).padStart(2, '0');
-        elapsedEl.textContent = 'Waktu berjalan: ' + mm + ':' + ss;
+        elapsedEl.textContent = 'Elapsed time: ' + mm + ':' + ss;
     }, 1000);
 }
 
@@ -670,17 +670,17 @@ async function startTesting() {
 
     if (currentMode === 'input') {
         if (!kataVal) {
-            showTestingError('Silakan input kata terlebih dahulu.');
+            showTestingError('Please input kata first.');
             return;
         }
         if (!kataValid) {
-            showTestingError('Input kata tidak boleh lebih dari 2 kata.');
+            showTestingError('Kata input cannot exceed 2 kata.');
             return;
         }
     }
 
     if (!selectedDatasetId || isNaN(selectedDatasetId)) {
-        showTestingError('Dataset tidak ditemukan dari model terpilih. Pastikan kolom dataset_id pada tabel models terisi.');
+        showTestingError('Dataset was not found for the selected model. Make sure dataset_id in the models table is filled.');
         return;
     }
 
@@ -695,7 +695,7 @@ async function startTesting() {
 
     var model = document.getElementById('selModel').value;
     if (!model) {
-        showTestingError('Model belum tersedia. Simpan model terlebih dahulu dari halaman Processing.');
+        showTestingError('Model is not available yet. Save the model first from the Processing page.');
         setTestingUiBusy(false);
         isRunning = false;
         return;
@@ -718,11 +718,11 @@ async function startTesting() {
     var bar = document.getElementById('progressBar');
     bar.classList.add('running');
     startProgressElapsedTimer();
-    setProgressStep('prepare', 10, 'Validasi konfigurasi testing...');
+        setProgressStep('prepare', 10, 'Validating testing configuration...');
 
     var backendResult = null;
     try {
-        setProgressStep('connect', 30, 'Mengirim request ke backend...');
+        setProgressStep('connect', 30, 'Sending request to backend...');
         var res = await fetch(API_BASE + '/testing/indobert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -737,21 +737,21 @@ async function startTesting() {
         });
         var data = await res.json();
         if (!res.ok) {
-            throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Testing backend gagal.');
+            throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Backend testing failed.');
         }
         backendResult = data;
-        setProgressStep('process', 75, 'Backend selesai memproses testing model.');
+        setProgressStep('process', 75, 'Backend finished processing model testing.');
     } catch (err) {
         bar.classList.remove('running');
         stopProgressElapsedTimer();
         setStatus('idle');
-        document.getElementById('progressText').textContent = 'Gagal menjalankan testing';
-        showTestingError(err && err.message ? err.message : 'Gagal menjalankan testing backend.');
+        document.getElementById('progressText').textContent = 'Failed to run testing';
+        showTestingError(err && err.message ? err.message : 'Failed to run backend testing.');
         setTestingUiBusy(false);
         isRunning = false;
         return;
     }
-    setProgressStep('metrics', 90, 'Menyiapkan metrik ke tampilan...');
+    setProgressStep('metrics', 90, 'Preparing metrics for display...');
     bar.classList.remove('running');
     setStatus('tested');
     finishTesting(backendResult, direction);
@@ -792,7 +792,7 @@ function finishTesting(result, direction) {
         }, i * 100);
     });
 
-    setProgressStep('finish', 100, 'Testing selesai.');
+    setProgressStep('finish', 100, 'Testing completed.');
     stopProgressElapsedTimer();
     setTestingUiBusy(false);
     isRunning = false;

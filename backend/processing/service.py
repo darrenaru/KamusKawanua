@@ -37,7 +37,7 @@ def _parse_ratio(split_ratio: str) -> tuple[float, float]:
     train = int(a)
     test = int(b)
     if train + test != 100:
-        raise ValueError("split_ratio harus total 100 (mis: 80:20)")
+        raise ValueError("split_ratio must total 100 (example: 80:20)")
     return train / 100.0, test / 100.0
 
 
@@ -144,7 +144,7 @@ def _make_label_maps(rows: list[dict]) -> tuple[dict[str, int], dict[int, str]]:
     labels = sorted({str(r.get("jenis") or "").strip() for r in rows})
     labels = [l for l in labels if l]
     if not labels:
-        raise ValueError("Kolom 'jenis' kosong. Pastikan dataset punya label (jenis).")
+        raise ValueError("Column 'jenis' is empty. Ensure the dataset has labels (jenis).")
     label2id = {l: i for i, l in enumerate(labels)}
     id2label = {i: l for l, i in label2id.items()}
     return label2id, id2label
@@ -191,8 +191,8 @@ def train_indobert_softmax(
 
     if not rows:
         raise ValueError(
-            "Data preprocessed_data tidak ditemukan atau kosong untuk dataset_id yang diberikan. "
-            "Pastikan proses preprocessing telah berhasil dan data tersimpan dengan benar sebelum "
+            "preprocessed_data not found or empty for the provided dataset_id. "
+            "Ensure preprocessing has completed successfully and data is stored correctly before "
             "digunakan pada tahap processing."
         )
 
@@ -402,7 +402,7 @@ def predict_indobert_softmax(*, text: str, model_name: str, max_length: int) -> 
     model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
     model_dir = os.path.join(model_root, _safe_name(model_name))
     if not os.path.isdir(model_dir):
-        raise ValueError("Model belum ada. Train dulu atau cek model_name.")
+        raise ValueError("Model is not available yet. Train first or check model_name.")
 
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = AutoModelForSequenceClassification.from_pretrained(model_dir)

@@ -41,7 +41,8 @@ function applySelection(algo) {
         }
     });
 
-    info.innerText = "Algoritma dipilih: " + labelMap[algo];
+    info.innerText = "Selected algorithm: " + labelMap[algo];
+    nextBtn.disabled = false;
 }
 
 // ==============================
@@ -67,6 +68,9 @@ window.onload = () => {
 
     if (saved) {
         applySelection(saved);
+    } else {
+        info.innerText = "No algorithm selected yet.";
+        nextBtn.disabled = true;
     }
 };
 
@@ -78,13 +82,13 @@ nextBtn.addEventListener("click", () => {
     const selected = localStorage.getItem("selectedAlgorithm");
 
     if (!selected) {
-        alert("Pilih algoritma terlebih dahulu!");
+        alert("Please select an algorithm first!");
         return;
     }
 
-    // 🔥 SIMPAN STATE (SUDAH ADA)
-    console.log("Lanjut dengan algoritma:", selected);
+    // Persist current selection
+    console.log("Continue with algorithm:", selected);
 
-    // 🔥 REDIRECT KE DATA COLLECTION
+    // Redirect to Data Collection
     window.location.href = "../pages/data-collection.html";
 });

@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const isLoggedIn = localStorage.getItem("isLoggedIn");
 
 if (!isLoggedIn) {
-    alert("Kamu belum login!");
+    alert("You are not logged in!");
     window.location.href = "../../login/login.html";
     return;
 }
@@ -31,6 +31,7 @@ if (!isLoggedIn) {
     initFileInput();
     initValidation();
     initSearch();
+    setDatasetStatus("Loading datasets...");
     fetchDatasets();
 });
 
@@ -46,10 +47,12 @@ async function fetchDatasets() {
 
         if (error) {
             console.error("FETCH ERROR:", error);
-            return; // ❌ jangan alert
+            setDatasetStatus("Unable to load dataset list.");
+            return; // avoid alert here
         }
 
         if (!data || data.length === 0) {
+            datasets = [];
             renderDatasets([]);
             return;
         }
@@ -70,6 +73,7 @@ async function fetchDatasets() {
 
     } catch (err) {
         console.error("FETCH CRASH:", err);
+        setDatasetStatus("Unable to load dataset list.");
     }
 }
 
@@ -82,7 +86,7 @@ function initFileInput() {
     const uploadBox = document.querySelector(".upload-box");
 
     if (!input || !fileName || !uploadBox) {
-        console.error("Upload element tidak lengkap");
+        console.error("Upload elements are incomplete");
         return;
     }
 
@@ -91,11 +95,32 @@ function initFileInput() {
             input.click();
         });
 
+    ["dragenter", "dragover"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            uploadBox.classList.add("dragover");
+        });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            uploadBox.classList.remove("dragover");
+        });
+    });
+
+    uploadBox.addEventListener("drop", (event) => {
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+        input.files = files;
+        input.dispatchEvent(new Event("change"));
+    });
+
     input.addEventListener("change", function () {
         if (this.files && this.files.length > 0) {
             fileName.textContent = this.files[0].name;
         } else {
-            fileName.textContent = "Belum ada file";
+            fileName.textContent = "No file selected";
         }
     });
 }
@@ -124,6 +149,20 @@ function renderDatasets(list = datasets) {
     if (!container) return;
 
     container.innerHTML = "";
+    updateDatasetCount(list.length, datasets.length);
+
+    if (!list.length) {
+        const hasSourceData = datasets.length > 0;
+        container.innerHTML = `<div class="dataset-empty">${
+            hasSourceData
+                ? "No dataset matches your current search keyword."
+                : "No datasets are available yet. Upload a CSV file to get started."
+        }</div>`;
+        setDatasetStatus(hasSourceData ? "Search completed." : "Waiting for dataset upload.");
+        return;
+    }
+
+    setDatasetStatus(`Showing ${list.length} dataset(s).`);
 
     list.forEach(ds => {
         const card = document.createElement("div");
@@ -132,17 +171,17 @@ function renderDatasets(list = datasets) {
         card.innerHTML = `
             <div class="card-header">
                 <h3>${ds.name}</h3>
-                <button class="delete-btn" onclick="deleteDataset(${ds.id})">Hapus</button>
+                <button class="delete-btn" onclick="deleteDataset(${ds.id})">Delete</button>
             </div>
 
             <div class="dataset-info">
-                <div>Jumlah data</div><div>: ${ds.total}</div>
+                <div>Data count</div><div>: ${ds.total}</div>
                 <div>Kata Kerja</div><div>: ${ds.kerja}</div>
                 <div>Kata Benda</div><div>: ${ds.benda}</div>
                 <div>Kata Sifat</div><div>: ${ds.sifat}</div>
                 <div>Kata Keterangan</div><div>: ${ds.keterangan}</div>
-                <div>Nama Pengimpor</div><div>: ${ds.uploader}</div>
-                <div>Tanggal Upload</div><div>: ${ds.date}</div>
+                <div>Uploader</div><div>: ${ds.uploader}</div>
+                <div>Upload Date</div><div>: ${ds.date}</div>
             </div>
         `;
 
@@ -156,7 +195,7 @@ function renderDatasets(list = datasets) {
 function parseCSVStrict(text) {
     const lines = text.split("\n").filter(l => l.trim() !== "");
 
-    // 🔥 HANDLE HEADER
+    // Handle header
     const header = parseCSVLine(lines[0]);
 
     const expected8 = [
@@ -184,10 +223,10 @@ function parseCSVStrict(text) {
 
     if (!isHeader8 && !isHeader6) {
         console.log("HEADER:", header);
-        throw new Error("Format CSV tidak sesuai! Gunakan header 6 atau 8 kolom yang didukung.");
+        throw new Error("Invalid CSV format! Use a supported 6-column or 8-column header.");
     }
 
-    // 🔥 PARSE DATA
+    // Parse data
     return lines.slice(1).map(line => {
         const c = parseCSVLine(line);
 
@@ -252,11 +291,11 @@ async function uploadDataset() {
     // 🔒 LOCK UI
     uploadBtn.disabled = true;
     cancelBtn.disabled = true;
-    uploadBtn.innerText = "Mengunggah...";
+    uploadBtn.innerText = "Uploading...";
     input.disabled = true;
     datasetNameInput.disabled = true;
 
-    // 🔥 UI ELEMENT
+    // UI elements
     const progressContainer = document.getElementById("progressContainer");
     const progressBar = document.getElementById("progressBar");
     const progressText = document.getElementById("progressText");
@@ -265,7 +304,7 @@ async function uploadDataset() {
 
         // VALIDASI DULU
         if (!file || !datasetName) {
-            alert("File dan nama dataset wajib diisi!");
+            alert("File and dataset name are required!");
             return;
         }
 
@@ -273,14 +312,14 @@ async function uploadDataset() {
         const exists = await isDatasetNameExists(datasetName);
 
         if (exists) {
-            alert("Nama dataset sudah digunakan!");
+            alert("Dataset name is already used!");
             return;
         }
 
         progressContainer.style.display = "block";
         progressText.style.display = "block";
         progressBar.style.width = "0%";
-        progressText.innerText = "Memproses file...";
+        progressText.innerText = "Processing file...";
 
         const text = await file.text();
         const rows = parseCSVStrict(text);
@@ -302,7 +341,7 @@ async function uploadDataset() {
         console.log("UPLOAD DEBUG username =", username);
 
         if (!username) {
-            alert("Session hilang, login ulang!");
+            alert("Session lost, please log in again!");
             window.location.href = "../../login/login.html";
             return;
         }
@@ -353,7 +392,7 @@ async function uploadDataset() {
             progressText.innerText = `Uploading ${percent}% (${currentChunk}/${totalChunks})`;
         }
 
-        progressText.innerText = "Selesai!";
+        progressText.innerText = "Completed!";
         progressBar.style.width = "100%";
 
         setTimeout(() => {
@@ -361,14 +400,14 @@ async function uploadDataset() {
             progressText.style.display = "none";
         }, 1000);
 
-        alert("Dataset berhasil disimpan!");
+        alert("Dataset saved successfully!");
 
         resetFile();
         fetchDatasets();
 
     } catch (err) {
         console.error(err);
-        alert(err.message || "Terjadi kesalahan");
+        alert(err.message || "An error occurred");
 
         progressContainer.style.display = "none";
         progressText.style.display = "none";
@@ -379,7 +418,7 @@ async function uploadDataset() {
 
         uploadBtn.disabled = false;
         cancelBtn.disabled = false;
-        uploadBtn.innerText = "Unggah";
+        uploadBtn.innerText = "Upload";
         input.disabled = false;
         datasetNameInput.disabled = false;
     }
@@ -395,7 +434,7 @@ function resetFile() {
     const uploadBtn = document.getElementById("uploadBtn");
 
     input.value = "";
-    label.innerText = "Belum ada file";
+    label.innerText = "No file selected";
     datasetNameInput.value = "";
     uploadBtn.disabled = true;
 }
@@ -404,7 +443,7 @@ function resetFile() {
 // SEARCH
 // ==============================
 function initSearch() {
-    const searchInput = document.querySelector(".search-box input");
+    const searchInput = document.getElementById("searchInput");
 
     if (!searchInput) return;
 
@@ -418,6 +457,18 @@ function initSearch() {
 
         renderDatasets(filtered);
     });
+}
+
+function updateDatasetCount(visibleCount, totalCount) {
+    const el = document.getElementById("datasetCount");
+    if (!el) return;
+    el.textContent = `Total datasets: ${totalCount} | Visible: ${visibleCount}`;
+}
+
+function setDatasetStatus(text) {
+    const el = document.getElementById("datasetStatus");
+    if (!el) return;
+    el.textContent = text;
 }
 
 function parseCSVLine(line) {
@@ -447,12 +498,12 @@ function parseCSVLine(line) {
 
 async function deleteDataset(datasetId) {
 
-    const confirmDelete = confirm("Yakin ingin menghapus dataset ini?");
+    const confirmDelete = confirm("Are you sure you want to delete this dataset?");
     if (!confirmDelete) return;
 
     try {
 
-        // 🔥 HAPUS RAW DATA DULU
+        // Delete raw_data first
         const { error: errRaw } = await supabaseClient
             .from("raw_data")
             .delete()
@@ -460,7 +511,7 @@ async function deleteDataset(datasetId) {
 
         if (errRaw) throw errRaw;
 
-        // 🔥 HAPUS DATASET
+        // Delete dataset
         const { error: errDataset } = await supabaseClient
             .from("datasets")
             .delete()
@@ -468,14 +519,14 @@ async function deleteDataset(datasetId) {
 
         if (errDataset) throw errDataset;
 
-        alert("Dataset berhasil dihapus");
+        alert("Dataset deleted successfully");
 
-        // 🔄 REFRESH UI
+        // Refresh UI
         fetchDatasets();
 
     } catch (err) {
         console.error("DELETE ERROR:", err);
-        alert("Gagal menghapus dataset");
+        alert("Failed to delete dataset");
     }
 }
 

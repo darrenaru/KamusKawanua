@@ -63,7 +63,7 @@ function renderTable() {
     body.innerHTML = "";
 
     if (!datasets || datasets.length === 0) {
-        body.innerHTML = `<tr><td colspan="7">Tidak ada dataset</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7">No dataset available</td></tr>`;
         return;
     }
 
@@ -81,7 +81,7 @@ function renderTable() {
             <td>${ds.kata_keterangan ?? 0}</td>
             <td>
                 <span class="status ${ds.is_preprocessed ? 'done' : 'pending'}">
-                    ${ds.is_preprocessed ? 'Selesai' : 'Belum'}
+                    ${ds.is_preprocessed ? 'Completed' : 'Not Yet'}
                 </span>
             </td>
         `;
@@ -123,7 +123,7 @@ function selectDataset(ds) {
     document.getElementById("keterangan").innerText = ds.kata_keterangan;
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
-    updateProgressUI(0, "Siap diproses");
+    updateProgressUI(0, "Ready to process");
 }
 
 function goToProcessing() {
@@ -187,7 +187,7 @@ async function pollPreprocessStatus(jobId) {
         const res = await fetch(`http://127.0.0.1:8000/preprocess/status/${jobId}`);
         const status = await res.json();
         if (!res.ok) {
-            throw new Error(status?.message || "Gagal membaca status preprocessing");
+            throw new Error(status?.message || "Failed to read preprocessing status");
         }
 
         const percent = 35 + Math.round((status.percent || 0) * 0.65);
@@ -197,15 +197,15 @@ async function pollPreprocessStatus(jobId) {
             percent,
             hasTotal
                 ? `Tokenizing ${status.processed || 0}/${status.total || 0}${deviceLabel}`
-                : `Menyiapkan tokenizer...${deviceLabel}`,
+                : `Preparing tokenizer...${deviceLabel}`,
         );
 
         if (status.status === "done") return status;
         if (status.status === "cancelled") {
-            throw new Error("Preprocessing dibatalkan");
+            throw new Error("Preprocessing was cancelled");
         }
         if (status.status === "error") {
-            throw new Error(status.error || "Backend tokenizer gagal");
+            throw new Error(status.error || "Backend tokenizer failed");
         }
 
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -245,7 +245,7 @@ async function startPreprocessing() {
         cancelRequested = false;
         preprocessJobId = null;
         btn.disabled = true;
-        btn.innerText = "Memproses...";
+        btn.innerText = "Processing...";
         cancelBtn.style.display = "inline-block";
         cancelBtn.disabled = false;
         cancelBtn.innerText = "Cancel Preprocessing";
@@ -258,14 +258,14 @@ async function startPreprocessing() {
         const allData = await fetchAllRawData(selectedDataset.id);
 
         if (!allData || allData.length === 0) {
-            throw new Error("Raw data kosong");
+            throw new Error("Raw data is empty");
         }
 
         const chunkSize = 100;
 
         for (let i = 0; i < allData.length; i += chunkSize) {
             if (cancelRequested) {
-                throw new Error("Preprocessing dibatalkan");
+                throw new Error("Preprocessing was cancelled");
             }
             const chunk = allData.slice(i, i + chunkSize);
 
@@ -303,7 +303,7 @@ async function startPreprocessing() {
         }
 
         if (cancelRequested) {
-            throw new Error("Preprocessing dibatalkan");
+            throw new Error("Preprocessing was cancelled");
         }
 
         // Jalankan tokenizer backend secara async + polling progres real.
@@ -313,17 +313,17 @@ async function startPreprocessing() {
         );
         const startData = await startRes.json();
         if (!startRes.ok || !startData?.job_id) {
-            throw new Error(startData?.message || "Gagal memulai tokenizer backend");
+            throw new Error(startData?.message || "Failed to start backend tokenizer");
         }
 
         preprocessJobId = startData.job_id;
-        updateProgressUI(35, "Tokenizer backend dimulai...");
+        updateProgressUI(35, "Backend tokenizer started...");
         const result = await pollPreprocessStatus(preprocessJobId);
 
         const finalDevice = (result.device || "cpu").toUpperCase();
         updateProgressUI(
             100,
-            `Selesai ${result.processed || 0}/${result.total || 0} | Device: ${finalDevice}`,
+            `Completed ${result.processed || 0}/${result.total || 0} | Device: ${finalDevice}`,
         );
 
         await supabaseClient
@@ -333,7 +333,7 @@ async function startPreprocessing() {
 
         document.getElementById("continueBtn").style.display = "block";
 
-        alert("Preprocessing + Tokenisasi selesai");
+        alert("Preprocessing + tokenization completed");
 
         await loadDatasets();
 
@@ -346,7 +346,7 @@ async function startPreprocessing() {
     } catch (err) {
         console.error(err);
         if (cancelRequested) {
-            updateProgressUI(0, "Preprocessing dibatalkan");
+            updateProgressUI(0, "Preprocessing was cancelled");
         } else {
             updateProgressUI(0, `Error: ${err.message}`);
         }
@@ -355,7 +355,7 @@ async function startPreprocessing() {
         isProcessing = false;
         preprocessJobId = null;
         btn.disabled = false;
-        btn.innerText = "Mulai Preprocessing";
+        btn.innerText = "Start Preprocessing";
         cancelBtn.style.display = "none";
         cancelBtn.disabled = true;
         cancelBtn.innerText = "Cancel Preprocessing";

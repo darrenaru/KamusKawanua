@@ -27,7 +27,7 @@ def get_available_testing_models() -> list[dict]:
         )
         models = models_res.data or []
     except Exception as e:
-        raise ValueError(f"Gagal mengambil data model: {e}")
+        raise ValueError(f"Failed to fetch model data: {e}")
 
     dataset_ids = sorted(
         {
@@ -73,7 +73,7 @@ def get_available_testing_models() -> list[dict]:
             {
                 "id": int(model_id),
                 "nama_model": model_name,
-                "algoritma": str(row.get("algoritma") or "Tidak Diketahui").strip() or "Tidak Diketahui",
+                "algoritma": str(row.get("algoritma") or "Unknown").strip() or "Unknown",
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
                 "max_length": row.get("max_length"),
@@ -112,7 +112,7 @@ def _insert_testing_result(payload: dict[str, Any]) -> int | None:
         return int(testing_result_id) if testing_result_id is not None else None
     except Exception as e:
         print("INSERT ERROR:", str(e))
-        raise ValueError(f"Gagal menyimpan ke testing_results: {e}")
+        raise ValueError(f"Failed to save to testing_results: {e}")
 
 
 def test_indobert_model(
@@ -126,7 +126,7 @@ def test_indobert_model(
 ) -> dict:
     rows = _fetch_preprocessed_rows(dataset_id)
     if not rows:
-        raise ValueError("Dataset tidak ditemukan atau preprocessed_data kosong untuk dataset_id ini.")
+        raise ValueError("Dataset not found or preprocessed_data is empty for this dataset_id.")
 
     valid_rows: list[dict] = []
     for row in rows:
@@ -139,7 +139,7 @@ def test_indobert_model(
         valid_rows.append(row)
 
     if not valid_rows:
-        raise ValueError("Tidak ada row valid (kolom 'jenis' dan text input harus terisi).")
+        raise ValueError("No valid rows found (columns 'jenis' and text input must be filled).")
 
     if limit:
         valid_rows = valid_rows[:limit]
@@ -149,8 +149,8 @@ def test_indobert_model(
     model_dir = os.path.join(model_root, _safe_name(model_name))
     if not os.path.isdir(model_dir):
         raise ValueError(
-            f"Model '{model_name}' tidak ditemukan di trained_models. "
-            "Pastikan model_name benar dan model sudah ditraining."
+            f"Model '{model_name}' was not found in trained_models. "
+            "Ensure model_name is correct and the model has been trained."
         )
 
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
@@ -253,7 +253,7 @@ def test_indobert_model(
 
     total_data = len(actual_labels)
     if total_data == 0:
-        raise ValueError("Tidak ada data valid untuk testing.")
+        raise ValueError("No valid data available for testing.")
 
     accuracy = float(accuracy_score(actual_labels, predicted_labels))
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(

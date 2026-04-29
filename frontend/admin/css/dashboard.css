@@ -188,6 +188,14 @@ body::after {
   letter-spacing: -0.02em;
 }
 
+.page-subtitle {
+  margin: -18px auto 24px;
+  max-width: 700px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .title-with-icon {
   display: inline-flex;
   align-items: center;
@@ -317,6 +325,7 @@ body::after {
   margin-top: 20px;
   font-weight: 500;
   color: var(--text-secondary);
+  min-height: 22px;
 }
 
 /* =========================
@@ -337,4 +346,10 @@ body::after {
 
 .next-btn:hover {
   background: #3a2a12;
+}
+
+.next-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #857462;
 }

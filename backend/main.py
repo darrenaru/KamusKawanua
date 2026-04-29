@@ -151,9 +151,9 @@ def login(data: LoginRequest):
             .execute()
 
         if response.data:
-            return {"success": True, "message": "Login berhasil"}
+            return {"success": True, "message": "Login successful"}
         else:
-            return {"success": False, "message": "Username atau password salah"}
+            return {"success": False, "message": "Username or password is incorrect"}
 
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -644,7 +644,7 @@ def search(query: str, lang: str):
         return {
             "query": query,
             "results": [],
-            "error": "database kosong / RLS belum aktif / Supabase gagal"
+            "error": "The database is empty, RLS is not enabled, or the Supabase request failed."
         }
 
     manado_words = set(df['manado'].astype(str))
@@ -695,6 +695,27 @@ def search(query: str, lang: str):
     query_original = query
     query_norm = normalize(query)
 
+    # Prioritas 1: exact match dari dictionary.
+    # Jika exact ditemukan, langsung kembalikan hasil exact agar tidak tercampur
+    # dengan partial/fuzzy/semantic.
+    if lang == "manado":
+        exact_rows = df[df["manado"].astype(str).apply(normalize) == query_norm]
+    elif lang == "indonesia":
+        exact_rows = df[df["indonesia"].astype(str).apply(normalize) == query_norm]
+    elif lang == "inggris":
+        exact_rows = df[df["inggris"].astype(str).apply(normalize) == query_norm]
+    else:
+        return {"message": "Parameter 'lang' is required."}
+
+    if not exact_rows.empty:
+        exact_results = []
+        for _, row in exact_rows.head(5).iterrows():
+            exact_results.append(format_result(row, lang, query_original, 1.0, "exact"))
+        return {
+            "query": query_original,
+            "results": exact_results
+        }
+
     results = []
 
     for idx, row in df.iterrows():
@@ -709,7 +730,7 @@ def search(query: str, lang: str):
         elif lang == "inggris":
             target = eng
         else:
-            return {"message": "lang harus diisi"}
+            return {"message": "Parameter 'lang' is required."}
 
         if query_norm == target:
             results.append(format_result(row, lang, query_original, 1.0, "exact"))
@@ -747,7 +768,7 @@ def search(query: str, lang: str):
         return {
             "query": query_original,
             "results": [],
-            "message": "kata tidak ditemukan",
+            "message": "No matching kata was found.",
             "suggestion": suggestion
         }
 

@@ -1,12 +1,12 @@
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.Chart === 'undefined') {
-        console.error('Chart.js belum termuat. Cek akses CDN.');
+        console.error('Chart.js is not loaded. Check CDN access.');
         var main = document.querySelector('main.main') || document.body;
         var p = document.createElement('p');
         p.style.color = '#c62828';
         p.style.fontWeight = '600';
         p.style.margin = '0 0 12px';
-        p.textContent = 'Gagal memuat Chart.js.';
+        p.textContent = 'Failed to load Chart.js.';
         main.prepend(p);
         return;
     }
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function () {
             options: JSON.parse(JSON.stringify(baseOpts))
         });
     } catch (e) {
-        console.error('Gagal render chartTransformer:', e);
+        console.error('Failed to render chartTransformer:', e);
     }
 
     buildLegend('legendTransformer', colors, metricNames);
@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function () {
             options: JSON.parse(JSON.stringify(baseOpts))
         });
     } catch (e) {
-        console.error('Gagal render chartClassic:', e);
+        console.error('Failed to render chartClassic:', e);
     }
 
     buildLegend('legendClassic', colors, metricNames);

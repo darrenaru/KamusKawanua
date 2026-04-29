@@ -1197,7 +1197,7 @@ body::before {
 }
 
 .results-table .best-row td:first-child::before {
-  content: "🏆";
+  content: "Best";
   position: absolute;
   left: 5px;
 }
