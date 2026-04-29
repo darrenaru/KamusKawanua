@@ -989,38 +989,87 @@ body::before {
   border-color: #ff6b6b;
 }
 
-.progress-wrap {
-  background: #d0c8bc;
-  border-radius: 50px;
-  height: 40px;
+.progress-container {
+  width: 100%;
+  height: 10px;
+  background: #eee;
+  border-radius: 10px;
+  margin-bottom: 6px;
   overflow: hidden;
-  position: relative;
-  margin-bottom: 20px;
-}
-
-.progress-wrap.done {
-  background: #c8a96e;
 }
 
 .progress-bar {
   height: 100%;
-  background: #c8a96e;
-  border-radius: 50px;
   width: 0%;
-  transition: width 0.4s ease;
+  background: var(--accent);
+  border-radius: 10px;
+  transition: width 0.3s ease;
   position: relative;
 }
 
-.progress-label {
+.progress-bar.running::after {
+  content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 1.2s infinite;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.proc-progress-elapsed {
+  margin: -10px 0 10px;
+  font-size: 12px;
+  color: #6f6358;
+}
+
+.proc-progress-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: -2px 0 12px;
+}
+
+.proc-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #9a8e7f;
+}
+
+.proc-step-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid #c7beb0;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.proc-progress-step.active {
+  color: #3b2b16;
   font-weight: 600;
-  font-size: 14px;
-  white-space: nowrap;
-  pointer-events: none;
+}
+
+.proc-progress-step.active .proc-step-dot {
+  border-color: #b0894f;
+  background: #e6d0aa;
+  box-shadow: 0 0 0 3px rgba(200, 169, 110, 0.2);
+}
+
+.proc-progress-step.done {
+  color: #2f5f3a;
+}
+
+.proc-progress-step.done .proc-step-dot {
+  border-color: #5a7a3a;
+  background: #8faf66;
+  box-shadow: none;
 }
 
 .loading-visual {
@@ -1508,6 +1557,15 @@ body::before {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
   }
 }
 

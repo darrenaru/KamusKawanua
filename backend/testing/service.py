@@ -29,9 +29,6 @@ def get_available_testing_models() -> list[dict]:
     except Exception as e:
         raise ValueError(f"Gagal mengambil data model: {e}")
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
-
     dataset_ids = sorted(
         {
             int(row.get("dataset_id"))
@@ -67,11 +64,9 @@ def get_available_testing_models() -> list[dict]:
         dataset_id = int(dataset_id_raw) if dataset_id_raw is not None else None
 
         model_name = str(row.get("nama_model") or "").strip()
-        # Testing butuh dataset_id dan model harus benar-benar ada di disk.
-        if dataset_id is None or not model_name:
-            continue
-        model_dir = os.path.join(model_root, _safe_name(model_name))
-        if not os.path.isdir(model_dir):
+        # Untuk dropdown, tampilkan semua model yang tercatat di database.
+        # Validasi keberadaan folder model tetap dilakukan saat endpoint testing dijalankan.
+        if not model_name:
             continue
 
         items.append(

@@ -668,6 +668,57 @@ select:focus {
     color: #555;
 }
 
+.progress-elapsed {
+    font-size: 11.5px;
+    margin-top: 4px;
+    color: var(--text-secondary);
+}
+
+.progress-steps {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.step-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid #c7beb0;
+    background: transparent;
+    flex-shrink: 0;
+}
+
+.progress-step.active {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.progress-step.active .step-dot {
+    border-color: #b0894f;
+    background: #e6d0aa;
+    box-shadow: 0 0 0 3px rgba(200, 169, 110, 0.2);
+}
+
+.progress-step.done {
+    color: #2f5f3a;
+}
+
+.progress-step.done .step-dot {
+    border-color: #5a7a3a;
+    background: #8faf66;
+    box-shadow: none;
+}
+
 .progress-summary {
     display: none;
     margin-top: 12px;
@@ -1201,6 +1252,9 @@ select:focus {
     .progress-summary.show {
         flex-direction: column;
         gap: 4px;
+    }
+    .progress-steps {
+        gap: 6px;
     }
     .kata-result-summary {
         flex-direction: column;

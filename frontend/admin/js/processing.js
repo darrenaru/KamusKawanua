@@ -1850,6 +1850,53 @@
     if (loadingText) loadingText.innerText = text;
   }
 
+  const processingStepOrder = ["prepare", "queue", "train", "metrics", "finish"];
+
+  function resetProcessingStepUI(card) {
+    card.querySelectorAll(".proc-progress-step").forEach((el) => {
+      el.classList.remove("active");
+      el.classList.remove("done");
+    });
+    const elapsed = card.querySelector(".proc-progress-elapsed");
+    if (elapsed) elapsed.textContent = "Waktu berjalan: 00:00";
+  }
+
+  function setProcessingStep(card, stepId) {
+    const currentIdx = processingStepOrder.indexOf(stepId);
+    card.querySelectorAll(".proc-progress-step").forEach((el) => {
+      const idx = processingStepOrder.indexOf(el.dataset.step);
+      el.classList.remove("active");
+      el.classList.remove("done");
+      if (idx < currentIdx) {
+        el.classList.add("done");
+      } else if (idx === currentIdx) {
+        el.classList.add("active");
+      }
+    });
+  }
+
+  function startProcessingElapsed(card) {
+    stopProcessingElapsed(card);
+    card.dataset.progressStartedAt = String(Date.now());
+    const elapsed = card.querySelector(".proc-progress-elapsed");
+    const timerId = setInterval(() => {
+      if (!elapsed) return;
+      const startedAt = Number(card.dataset.progressStartedAt || 0);
+      if (!startedAt) return;
+      const totalSec = Math.floor((Date.now() - startedAt) / 1000);
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const ss = String(totalSec % 60).padStart(2, "0");
+      elapsed.textContent = `Waktu berjalan: ${mm}:${ss}`;
+    }, 1000);
+    card.dataset.progressTimerId = String(timerId);
+  }
+
+  function stopProcessingElapsed(card) {
+    const timerId = Number(card.dataset.progressTimerId || 0);
+    if (timerId) clearInterval(timerId);
+    delete card.dataset.progressTimerId;
+  }
+
   function createProgressAnimator(progressBar, progressLabel) {
     let displayed = 0;
     let target = 0;
@@ -1915,8 +1962,7 @@
     }
 
     const progressBar = card.querySelector(".progress-bar");
-    const progressLabel = card.querySelector(".progress-label");
-    const progressWrap = card.querySelector(".progress-wrap");
+    const progressText = card.querySelector(".progress-text");
     const tableBody = card.querySelector(".results-table tbody");
 
     let progress = 0;
@@ -1925,9 +1971,14 @@
     const epochResults = []; // TAMBAHKAN: Array untuk menyimpan hasil
 
     tableBody.innerHTML = "";
+    progressBar.classList.add("running");
     resetProgressLog(card, "Training dimulai");
+    resetProcessingStepUI(card);
+    setProcessingStep(card, "prepare");
+    startProcessingElapsed(card);
     appendProgressLog(card, `Mode: simulasi ${params.algo || currentAlgo}`, "warning");
     setLoadingVisual(card, true, "Simulasi training berjalan...");
+    setProcessingStep(card, "train");
 
     const interval = setInterval(() => {
       progress += Math.floor(Math.random() * 5) + 3;
@@ -1950,18 +2001,18 @@
         clearInterval(interval);
         setLoadingVisual(card, false);
         appendProgressLog(card, "Semua epoch selesai, merangkum hasil...", "success");
+        setProcessingStep(card, "metrics");
         finishTrainingInCard(card, mode, params, epochResults); // KIRIM epochResults
       }
 
       progressBar.style.width = progress + "%";
-      progressLabel.innerText = progress + "%";
+      progressText.innerText = `${progress}% — Simulasi training berjalan...`;
     }, 400);
   }
 
   async function runBackendIndoBertTraining(card, mode, params) {
     const progressBar = card.querySelector(".progress-bar");
-    const progressLabel = card.querySelector(".progress-label");
-    const progressWrap = card.querySelector(".progress-wrap");
+    const progressText = card.querySelector(".progress-text");
     const tableBody = card.querySelector(".results-table tbody");
 
     if (!selectedDatasetId) {
@@ -1990,11 +2041,14 @@
 
     // Reset UI
     tableBody.innerHTML = "";
-    progressWrap.classList.remove("done");
+    progressBar.classList.add("running");
+    resetProcessingStepUI(card);
+    setProcessingStep(card, "prepare");
+    startProcessingElapsed(card);
     const setProgressPct = (value) => {
       const safe = Math.max(0, Math.min(100, Number(value) || 0));
       progressBar.style.width = `${safe.toFixed(1)}%`;
-      progressLabel.innerText = `${Math.round(safe)}%`;
+      progressText.innerText = `${Math.round(safe)}% — Memproses training...`;
     };
     setProgressPct(0);
     resetProgressLog(card, "Menyiapkan training job IndoBERT...");
@@ -2031,6 +2085,7 @@
       const jobId = startResult.job_id;
       const totalEpochs = payload.epoch || startResult.total_epochs || 1;
       setLoadingVisual(card, true, `Job ${jobId.slice(0, 6)} sedang diproses...`);
+      setProcessingStep(card, "queue");
       appendProgressLog(
         card,
         `Job dibuat: ${jobId.slice(0, 8)} | device akan dipilih otomatis`,
@@ -2051,7 +2106,10 @@
         if (st.status !== lastStatus) {
           lastStatus = st.status;
           if (st.status === "queued") appendProgressLog(card, "Job masih dalam antrean...", "warning");
-          if (st.status === "running") appendProgressLog(card, "Training sedang berjalan di backend", "info");
+          if (st.status === "running") {
+            appendProgressLog(card, "Training sedang berjalan di backend", "info");
+            setProcessingStep(card, "train");
+          }
         }
 
         // Progress sinkron dengan status backend (epoch aktual)
@@ -2108,8 +2166,9 @@
 
         if (st.status === "done") {
           setProgressPct(100);
-          progressWrap.classList.add("done");
+          progressBar.classList.remove("running");
           setLoadingVisual(card, false);
+          setProcessingStep(card, "metrics");
           appendProgressLog(
             card,
             `Training selesai (${st.result?.device || "device"})`,
@@ -2125,8 +2184,10 @@
         }
 
         if (st.status === "error") {
-          progressLabel.innerText = "Gagal";
+          progressText.innerText = "100% — Gagal";
+          progressBar.classList.remove("running");
           setLoadingVisual(card, false);
+          stopProcessingElapsed(card);
           appendProgressLog(card, `Training gagal: ${st.error || "-"}`, "error");
           showToast(st.error || "Training gagal", "error");
           return;
@@ -2139,8 +2200,10 @@
     } catch (err) {
       console.error(err);
       progressBar.style.width = "100%";
-      progressLabel.innerText = "Gagal";
+      progressText.innerText = "100% — Gagal";
+      progressBar.classList.remove("running");
       setLoadingVisual(card, false);
+      stopProcessingElapsed(card);
       appendProgressLog(card, `Error: ${err.message || "training gagal"}`, "error");
       showToast(err.message || "Training gagal", "error");
     }
@@ -2343,16 +2406,17 @@
   }
 
   function finishTrainingInCard(card, mode, params, epochResults) {
-    const progressWrap = card.querySelector(".progress-wrap");
     const progressBar = card.querySelector(".progress-bar");
-    const progressLabel = card.querySelector(".progress-label");
+    const progressText = card.querySelector(".progress-text");
     const btnGunakanTerbaik = card.querySelector(".btn-gunakan-terbaik-card");
     const btnSimpan = card.querySelector(".btn-simpan-card");
     const bestParamsDisplay = card.querySelector(".best-params-display");
 
-    progressWrap.classList.add("done");
     progressBar.style.width = "100%";
-    progressLabel.innerText = "Selesai";
+    progressBar.classList.remove("running");
+    progressText.innerText = "100% — Selesai";
+    setProcessingStep(card, "finish");
+    stopProcessingElapsed(card);
     appendProgressLog(
       card,
       `Ringkasan selesai. Total epoch tercatat: ${epochResults.length}`,

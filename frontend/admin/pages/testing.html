@@ -190,6 +190,30 @@
                         </div>
 
                         <p id="progressText" class="progress-text">Menunggu...</p>
+                        <p id="progressElapsed" class="progress-elapsed">Waktu berjalan: 00:00</p>
+
+                        <div class="progress-steps" id="progressSteps">
+                            <div class="progress-step" id="step-prepare">
+                                <span class="step-dot"></span>
+                                <span class="step-label">Validasi konfigurasi</span>
+                            </div>
+                            <div class="progress-step" id="step-connect">
+                                <span class="step-dot"></span>
+                                <span class="step-label">Kirim request ke backend</span>
+                            </div>
+                            <div class="progress-step" id="step-process">
+                                <span class="step-dot"></span>
+                                <span class="step-label">Proses testing model</span>
+                            </div>
+                            <div class="progress-step" id="step-metrics">
+                                <span class="step-dot"></span>
+                                <span class="step-label">Render metrik evaluasi</span>
+                            </div>
+                            <div class="progress-step" id="step-finish">
+                                <span class="step-dot"></span>
+                                <span class="step-label">Selesai</span>
+                            </div>
+                        </div>
 
                         <div class="progress-summary" id="progressSummary">
                             <span>Dataset: <b id="sumDataset">—</b></span>

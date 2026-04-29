@@ -422,26 +422,37 @@
               </div>
 
               <!-- Progress Bar -->
-              <div class="progress-wrap">
-                <div class="progress-bar">
-                  <span class="progress-label">0%</span>
+              <div class="progress-container">
+                <div class="progress-bar"></div>
+              </div>
+              <p class="progress-text">0% — Menunggu proses...</p>
+              <p class="proc-progress-elapsed">Waktu berjalan: 00:00</p>
+              <div class="proc-progress-steps">
+                <div class="proc-progress-step" data-step="prepare">
+                  <span class="proc-step-dot"></span>
+                  <span class="proc-step-label">Validasi parameter</span>
+                </div>
+                <div class="proc-progress-step" data-step="queue">
+                  <span class="proc-step-dot"></span>
+                  <span class="proc-step-label">Antrian job backend</span>
+                </div>
+                <div class="proc-progress-step" data-step="train">
+                  <span class="proc-step-dot"></span>
+                  <span class="proc-step-label">Training per epoch</span>
+                </div>
+                <div class="proc-progress-step" data-step="metrics">
+                  <span class="proc-step-dot"></span>
+                  <span class="proc-step-label">Sinkronisasi metrik</span>
+                </div>
+                <div class="proc-progress-step" data-step="finish">
+                  <span class="proc-step-dot"></span>
+                  <span class="proc-step-label">Selesai</span>
                 </div>
               </div>
 
               <div class="loading-visual" style="display: none">
                 <span class="loading-spinner"></span>
                 <span class="loading-text">Training sedang diproses...</span>
-              </div>
-
-              <div class="progress-visualizer">
-                <div class="progress-visualizer-header">
-                  <span>Training Activity</span>
-                </div>
-                <ul class="progress-log-list">
-                  <li class="progress-log-item log-info">
-                    Menunggu proses dimulai...
-                  </li>
-                </ul>
               </div>
 
               <!-- Tabel Hasil Training -->

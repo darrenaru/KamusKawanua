@@ -107,6 +107,9 @@ var selectedDatasetName = null;
 var selectedModelId = null;
 var selectedModelMaxLength = 64;
 var testingModels = [];
+var progressTimer = null;
+var progressStartedAt = null;
+var progressStepOrder = ['prepare', 'connect', 'process', 'metrics', 'finish'];
 
 function showTestingError(message) {
     var box = document.getElementById('testingError');
@@ -569,7 +572,67 @@ function resetMetrics() {
     document.getElementById('progressBar').style.width = '0%';
     document.getElementById('progressBar').classList.remove('running');
     document.getElementById('progressText').textContent = 'Menunggu...';
+    document.getElementById('progressElapsed').textContent = 'Waktu berjalan: 00:00';
     document.getElementById('progressSummary').classList.remove('show');
+    resetProgressSteps();
+}
+
+function resetProgressSteps() {
+    for (var i = 0; i < progressStepOrder.length; i++) {
+        var id = progressStepOrder[i];
+        var node = document.getElementById('step-' + id);
+        if (!node) continue;
+        node.classList.remove('active');
+        node.classList.remove('done');
+    }
+}
+
+function setProgressStep(stepId, percent, message) {
+    var bar = document.getElementById('progressBar');
+    var text = document.getElementById('progressText');
+    if (bar) {
+        bar.style.width = percent + '%';
+    }
+    if (text && message) {
+        text.textContent = percent + '% — ' + message;
+    }
+
+    for (var i = 0; i < progressStepOrder.length; i++) {
+        var id = progressStepOrder[i];
+        var node = document.getElementById('step-' + id);
+        if (!node) continue;
+
+        if (id === stepId) {
+            node.classList.add('active');
+            node.classList.remove('done');
+        } else if (progressStepOrder.indexOf(id) < progressStepOrder.indexOf(stepId)) {
+            node.classList.remove('active');
+            node.classList.add('done');
+        } else {
+            node.classList.remove('active');
+            node.classList.remove('done');
+        }
+    }
+}
+
+function startProgressElapsedTimer() {
+    stopProgressElapsedTimer();
+    progressStartedAt = Date.now();
+    progressTimer = setInterval(function() {
+        var elapsedEl = document.getElementById('progressElapsed');
+        if (!elapsedEl || !progressStartedAt) return;
+        var diffSec = Math.floor((Date.now() - progressStartedAt) / 1000);
+        var mm = String(Math.floor(diffSec / 60)).padStart(2, '0');
+        var ss = String(diffSec % 60).padStart(2, '0');
+        elapsedEl.textContent = 'Waktu berjalan: ' + mm + ':' + ss;
+    }, 1000);
+}
+
+function stopProgressElapsedTimer() {
+    if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+    }
 }
 
 /* =============================
@@ -649,27 +712,13 @@ async function startTesting() {
     document.getElementById('progressSummary').classList.add('show');
 
     var bar = document.getElementById('progressBar');
-    var text = document.getElementById('progressText');
     bar.classList.add('running');
-
-    var progress = 0;
-
-    var messages = [
-        { at: 5, msg: 'Memuat data...' },
-        { at: 15, msg: 'Data dimuat' },
-        { at: 25, msg: 'Menghubungkan ke backend testing...' },
-        { at: 35, msg: 'Menyiapkan model hasil training...' },
-        { at: 45, msg: 'Memproses input...' },
-        { at: 55, msg: 'Tokenisasi data uji...' },
-        { at: 65, msg: 'Tokenisasi selesai' },
-        { at: 75, msg: 'Menjalankan inferensi...' },
-        { at: 85, msg: 'Inferensi berlangsung...' },
-        { at: 92, msg: 'Menghitung metrik evaluasi...' },
-        { at: 100, msg: 'Testing selesai' }
-    ];
+    startProgressElapsedTimer();
+    setProgressStep('prepare', 10, 'Validasi konfigurasi testing...');
 
     var backendResult = null;
     try {
+        setProgressStep('connect', 30, 'Mengirim request ke backend...');
         var res = await fetch(API_BASE + '/testing/indobert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -687,35 +736,21 @@ async function startTesting() {
             throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Testing backend gagal.');
         }
         backendResult = data;
+        setProgressStep('process', 75, 'Backend selesai memproses testing model.');
     } catch (err) {
         bar.classList.remove('running');
+        stopProgressElapsedTimer();
         setStatus('idle');
-        text.textContent = 'Gagal menjalankan testing';
+        document.getElementById('progressText').textContent = 'Gagal menjalankan testing';
         showTestingError(err && err.message ? err.message : 'Gagal menjalankan testing backend.');
         setTestingUiBusy(false);
         isRunning = false;
         return;
     }
-
-    var interval = setInterval(function() {
-        progress += 5;
-        bar.style.width = progress + '%';
-        text.textContent = progress + '%';
-
-        for (var i = 0; i < messages.length; i++) {
-            if (progress === messages[i].at) {
-                text.textContent = progress + '% — ' + messages[i].msg;
-                break;
-            }
-        }
-
-        if (progress >= 100) {
-            clearInterval(interval);
-            bar.classList.remove('running');
-            setStatus('tested');
-            finishTesting(backendResult, direction);
-        }
-    }, 120);
+    setProgressStep('metrics', 90, 'Menyiapkan metrik ke tampilan...');
+    bar.classList.remove('running');
+    setStatus('tested');
+    finishTesting(backendResult, direction);
 }
 
 function finishTesting(result, direction) {
@@ -749,7 +784,8 @@ function finishTesting(result, direction) {
         }, i * 100);
     });
 
-    var btn = document.getElementById('btnStart');
+    setProgressStep('finish', 100, 'Testing selesai.');
+    stopProgressElapsedTimer();
     setTestingUiBusy(false);
     isRunning = false;
 }
