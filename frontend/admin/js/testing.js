@@ -563,7 +563,7 @@ function setStatus(status) {
 ============================= */
 function resetMetrics() {
     metricIds.forEach(function(id) {
-        document.getElementById(id).textContent = '0%';
+        document.getElementById(id).textContent = id === 'mcc' ? '0.00' : '0%';
         document.getElementById(id).classList.remove('revealed');
     });
     metricHeaderIds.forEach(function(id) {
@@ -638,7 +638,10 @@ function stopProgressElapsedTimer() {
 /* =============================
    ANIMASI COUNTER
 ============================= */
-function animateValue(el, target, duration) {
+function animateValue(el, target, duration, options) {
+    options = options || {};
+    var decimals = Number.isFinite(options.decimals) ? options.decimals : 0;
+    var suffix = options.suffix || '';
     var start = 0;
     var startTime = null;
 
@@ -646,7 +649,8 @@ function animateValue(el, target, duration) {
         if (!startTime) startTime = timestamp;
         var progress = Math.min((timestamp - startTime) / duration, 1);
         var eased = 1 - Math.pow(1 - progress, 3);
-        el.textContent = Math.floor(start + (target - start) * eased) + '%';
+        var value = start + (target - start) * eased;
+        el.textContent = value.toFixed(decimals) + suffix;
         if (progress < 1) {
             requestAnimationFrame(step);
         }
@@ -758,7 +762,7 @@ function finishTesting(result, direction) {
     var precision = Number(result.precision_macro || 0) * 100;
     var recall = Number(result.recall_macro || 0) * 100;
     var f1 = Number(result.f1_macro || 0) * 100;
-    var mcc = Number(result.mcc || 0) * 100; // MCC 0..1 diubah ke persen agar konsisten UI
+    var mcc = Number(result.mcc || 0);
     var roc = Number(result.roc_auc || 0) * 100;
     var std = Number(result.std_deviation || 0) * 100;
     var weighted = Number(result.weighted_avg || 0) * 100;
@@ -780,7 +784,11 @@ function finishTesting(result, direction) {
         setTimeout(function() {
             document.getElementById(metricHeaderIds[i]).classList.add('revealed');
             document.getElementById(id).classList.add('revealed');
-            animateValue(document.getElementById(id), r[id], 800);
+            if (id === 'mcc') {
+                animateValue(document.getElementById(id), r[id], 800, { decimals: 2, suffix: '' });
+            } else {
+                animateValue(document.getElementById(id), r[id], 800, { decimals: 0, suffix: '%' });
+            }
         }, i * 100);
     });
 
