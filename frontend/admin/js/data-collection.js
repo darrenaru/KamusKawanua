@@ -176,10 +176,10 @@ function renderDatasets(list = datasets) {
 
             <div class="dataset-info">
                 <div>Data count</div><div>: ${ds.total}</div>
-                <div>Kata Kerja</div><div>: ${ds.kerja}</div>
-                <div>Kata Benda</div><div>: ${ds.benda}</div>
-                <div>Kata Sifat</div><div>: ${ds.sifat}</div>
-                <div>Kata Keterangan</div><div>: ${ds.keterangan}</div>
+                <div>Verb</div><div>: ${ds.kerja}</div>
+                <div>Noun</div><div>: ${ds.benda}</div>
+                <div>Adjective</div><div>: ${ds.sifat}</div>
+                <div>Adverb</div><div>: ${ds.keterangan}</div>
                 <div>Uploader</div><div>: ${ds.uploader}</div>
                 <div>Upload Date</div><div>: ${ds.date}</div>
             </div>

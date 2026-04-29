@@ -157,12 +157,12 @@
 
     if (editingIndex >= 0) {
       ratioData[editingIndex] = { train: trainVal, test: testVal };
-      showToast(`Rasio ${trainVal}:${testVal} was updated successfully`);
+      showToast(`Ratio ${trainVal}:${testVal} was updated successfully`);
       editingIndex = -1;
-      document.getElementById("btn-add-ratio").innerHTML = "➕ Tambah";
+      document.getElementById("btn-add-ratio").innerHTML = "Add";
     } else {
       ratioData.push({ train: trainVal, test: testVal });
-      showToast(`Rasio ${trainVal}:${testVal} was added successfully`);
+      showToast(`Ratio ${trainVal}:${testVal} was added successfully`);
     }
 
     trainInput.value = "";
@@ -193,8 +193,8 @@
         <td><strong>${item.test}%</strong></td>
         <td>
           <div class="ratio-action-wrap">
-            <button class="btn-edit" data-index="${index}">Ubah</button>
-            <button class="btn-delete" data-index="${index}">Hapus</button>
+            <button class="btn-edit" data-index="${index}">Edit</button>
+            <button class="btn-delete" data-index="${index}">Delete</button>
           </div>
         </td>
       </tr>
@@ -230,7 +230,7 @@
     testInput.dataset.auto = "false";
 
     editingIndex = index;
-    document.getElementById("btn-add-ratio").innerHTML = "💾 Simpan";
+    document.getElementById("btn-add-ratio").innerHTML = "Save";
     trainInput.focus();
   }
 
@@ -253,14 +253,14 @@
       updateRatioDropdown();
       updateRatioTableVisibility();
 
-      showToast(`Rasio ${deleted.train}:${deleted.test} deleted`);
+      showToast(`Ratio ${deleted.train}:${deleted.test} deleted`);
 
       if (editingIndex === index) {
         document.getElementById("train-input").value = "";
         document.getElementById("test-input").value = "";
         document.getElementById("test-input").dataset.auto = "true";
         editingIndex = -1;
-        document.getElementById("btn-add-ratio").innerHTML = "➕ Tambah";
+        document.getElementById("btn-add-ratio").innerHTML = "Add";
       } else if (editingIndex > index) {
         editingIndex--;
       }
@@ -273,7 +273,7 @@
 
     const currentValue = splitSelect.value;
     let options =
-      '<option value="" disabled selected>-- Select Rasio --</option>';
+      '<option value="" disabled selected>-- Select Ratio --</option>';
 
     ratioData.forEach((item) => {
       const ratioString = `${item.train}:${item.test}`;
@@ -318,10 +318,10 @@
     confirmModal.innerHTML = `
       <div class="modal-confirm">
         <h4>Delete Confirmation</h4>
-        <p>Apakah Anda yakin ingin menghapus rasio ini?</p>
+        <p>Are you sure you want to delete this ratio?</p>
         <div class="modal-confirm-actions">
           <button class="btn-confirm-cancel" id="btn-confirm-cancel">Cancel</button>
-          <button class="btn-confirm-delete" id="btn-confirm-delete">Hapus</button>
+          <button class="btn-confirm-delete" id="btn-confirm-delete">Delete</button>
         </div>
       </div>
     `;
@@ -553,7 +553,7 @@
 
     const nameCard = document.getElementById("new-model-name-card");
     nameCard.innerHTML = `
-      <p class="file-card-label">📝 Nama Model</p>
+      <p class="file-card-label">Model Name</p>
       <p class="file-card-name" style="flex:1;">${namaModel}</p>
       <button class="btn-small" id="btn-edit-nama" style="padding:8px 16px; margin-left:10px; background:transparent; color:#2c1f0e; border:1px solid #2c1f0e; border-radius:6px; cursor:pointer;">Edit</button>
     `;
@@ -562,9 +562,9 @@
       .getElementById("btn-edit-nama")
       .addEventListener("click", function () {
         nameCard.innerHTML = `
-        <p class="file-card-label">📝 Nama Model Baru</p>
+        <p class="file-card-label">New Model Name</p>
         <input type="text" id="new-model-name" placeholder="Enter new model name" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:6px;" value="${namaModel}">
-        <button class="btn-small" id="btn-simpan-nama" style="padding:8px 16px; margin-left:10px; background:#2c1f0e; color:white; border:none; border-radius:6px; cursor:pointer;">Simpan</button>
+        <button class="btn-small" id="btn-simpan-nama" style="padding:8px 16px; margin-left:10px; background:#2c1f0e; color:white; border:none; border-radius:6px; cursor:pointer;">Save</button>
       `;
         document
           .getElementById("btn-simpan-nama")
@@ -897,9 +897,9 @@
     return `
     <div class="param-row">
       <div class="param-group" style="grid-column: span 2;">
-        ${renderLabelWithTooltip("Rasio Data Split", "split_ratio")}
+        ${renderLabelWithTooltip("Split Ratio", "split_ratio")}
         <select id="split-ratio-select" class="split-select">
-          <option value="" disabled selected>-- Select Rasio --</option>
+          <option value="" disabled selected>-- Select Ratio --</option>
         </select>
       </div>
     </div>
@@ -967,7 +967,7 @@
     <div class="layer-card">
       <div class="layer-header">
         <h4>1. Input Layer</h4>
-        <p>Parameter input dibedakan dari layer lain untuk menyesuaikan token teks yang masuk ke IndoBERT.</p>
+        <p>Input parameters are separated from other layers to align with text token handling in IndoBERT.</p>
       </div>
       <div class="param-row">
         <div class="param-group">
@@ -994,12 +994,12 @@
         <div class="param-group">
           <label>Input Representation</label>
           <input type="text" value="WordPiece Tokens + [CLS]/[SEP]" disabled>
-          <small>Representasi input mengikuti tokenizer bawaan IndoBERT.</small>
+          <small>Input representation follows the default IndoBERT tokenizer.</small>
         </div>
         <div class="param-group">
           <label>Attention Mask</label>
           <input type="text" value="Automatic" disabled>
-          <small>Otomatis dibentuk saat fine-tuning.</small>
+          <small>Automatically generated during fine-tuning.</small>
         </div>
       </div>
     </div>
@@ -1022,7 +1022,7 @@
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Epoch", "epoch")}
-          <input type="number" id="epoch" placeholder="Contoh: 3" value="" min="1" max="100">
+          <input type="number" id="epoch" placeholder="Example: 3" value="" min="1" max="100">
         </div>
       </div>
       <div class="param-row">
@@ -1095,18 +1095,18 @@
     <div class="layer-card">
       <div class="layer-header">
         <h4>3. Output Layer</h4>
-        <p>Konfigurasi keluaran untuk klasifikasi fine-tuning dengan Softmax.</p>
+        <p>Output configuration for fine-tuning classification with Softmax.</p>
       </div>
       <div class="param-row">
         <div class="param-group">
           <label>Output Activation</label>
           <input type="text" value="Softmax" disabled>
-          <small>Hasil akhir menggunakan Softmax untuk probabilitas kelas.</small>
+          <small>Final output uses Softmax for class probabilities.</small>
         </div>
         <div class="param-group">
           <label>Loss Function</label>
           <input type="text" value="Cross Entropy" disabled>
-          <small>Loss utama untuk klasifikasi multi-class.</small>
+          <small>Main loss function for multi-class classification.</small>
         </div>
       </div>
       <div class="param-row">
@@ -1114,15 +1114,15 @@
           ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
           <input type="text" id="early-stopping" list="early-stopping-options" placeholder="Select or type manually" value="">
           <datalist id="early-stopping-options">
-            <option value="0">Nonaktif</option>
-            <option value="2">Aktif (patience 2) (Recommended)</option>
-            <option value="3">Aktif (patience 3)</option>
+            <option value="0">Disabled</option>
+            <option value="2">Enabled (patience 2) (Recommended)</option>
+            <option value="3">Enabled (patience 3)</option>
           </datalist>
         </div>
         <div class="param-group">
           <label>Prediction Target</label>
           <input type="text" value="Label Class" disabled>
-          <small>Neuron output mewakili jumlah label pada dataset.</small>
+          <small>The output neuron count represents the number of labels in the dataset.</small>
         </div>
       </div>
     </div>
@@ -1146,7 +1146,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Contoh: 4 (Range: 2–5)" value="" min="1" max="100">
+        <input type="number" id="epoch" placeholder="Example: 4 (Range: 2-5)" value="" min="1" max="100">
       </div>
     </div>
     <div class="param-row">
@@ -1232,7 +1232,7 @@
         ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
         <input type="text" id="early-stopping" list="early-stopping-options-mbert" placeholder="Select or type manually" value="">
         <datalist id="early-stopping-options-mbert">
-          <option value="0">Nonaktif</option>
+          <option value="0">Disabled</option>
           <option value="2">2</option>
           <option value="3">3 (Recommended)</option>
           <option value="5">5</option>
@@ -1269,7 +1269,7 @@
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Contoh: 3 (Range: 3–5)" value="" min="1" max="100">
+        <input type="number" id="epoch" placeholder="Example: 3 (Range: 3-5)" value="" min="1" max="100">
       </div>
     </div>
     <div class="param-row">
@@ -1352,7 +1352,7 @@
         ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
         <input type="text" id="early-stopping" list="early-stopping-options-xlmr" placeholder="Select or type manually" value="">
         <datalist id="early-stopping-options-xlmr">
-          <option value="0">Nonaktif</option>
+          <option value="0">Disabled</option>
           <option value="2">2 (Recommended)</option>
           <option value="3">3</option>
           <option value="5">5</option>
@@ -1422,7 +1422,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Contoh: 50" value="" min="1">
+        <input type="number" id="epoch" placeholder="Example: 50" value="" min="1">
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("Model Type", "model_type")}
@@ -1498,7 +1498,7 @@
     <div class="param-row">
       <div class="param-group">
         ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Contoh: 50" value="" min="1">
+        <input type="number" id="epoch" placeholder="Example: 50" value="" min="1">
       </div>
       <div class="param-group">
         ${renderLabelWithTooltip("X_max", "x_max")}
@@ -1842,7 +1842,7 @@
     }
   }
 
-  function setLoadingVisual(card, isVisible, text = "Training sedang diproses...") {
+  function setLoadingVisual(card, isVisible, text = "Training is in progress...") {
     const loadingWrap = card.querySelector(".loading-visual");
     const loadingText = card.querySelector(".loading-text");
     if (!loadingWrap) return;
@@ -1858,7 +1858,7 @@
       el.classList.remove("done");
     });
     const elapsed = card.querySelector(".proc-progress-elapsed");
-    if (elapsed) elapsed.textContent = "Waktu berjalan: 00:00";
+    if (elapsed) elapsed.textContent = "Elapsed time: 00:00";
   }
 
   function setProcessingStep(card, stepId) {
@@ -1886,7 +1886,7 @@
       const totalSec = Math.floor((Date.now() - startedAt) / 1000);
       const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
       const ss = String(totalSec % 60).padStart(2, "0");
-      elapsed.textContent = `Waktu berjalan: ${mm}:${ss}`;
+      elapsed.textContent = `Elapsed time: ${mm}:${ss}`;
     }, 1000);
     card.dataset.progressTimerId = String(timerId);
   }
@@ -1972,12 +1972,12 @@
 
     tableBody.innerHTML = "";
     progressBar.classList.add("running");
-    resetProgressLog(card, "Training dimulai");
+    resetProgressLog(card, "Training started");
     resetProcessingStepUI(card);
     setProcessingStep(card, "prepare");
     startProcessingElapsed(card);
-    appendProgressLog(card, `Mode: simulasi ${params.algo || currentAlgo}`, "warning");
-    setLoadingVisual(card, true, "Simulasi training berjalan...");
+    appendProgressLog(card, `Mode: simulation ${params.algo || currentAlgo}`, "warning");
+    setLoadingVisual(card, true, "Training simulation is running...");
     setProcessingStep(card, "train");
 
     const interval = setInterval(() => {
@@ -2006,7 +2006,7 @@
       }
 
       progressBar.style.width = progress + "%";
-      progressText.innerText = `${progress}% — Simulasi training berjalan...`;
+      progressText.innerText = `${progress}% — Training simulation is running...`;
     }, 400);
   }
 
@@ -2048,11 +2048,11 @@
     const setProgressPct = (value) => {
       const safe = Math.max(0, Math.min(100, Number(value) || 0));
       progressBar.style.width = `${safe.toFixed(1)}%`;
-      progressText.innerText = `${Math.round(safe)}% — Memproses training...`;
+      progressText.innerText = `${Math.round(safe)}% — Training in progress...`;
     };
     setProgressPct(0);
-    resetProgressLog(card, "Menyiapkan training job IndoBERT...");
-    setLoadingVisual(card, true, "Mengirim job ke backend...");
+    resetProgressLog(card, "Preparing IndoBERT training job...");
+    setLoadingVisual(card, true, "Sending job request to backend...");
 
     try {
       const payload = {
@@ -2084,7 +2084,7 @@
 
       const jobId = startResult.job_id;
       const totalEpochs = payload.epoch || startResult.total_epochs || 1;
-      setLoadingVisual(card, true, `Job ${jobId.slice(0, 6)} sedang diproses...`);
+      setLoadingVisual(card, true, `Job ${jobId.slice(0, 6)} is in progress...`);
       setProcessingStep(card, "queue");
       appendProgressLog(
         card,
@@ -2107,7 +2107,7 @@
           lastStatus = st.status;
           if (st.status === "queued") appendProgressLog(card, "Job is still in the queue...", "warning");
           if (st.status === "running") {
-            appendProgressLog(card, "Training sedang berjalan di backend", "info");
+            appendProgressLog(card, "Training is running on backend", "info");
             setProcessingStep(card, "train");
           }
         }
@@ -2188,7 +2188,7 @@
           progressBar.classList.remove("running");
           setLoadingVisual(card, false);
           stopProcessingElapsed(card);
-          appendProgressLog(card, `Training gagal: ${st.error || "-"}`, "error");
+          appendProgressLog(card, `Training failed: ${st.error || "-"}`, "error");
           showToast(st.error || "Training failed", "error");
           return;
         }
