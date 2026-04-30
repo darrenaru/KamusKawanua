@@ -305,7 +305,7 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             raw_res = (
                 supabase.table("raw_data")
                 .select(
-                    "dataset_id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia"
+                    "dataset_id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, kategori, sumber"
                 )
                 .eq("dataset_id", dataset_id)
                 .range(raw_from, raw_from + raw_limit - 1)
@@ -360,6 +360,8 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                         "indonesia": r.get("indonesia"),
                         "kalimat_manado": r.get("kalimat_manado"),
                         "kalimat_indonesia": r.get("kalimat_indonesia"),
+                        "kategori": r.get("kategori"),
+                        "sumber": r.get("sumber"),
                         "manado_clean": manado_clean,
                         "indonesia_clean": indonesia_clean,
                         "kalimat_manado_clean": kal_manado_clean,
@@ -383,12 +385,20 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
     limit = 1000
 
     while True:
-        res = supabase.table("preprocessed_data") \
-            .select("id, manado, indonesia, kalimat_manado, kalimat_indonesia, manado_clean, indonesia_clean") \
-            .eq("dataset_id", dataset_id) \
-            .is_("input_ids", None) \
-            .range(from_idx, from_idx + limit - 1) \
+        # Ambil baris yang belum benar-benar diproses.
+        # Catatan: beberapa dataset lama menyimpan kolom text ini sebagai '' atau '[]',
+        # sehingga tidak terjaring kalau hanya filter IS NULL.
+        res = (
+            supabase.table("preprocessed_data")
+            .select(
+                "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
+                "manado_clean, indonesia_clean"
+            )
+            .eq("dataset_id", dataset_id)
+            .or_("input_ids.is.null,input_ids.eq.[],input_ids.eq.\"\",attention_mask.is.null,attention_mask.eq.[],attention_mask.eq.\"\"")
+            .range(from_idx, from_idx + limit - 1)
             .execute()
+        )
 
         data = res.data
 
@@ -499,6 +509,24 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             # =========================
             # SAVE ALL
             # =========================
+            # Pastikan label `jenis` ikut tersimpan konsisten (seed/preprocess lama kadang kosong).
+            # Jika `jenis` masih kosong, coba ambil dari raw_data berdasarkan (dataset_id, id_kata).
+            jenis_val = row.get("jenis")
+            if not jenis_val and row.get("id_kata"):
+                try:
+                    jenis_res = (
+                        supabase.table("raw_data")
+                        .select("jenis")
+                        .eq("dataset_id", dataset_id)
+                        .eq("id_kata", str(row.get("id_kata")))
+                        .limit(1)
+                        .execute()
+                    )
+                    if jenis_res.data:
+                        jenis_val = jenis_res.data[0].get("jenis")
+                except Exception as e:
+                    print("WARN: failed to backfill jenis:", e)
+
             supabase.table("preprocessed_data").update({
 
                 # WORD
@@ -516,7 +544,10 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                 # FINAL BERT
                 "bert_tokens": json.dumps(tokens),
                 "input_ids": json.dumps(input_ids),
-                "attention_mask": json.dumps(attention_mask)
+                "attention_mask": json.dumps(attention_mask),
+
+                # LABEL
+                "jenis": jenis_val,
 
             }).eq("id", row["id"]).execute()
 

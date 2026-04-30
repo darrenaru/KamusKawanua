@@ -5,6 +5,19 @@ Project ini membangun sistem penerjemahan/klasifikasi berbasis data kamus bahasa
 
 Backend menggunakan **FastAPI**, training/inferensi menggunakan **IndoBERT**, dan penyimpanan data menggunakan **Supabase**.
 
+## Konfigurasi Environment (WAJIB)
+Backend membaca konfigurasi Supabase dari environment variable atau file `.env` di root project.
+
+1. Salin contoh env:
+   - Windows (PowerShell): `Copy-Item .env.example .env`
+2. Isi variabel berikut di `.env`:
+   - `SUPABASE_URL=...`
+   - `SUPABASE_KEY=...` (**service role key**, hanya untuk backend)
+
+Catatan:
+- File `.env` sudah di-`gitignore` (jangan pernah di-commit).
+- Backend otomatis me-load `.env` (tanpa dependency tambahan).
+
 ## Prasyarat
 
 ### Backend (Python)
@@ -23,6 +36,7 @@ Backend menggunakan **FastAPI**, training/inferensi menggunakan **IndoBERT**, da
 ### Frontend (Static)
 - Halaman admin bersifat static (`frontend/admin/...`) dan memanggil backend via `fetch`.
 - Koneksi Supabase dibuat langsung di beberapa file JS (contoh: `frontend/admin/js/data-collection.js`, `frontend/admin/js/preprocessing.js`).
+  - Gunakan **anon key** untuk frontend (bukan service role key).
 
 ## Struktur Database (ringkas)
 Tabel yang dipakai untuk pipeline utama:
@@ -36,9 +50,12 @@ Tabel yang dipakai untuk pipeline utama:
 
 ## Format CSV yang didukung (Data Collection)
 Parser `parseCSVStrict()` di `frontend/admin/js/data-collection.js` menerima:
-1. **8 kolom** (lengkap)
+1. **8 kolom (NEW)** (disarankan, sesuai dataset saat ini)
+   - `id_kata, manado, indonesia, jenis, kalimat_manado, kalimat_indonesia, kategori, sumber`
+   - Kolom `inggris` dan `kalimat_inggris` akan diisi otomatis sebagai `""` untuk kompatibilitas schema lama.
+2. **8 kolom (legacy)** (lengkap)
    - `id_kata, jenis, manado, indonesia, inggris, kalimat_manado, kalimat_indonesia, kalimat_inggris`
-2. **6 kolom** (tanpa kolom Inggris)
+3. **6 kolom (legacy)** (tanpa kolom Inggris)
    - `id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia`
    - Untuk format 6 kolom, parser mengisi `inggris` dan `kalimat_inggris` sebagai `""`.
 
@@ -54,6 +71,10 @@ Endpoint:
 - `GET  /preprocess/status/{job_id}`
 - `POST /preprocess/cancel/{job_id}`
 
+Perubahan penting:
+- Preprocess akan memproses ulang baris yang `input_ids/attention_mask` bernilai **NULL / "" / "[]"** (dataset lama sering tersimpan sebagai string kosong).
+- Preprocess menyimpan secara konsisten: `jenis`, `input_ids`, `attention_mask`, `bert_tokens` (serta token-token lain).
+
 Catatan implementasi (untuk kesesuaian dengan IndoBERT):
 - Stemming tidak dilakukan manual di pipeline preprocessing.
 - Tokenisasi word/sentence konsisten memakai tokenizer pilihan.
@@ -67,6 +88,10 @@ Endpoint training IndoBERT (async):
 Training memakai model klasifikasi `AutoModelForSequenceClassification` dan menyimpan:
 - `trained_models/<model_name>/...`
 - `label_map.json`
+
+Input text untuk training dibangun dari kolom (bila tersedia):
+- `manado_clean`, `indonesia_clean`, `kalimat_manado_clean`, `kalimat_indonesia_clean`
+- opsional: `kategori`, `sumber` (dipisah dengan `[SEP]`)
 
 ## Testing (Backend)
 Registry model untuk dropdown UI:
@@ -84,3 +109,8 @@ Testing UI (halaman `frontend/admin/pages/testing.html`) sekarang mengambil:
 Confusion matrix ditampilkan pada modal “Training Results” (halaman `frontend/admin/pages/processing.html`) dengan mengambil:
 - epoch validasi dengan **akurasi tertinggi**
 - confusion matrix yang dihitung backend per-epoch
+
+## Menjalankan Backend (dev)
+Jalankan dari root project:
+- `uvicorn backend.main:app --reload`
+

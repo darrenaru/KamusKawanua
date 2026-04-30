@@ -28,6 +28,9 @@ __pycache__/
 backend/trained_models/
 backend/data/embeddings.npy
 
+# Env examples are safe to commit
+!.env.example
+
 .venv/
 __pycache__/
 *.pyc

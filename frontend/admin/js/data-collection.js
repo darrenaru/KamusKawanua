@@ -198,6 +198,19 @@ function parseCSVStrict(text) {
     // Handle header
     const header = parseCSVLine(lines[0]);
 
+    // Format baru (8 kolom) untuk project saat ini:
+    // id_kata, manado, indonesia, jenis, kalimat_manado, kalimat_indonesia, kategori, sumber
+    const expected8New = [
+        "id_kata",
+        "manado",
+        "indonesia",
+        "jenis",
+        "kalimat_manado",
+        "kalimat_indonesia",
+        "kategori",
+        "sumber"
+    ];
+
     const expected8 = [
         "id_kata",
         "jenis",
@@ -220,15 +233,33 @@ function parseCSVStrict(text) {
     const normalizedHeader = header.map(h => (h || "").trim().toLowerCase());
     const isHeader8 = expected8.every((col, i) => normalizedHeader[i] === col);
     const isHeader6 = expected6.every((col, i) => normalizedHeader[i] === col);
+    const isHeader8New = expected8New.every((col, i) => normalizedHeader[i] === col);
 
-    if (!isHeader8 && !isHeader6) {
+    if (!isHeader8 && !isHeader6 && !isHeader8New) {
         console.log("HEADER:", header);
-        throw new Error("Invalid CSV format! Use a supported 6-column or 8-column header.");
+        throw new Error("Invalid CSV format! Use a supported header (6-col legacy, 8-col legacy, or 8-col new: kategori+sumber).");
     }
 
     // Parse data
     return lines.slice(1).map(line => {
         const c = parseCSVLine(line);
+
+        // Format 8 kolom baru: tidak ada inggris/kalimat_inggris.
+        // Untuk kompatibilitas schema lama, inggris/kalimat_inggris diisi string kosong.
+        if (isHeader8New) {
+            return {
+                id_kata: c[0],
+                manado: c[1],
+                indonesia: c[2],
+                jenis: c[3],
+                kalimat_manado: c[4],
+                kalimat_indonesia: c[5],
+                kategori: c[6] || "",
+                sumber: c[7] || "",
+                inggris: "",
+                kalimat_inggris: ""
+            };
+        }
 
         // Format 6 kolom: otomatis isi data Inggris dengan string kosong.
         if (isHeader6) {
@@ -240,7 +271,9 @@ function parseCSVStrict(text) {
                 inggris: "",
                 kalimat_manado: c[4],
                 kalimat_indonesia: c[5],
-                kalimat_inggris: ""
+                kalimat_inggris: "",
+                kategori: "",
+                sumber: ""
             };
         }
 
@@ -252,7 +285,9 @@ function parseCSVStrict(text) {
             inggris: c[4],
             kalimat_manado: c[5],
             kalimat_indonesia: c[6],
-            kalimat_inggris: c[7]
+            kalimat_inggris: c[7],
+            kategori: "",
+            sumber: ""
         };
     });
 }
