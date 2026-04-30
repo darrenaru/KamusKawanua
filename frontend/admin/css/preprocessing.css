@@ -4,6 +4,25 @@
   --bg: #f7f5f0;
   --text: #1a1714;
   --accent: #2c1f0e;
+<<<<<<< HEAD
+=======
+  --accent-hover: #3a2a12;
+  --accent-soft: rgba(200, 169, 110, 0.4);
+  --accent-glow: rgba(200, 169, 110, 0.2);
+  --text-primary: #1a1714;
+  --text-secondary: #6b5e50;
+  --text-muted: #9a8e7f;
+  --border: rgba(44, 31, 14, 0.1);
+  --border-light: rgba(44, 31, 14, 0.06);
+  --border-strong: rgba(44, 31, 14, 0.18);
+  --bg-card: rgba(255, 252, 245, 0.75);
+  --bg-header: rgba(200, 169, 110, 0.18);
+  --bg-row-alt: rgba(44, 31, 14, 0.025);
+  --bg-row-hover: rgba(200, 169, 110, 0.12);
+  --success: #5a7a3a;
+  --chart-w2v: #2c1f0e;
+  --chart-glove: #c8a96e;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 /* BASE */
@@ -25,12 +44,19 @@ body::before {
     linear-gradient(90deg, rgba(44,31,14,0.04) 1px, transparent 1px);
   background-size: 40px 40px;
   z-index: 0;
+<<<<<<< HEAD
   pointer-events: none;
+=======
+>>>>>>> 5389e9f (Initial commit)
 }
 
 /* LAYOUT */
 .layout {
   display: flex;
+<<<<<<< HEAD
+=======
+  min-height: 100vh;
+>>>>>>> 5389e9f (Initial commit)
   position: relative;
   z-index: 1;
 }
@@ -38,41 +64,101 @@ body::before {
 /* SIDEBAR */
 .sidebar {
   width: 250px;
+<<<<<<< HEAD
   background: rgba(241, 231, 216, 0.85);
   backdrop-filter: blur(6px);
   min-height: 100vh;
+=======
+  min-width: 250px;
+  background: rgba(241, 231, 216, 0.85);
+  backdrop-filter: blur(6px);
+  height: 100vh;
+>>>>>>> 5389e9f (Initial commit)
   padding: 20px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+<<<<<<< HEAD
   position: relative;
   z-index: 3;
+=======
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  box-sizing: border-box;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .logo {
   margin-top: 20px;
+<<<<<<< HEAD
+=======
+  margin-bottom: 20px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .logo img {
   width: 220px;
+<<<<<<< HEAD
+=======
+  display: block;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar ul {
   list-style: none;
   padding: 0;
+<<<<<<< HEAD
+=======
+  margin: 0;
+>>>>>>> 5389e9f (Initial commit)
   width: 100%;
 }
 
 .sidebar li {
+<<<<<<< HEAD
   padding: 14px 20px;
   font-weight: 500;
   cursor: pointer;
+=======
+  padding: 0;
+}
+
+.sidebar li a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+}
+
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar li.active {
   background: rgba(200,169,110,0.4);
 }
 
+<<<<<<< HEAD
 .sidebar li:hover {
   background: rgba(200,169,110,0.25);
 }
@@ -95,6 +181,235 @@ body::before {
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   overflow: hidden;
   margin-bottom: 30px;
+=======
+/* MAIN */
+.main {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 40px 60px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.main h1 {
+  margin-bottom: 36px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.title-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* =========================
+   TABLE FIX (INI KUNCI)
+========================= */
+
+.table-wrapper {
+  width: 100%;
+  max-width: 1000px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  margin-bottom: 30px;
+  position: relative;
+  z-index: 2;
+}
+
+.manager-toggle-wrap {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+#toggleLexiconManagerBtn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#toggleLexiconManagerBtn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.lexicon-manager {
+  width: 100%;
+  max-width: 1000px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.lexicon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.lexicon-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.lexicon-type-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lexicon-type-wrap label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.lexicon-type-wrap select {
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.lexicon-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#lexiconAddSlang {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.lexicon-add-row input {
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.lexicon-add-row button,
+.lexicon-pagination button {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lexicon-add-row button:disabled,
+.lexicon-pagination button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lexicon-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.lexicon-grid {
+  min-height: 260px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lexicon-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.lexicon-item-word {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lexicon-item-delete {
+  border: 1px solid #c89b9b;
+  background: #fff5f5;
+  color: #9b1c1c;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.lexicon-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.lexicon-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 table {
@@ -103,6 +418,7 @@ table {
   table-layout: fixed;
 }
 
+<<<<<<< HEAD
 thead {
   background: rgba(44,31,14,0.08);
 }
@@ -121,6 +437,29 @@ td {
   text-align: center;
 }
 
+=======
+th {
+  background: var(--bg-header);
+  padding: 13px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+td {
+  padding: 12px 16px;
+  font-size: 13px;
+  border-top: 1px solid var(--border-light);
+  text-align: center;
+}
+
+/* Nama panjang */
+>>>>>>> 5389e9f (Initial commit)
 td.col-name {
   text-align: left;
   padding-left: 16px;
@@ -130,11 +469,19 @@ td.col-name {
   text-overflow: ellipsis;
 }
 
+<<<<<<< HEAD
+=======
+/* Hover */
+>>>>>>> 5389e9f (Initial commit)
 tbody tr:hover {
   background: rgba(200,169,110,0.2);
   cursor: pointer;
 }
 
+<<<<<<< HEAD
+=======
+/* Selected */
+>>>>>>> 5389e9f (Initial commit)
 tbody tr.selected {
   background: rgba(44,31,14,0.15);
 }
@@ -154,6 +501,7 @@ tbody tr.selected {
   background: #ddd;
 }
 
+<<<<<<< HEAD
 /* ======================
    BUTTON SYSTEM
 ====================== */
@@ -190,10 +538,40 @@ button {
 #processBtn:active,
 .input-group button:active {
   transform: scale(0.96);
+=======
+/* BUTTON */
+.action-row {
+  margin-top: 22px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+
+#processBtn,
+#cancelProcessBtn {
+  width: 200px;
+  padding: 10px 0;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#processBtn {
+  border: none;
+  background: var(--accent);
+  color: white;
+}
+
+#processBtn:hover:not(:disabled) {
+  background: #3a2a12;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 #processBtn:disabled {
   opacity: 0.5;
+<<<<<<< HEAD
 }
 
 /* DELETE BUTTON */
@@ -226,21 +604,128 @@ button[onclick^="deleteWord"]:hover {
 
 .dataset-card h3 {
   margin-bottom: 20px;
+=======
+  cursor: not-allowed;
+}
+
+#cancelProcessBtn {
+  border: 1.5px solid #9b1c1c;
+  background: transparent;
+  color: #9b1c1c;
+}
+
+#cancelProcessBtn:hover:not(:disabled) {
+  background: #9b1c1c;
+  color: #fff;
+}
+
+#cancelProcessBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#continueBtn {
+  margin: 10px auto 0 auto;
+  width: 200px;
+  padding: 10px 0;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  display: block;
+}
+
+#continueBtn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+/* DETAIL CARD */
+.dataset-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 23, 20, 0.38);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* =========================
+   DETAIL CARD (FIX ALIGNMENT)
+========================= */
+.dataset-card {
+  width: 100%;
+  max-width: 640px;
+  background: #fffdf7;
+  border: 1px solid var(--border);
+  padding: 28px 30px;
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(19, 14, 9, 0.25);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: #f7f5f0;
+}
+
+/* TITLE */
+.dataset-card h3 {
+  margin-bottom: 20px;
+  font-weight: 600;
+  text-align: center;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .dataset-info {
   width: 100%;
   display: grid;
+<<<<<<< HEAD
   grid-template-columns: 1fr 1fr;
   gap: 12px 20px;
 }
 
+=======
+  grid-template-columns: 1fr 1fr; /* 🔥 seimbang kiri-kanan */
+  gap: 12px 20px;
+  margin-top: 10px;
+}
+
+/* ITEM */
+>>>>>>> 5389e9f (Initial commit)
 .dataset-info div {
   background: #f9f9f9;
   padding: 10px 14px;
   border-radius: 10px;
   display: flex;
   justify-content: space-between;
+<<<<<<< HEAD
 }
 
 /* TOPBAR */
@@ -353,10 +838,23 @@ button[onclick^="deleteWord"]:hover {
 }
 
 .pagination span {
+=======
+  align-items: center;
+}
+
+/* LABEL */
+.dataset-info div span.label {
+  color: #555;
+}
+
+/* VALUE */
+.dataset-info div span.value {
+>>>>>>> 5389e9f (Initial commit)
   font-weight: 600;
   color: var(--accent);
 }
 
+<<<<<<< HEAD
 /* ======================
    WORD GRID (NEW)
 ====================== */
@@ -420,11 +918,25 @@ button[onclick^="deleteWord"]:hover {
   margin-top: 20px;
 
   display: none; /* default hidden */
+=======
+/* PROGRESS */
+.progress-container {
+  margin-top: 16px;
+  width: 100%;
+  height: 10px;
+  background: #ece8e2;
+  border-radius: 999px;
+  overflow: hidden;
+  display: none;
+  border: 0;
+  box-shadow: none;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .progress-bar {
   height: 100%;
   width: 0%;
+<<<<<<< HEAD
   background: #2c1f0e;
   border-radius: 999px;
 
@@ -436,4 +948,33 @@ button[onclick^="deleteWord"]:hover {
   font-size: 13px;
   color: #555;
   text-align: center;
+=======
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.progress-text {
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 0;
+  text-align: left;
+  color: #3b342b;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* FILE NAME KHUSUS */
+#fileName {
+  max-width: 140px;          /* 🔥 batasi panjang */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;   /* ... */
+  display: inline-block;
+  text-align: right;
+>>>>>>> 5389e9f (Initial commit)
 }

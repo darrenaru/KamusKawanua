@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
+<<<<<<< HEAD
     <title>Pengujian</title>
+=======
+    <title>Testing</title>
+>>>>>>> 5389e9f (Initial commit)
 
     <link rel="stylesheet" href="../css/testing.css">
 </head>
@@ -15,6 +19,7 @@
         <!-- SIDEBAR -->
         <div class="sidebar">
             <div class="logo">
+<<<<<<< HEAD
                 <img src="../../assets/images/logo.png">
             </div>
 
@@ -25,17 +30,47 @@
                 <li onclick="window.location.href='processing.html'">Processing</li>
                 <li class="active" onclick="window.location.href='testing.html'">Testing</li>
                 <li onclick="window.location.href='evaluasi.html'">Evaluasi</li>
+=======
+                <img src="../../assets/images/logo.png" alt="logo">
+            </div>
+
+            <ul>
+                <li><a href="dashboard.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span>Home</span></a></li>
+                <li><a href="data-collection.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="20" x2="9" y2="10"/></svg></span><span>Data Collection</span></a></li>
+                <li><a href="preprocessing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span><span>Preprocessing</span></a></li>
+                <li><a href="processing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg></span><span>Processing</span></a></li>
+                <li class="active"><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v5l-4 7a4 4 0 0 0 3.5 6h5a4 4 0 0 0 3.5-6l-4-7V3"/></svg></span><span>Testing</span></a></li>
+                <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Performance Evaluation</span></a></li>
+>>>>>>> 5389e9f (Initial commit)
             </ul>
         </div>
 
         <!-- MAIN -->
         <div class="main">
 
+<<<<<<< HEAD
             <h1>Pengujian</h1>
 
             <!-- Konfigurasi Testing -->
             <div class="card">
                 <h3>Konfigurasi Testing</h3>
+=======
+            <h1 class="title-with-icon">
+                <span class="title-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v5l-4 7a4 4 0 0 0 3.5 6h5a4 4 0 0 0 3.5-6l-4-7V3"/></svg>
+                </span>
+                Testing
+            </h1>
+
+            <!-- Konfigurasi Testing -->
+            <div class="card">
+                <h3 class="card-title-with-icon">
+                    <span class="card-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/></svg>
+                    </span>
+                    Konfigurasi Testing
+                </h3>
+>>>>>>> 5389e9f (Initial commit)
 
                 <div class="form-group">
                     Sumber Data:
@@ -46,7 +81,11 @@
                         </div>
                         <div class="ds-option" data-mode="input" onclick="switchMode('input')">
                             <span class="radio-circle"></span>
+<<<<<<< HEAD
                             <span class="opt-label">Input Kata</span>
+=======
+                            <span class="opt-label">Word Input</span>
+>>>>>>> 5389e9f (Initial commit)
                         </div>
                     </div>
 
@@ -54,6 +93,7 @@
                     <div class="ds-panel show" id="panelUpload">
                         <label class="upload-area" id="uploadArea">
                             <input type="file" id="fileDataset" accept=".csv" hidden>
+<<<<<<< HEAD
                             <span id="uploadText">Pilih atau seret file dataset (.csv)</span>
                         </label>
                     </div>
@@ -67,6 +107,21 @@
 
                         <div class="kata-result" id="kataResult">
                             <div class="kata-result-title">Hasil Uji Kata</div>
+=======
+                            <span id="uploadText">Select or drag dataset file (.csv)</span>
+                        </label>
+                    </div>
+
+                    <!-- Panel Word Input -->
+                    <div class="ds-panel" id="panelInput">
+                        <input type="text" id="inputKata" class="input-text" placeholder="Type keyword...">
+                        <span class="kata-hint" id="kataHint">0 / 3 kata</span>
+
+                        <button class="btn-test-kata" id="btnTestKata" onclick="testKata()" disabled>Test Word</button>
+
+                        <div class="kata-result" id="kataResult">
+                            <div class="kata-result-title">Test Results Word</div>
+>>>>>>> 5389e9f (Initial commit)
                             <div class="kata-result-list" id="kataResultList"></div>
                             <div class="kata-result-divider" id="kataResultDivider" style="display:none"></div>
                             <div class="kata-result-summary" id="kataResultSummary" style="display:none">
@@ -79,15 +134,29 @@
                 </div>
 
                 <div class="form-group">
+<<<<<<< HEAD
                     Algoritma/Model:
                     <select id="selModel">
                         <option value="xlmr">XLM-R</option>
                         <option value="mbert">mBERT</option>
                         <option value="indobert">IndoBERT</option>
+=======
+                    Algoritma:
+                    <select id="selAlgorithm">
+                        <option value="">Memuat algoritma...</option>
+>>>>>>> 5389e9f (Initial commit)
                     </select>
                 </div>
 
                 <div class="form-group">
+<<<<<<< HEAD
+=======
+                    Model:
+                    <select id="selModel"></select>
+                </div>
+
+                <div class="form-group">
+>>>>>>> 5389e9f (Initial commit)
                     Arah Terjemahan:
                     <select id="selDirection">
                         <option value="m2i">Manado - Indonesia</option>
@@ -100,7 +169,11 @@
             <div class="card">
                 <div class="ds-header">
                     <div>
+<<<<<<< HEAD
                         <h3 id="dsTitle">Belum ada dataset</h3>
+=======
+                        <h3 id="dsTitle">Not Yet ada dataset</h3>
+>>>>>>> 5389e9f (Initial commit)
                         <p class="ds-subtitle" id="dsSubtitle">Unggah file atau input kata untuk memulai</p>
                     </div>
                     <span class="status-badge idle" id="statusBadge">
@@ -122,6 +195,7 @@
 
                 <div class="ds-divider"></div>
 
+<<<<<<< HEAD
                 <p class="ds-label">Distribusi Kata per Kategori</p>
                 <div class="ds-kategori">
                     <div class="kat-item verb">
@@ -139,18 +213,46 @@
                     <div class="kat-item adv">
                         <div class="kat-count" id="katAdv">0</div>
                         <div class="kat-label">Kata Keterangan</div>
+=======
+                <p class="ds-label">Word Distribution by Category</p>
+                <div class="ds-kategori">
+                    <div class="kat-item verb">
+                        <div class="kat-count" id="katVerb">0</div>
+                        <div class="kat-label">Verb</div>
+                    </div>
+                    <div class="kat-item noun">
+                        <div class="kat-count" id="katNoun">0</div>
+                        <div class="kat-label">Noun</div>
+                    </div>
+                    <div class="kat-item adj">
+                        <div class="kat-count" id="katAdj">0</div>
+                        <div class="kat-label">Adjective</div>
+                    </div>
+                    <div class="kat-item adv">
+                        <div class="kat-count" id="katAdv">0</div>
+                        <div class="kat-label">Adverb</div>
+>>>>>>> 5389e9f (Initial commit)
                     </div>
                 </div>
 
                 <div class="ds-divider"></div>
 
                 <div class="ds-meta">
+<<<<<<< HEAD
                     <span>Pengimport: <b id="dsImporter">—</b></span>
                     <span>Tanggal: <b id="dsDate">—</b></span>
                 </div>
             </div>
 
             <button class="btn primary" id="btnStart" onclick="startTesting()">Mulai Testing</button>
+=======
+                    <span>Importert: <b id="dsImporter">—</b></span>
+                    <span>Date: <b id="dsDate">—</b></span>
+                </div>
+            </div>
+
+            <button class="btn primary" id="btnStart" onclick="startTesting()">Start Testing</button>
+>>>>>>> 5389e9f (Initial commit)
 
             <!-- Progress -->
             <div class="card">
@@ -163,12 +265,17 @@
                     <div class="progress-bar" id="progressBar"></div>
                 </div>
 
+<<<<<<< HEAD
                 <p id="progressText" class="progress-text">Menunggu...</p>
+=======
+                <p id="progressText" class="progress-text">Waiting...</p>
+>>>>>>> 5389e9f (Initial commit)
 
                 <div class="progress-summary" id="progressSummary">
                     <span>Dataset: <b id="sumDataset">—</b></span>
                     <span>Model: <b id="sumModel">—</b></span>
                     <span>Arah: <b id="sumDir">—</b></span>
+<<<<<<< HEAD
                     <span>Kata: <b id="sumKata">—</b></span>
                 </div>
             </div>
@@ -176,6 +283,20 @@
             <!-- Tabel Hasil Evaluasi -->
             <div class="card">
                 <h3>Hasil Evaluasi</h3>
+=======
+                    <span>Word: <b id="sumKata">—</b></span>
+                </div>
+            </div>
+
+            <!-- Evaluation Results Table -->
+            <div class="card">
+                <h3 class="card-title-with-icon">
+                    <span class="card-title-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    </span>
+                    Evaluation Results
+                </h3>
+>>>>>>> 5389e9f (Initial commit)
                 <table class="eval-table">
                     <thead>
                         <tr>

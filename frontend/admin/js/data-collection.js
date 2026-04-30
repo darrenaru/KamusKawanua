@@ -82,7 +82,11 @@ function initFileInput() {
     const uploadBox = document.querySelector(".upload-box");
 
     if (!input || !fileName || !uploadBox) {
+<<<<<<< HEAD
         console.error("Upload element tidak lengkap");
+=======
+        console.error("Upload element is incomplete");
+>>>>>>> 5389e9f (Initial commit)
         return;
     }
 
@@ -95,7 +99,11 @@ function initFileInput() {
         if (this.files && this.files.length > 0) {
             fileName.textContent = this.files[0].name;
         } else {
+<<<<<<< HEAD
             fileName.textContent = "Belum ada file";
+=======
+            fileName.textContent = "Not Yet ada file";
+>>>>>>> 5389e9f (Initial commit)
         }
     });
 }
@@ -132,6 +140,7 @@ function renderDatasets(list = datasets) {
         card.innerHTML = `
             <div class="card-header">
                 <h3>${ds.name}</h3>
+<<<<<<< HEAD
                 <button class="delete-btn" onclick="deleteDataset(${ds.id})">Hapus</button>
             </div>
 
@@ -143,6 +152,19 @@ function renderDatasets(list = datasets) {
                 <div>Kata Keterangan</div><div>: ${ds.keterangan}</div>
                 <div>Nama Pengimpor</div><div>: ${ds.uploader}</div>
                 <div>Tanggal Upload</div><div>: ${ds.date}</div>
+=======
+                <button class="delete-btn" onclick="deleteDataset(${ds.id})">Delete</button>
+            </div>
+
+            <div class="dataset-info">
+                <div>Data Count</div><div>: ${ds.total}</div>
+                <div>Verb</div><div>: ${ds.kerja}</div>
+                <div>Noun</div><div>: ${ds.benda}</div>
+                <div>Adjective</div><div>: ${ds.sifat}</div>
+                <div>Adverb</div><div>: ${ds.keterangan}</div>
+                <div>Nama Importer</div><div>: ${ds.uploader}</div>
+                <div>Date Upload</div><div>: ${ds.date}</div>
+>>>>>>> 5389e9f (Initial commit)
             </div>
         `;
 
@@ -159,7 +181,11 @@ function parseCSVStrict(text) {
     // 🔥 HANDLE HEADER
     const header = parseCSVLine(lines[0]);
 
+<<<<<<< HEAD
     const expected = [
+=======
+    const expected8 = [
+>>>>>>> 5389e9f (Initial commit)
         "id_kata",
         "jenis",
         "manado",
@@ -169,18 +195,54 @@ function parseCSVStrict(text) {
         "kalimat_indonesia",
         "kalimat_inggris"
     ];
+<<<<<<< HEAD
 
     for (let i = 0; i < expected.length; i++) {
         if (header[i]?.trim() !== expected[i]) {
             console.log("HEADER:", header);
             throw new Error("Format CSV tidak sesuai!");
         }
+=======
+    const expected6 = [
+        "id_kata",
+        "jenis",
+        "manado",
+        "indonesia",
+        "kalimat_manado",
+        "kalimat_indonesia"
+    ];
+
+    const normalizedHeader = header.map(h => (h || "").trim().toLowerCase());
+    const isHeader8 = expected8.every((col, i) => normalizedHeader[i] === col);
+    const isHeader6 = expected6.every((col, i) => normalizedHeader[i] === col);
+
+    if (!isHeader8 && !isHeader6) {
+        console.log("HEADER:", header);
+        throw new Error("CSV format is invalid! Use supported 6 or 8 column headers.");
+>>>>>>> 5389e9f (Initial commit)
     }
 
     // 🔥 PARSE DATA
     return lines.slice(1).map(line => {
         const c = parseCSVLine(line);
 
+<<<<<<< HEAD
+=======
+        // Format 6 kolom: otomatis isi data Inggris dengan string kosong.
+        if (isHeader6) {
+            return {
+                id_kata: c[0],
+                jenis: c[1],
+                manado: c[2],
+                indonesia: c[3],
+                inggris: "",
+                kalimat_manado: c[4],
+                kalimat_indonesia: c[5],
+                kalimat_inggris: ""
+            };
+        }
+
+>>>>>>> 5389e9f (Initial commit)
         return {
             id_kata: c[0],
             jenis: c[1],
@@ -228,7 +290,11 @@ async function uploadDataset() {
     // 🔒 LOCK UI
     uploadBtn.disabled = true;
     cancelBtn.disabled = true;
+<<<<<<< HEAD
     uploadBtn.innerText = "Mengunggah...";
+=======
+    uploadBtn.innerText = "Uploading...";
+>>>>>>> 5389e9f (Initial commit)
     input.disabled = true;
     datasetNameInput.disabled = true;
 
@@ -329,7 +395,11 @@ async function uploadDataset() {
             progressText.innerText = `Uploading ${percent}% (${currentChunk}/${totalChunks})`;
         }
 
+<<<<<<< HEAD
         progressText.innerText = "Selesai!";
+=======
+        progressText.innerText = "Completed!";
+>>>>>>> 5389e9f (Initial commit)
         progressBar.style.width = "100%";
 
         setTimeout(() => {
@@ -337,7 +407,11 @@ async function uploadDataset() {
             progressText.style.display = "none";
         }, 1000);
 
+<<<<<<< HEAD
         alert("Dataset berhasil disimpan!");
+=======
+        alert("Dataset saved successfully!");
+>>>>>>> 5389e9f (Initial commit)
 
         resetFile();
         fetchDatasets();
@@ -371,7 +445,11 @@ function resetFile() {
     const uploadBtn = document.getElementById("uploadBtn");
 
     input.value = "";
+<<<<<<< HEAD
     label.innerText = "Belum ada file";
+=======
+    label.innerText = "Not Yet ada file";
+>>>>>>> 5389e9f (Initial commit)
     datasetNameInput.value = "";
     uploadBtn.disabled = true;
 }
@@ -423,7 +501,11 @@ function parseCSVLine(line) {
 
 async function deleteDataset(datasetId) {
 
+<<<<<<< HEAD
     const confirmDelete = confirm("Yakin ingin menghapus dataset ini?");
+=======
+    const confirmDelete = confirm("Are you sure you want to delete this dataset?");
+>>>>>>> 5389e9f (Initial commit)
     if (!confirmDelete) return;
 
     try {
@@ -444,13 +526,27 @@ async function deleteDataset(datasetId) {
 
         if (errDataset) throw errDataset;
 
+<<<<<<< HEAD
         alert("Dataset berhasil dihapus");
+=======
+        alert("Dataset deleted successfully");
+>>>>>>> 5389e9f (Initial commit)
 
         // 🔄 REFRESH UI
         fetchDatasets();
 
     } catch (err) {
         console.error("DELETE ERROR:", err);
+<<<<<<< HEAD
         alert("Gagal menghapus dataset");
     }
 }
+=======
+        alert("Failed to delete dataset");
+    }
+}
+
+function goToPreprocessing() {
+    window.location.href = "preprocessing.html";
+}
+>>>>>>> 5389e9f (Initial commit)

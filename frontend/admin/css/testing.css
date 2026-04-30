@@ -3,10 +3,32 @@
     --bg: #f7f5f0;
     --text: #1a1714;
     --accent: #2c1f0e;
+<<<<<<< HEAD
     --accent-light: rgba(200, 169, 110, 0.4);
     --card-bg: white;
     --muted: #777;
     --border: #e8e4dd;
+=======
+    --accent-hover: #3a2a12;
+    --accent-soft: rgba(200, 169, 110, 0.4);
+    --accent-glow: rgba(200, 169, 110, 0.2);
+    --text-primary: #1a1714;
+    --text-secondary: #6b5e50;
+    --text-muted: #9a8e7f;
+    --accent-light: rgba(200, 169, 110, 0.4);
+    --card-bg: white;
+    --muted: #777;
+    --border: rgba(44, 31, 14, 0.1);
+    --border-light: rgba(44, 31, 14, 0.06);
+    --border-strong: rgba(44, 31, 14, 0.18);
+    --bg-card: rgba(255, 252, 245, 0.75);
+    --bg-header: rgba(200, 169, 110, 0.18);
+    --bg-row-alt: rgba(44, 31, 14, 0.025);
+    --bg-row-hover: rgba(200, 169, 110, 0.12);
+    --success: #5a7a3a;
+    --chart-w2v: #2c1f0e;
+    --chart-glove: #c8a96e;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 
@@ -16,8 +38,14 @@ body {
     margin: 0;
     font-family: 'Inter', sans-serif;
     background-color: var(--bg);
+<<<<<<< HEAD
     height: 100vh;
     overflow: hidden;
+=======
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+>>>>>>> 5389e9f (Initial commit)
     position: relative;
 }
 
@@ -31,7 +59,10 @@ body::before {
     background-image: linear-gradient(rgba(44, 31, 14, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(44, 31, 14, 0.04) 1px, transparent 1px);
     background-size: 40px 40px;
     z-index: 0;
+<<<<<<< HEAD
     pointer-events: none;
+=======
+>>>>>>> 5389e9f (Initial commit)
 }
 
 
@@ -46,7 +77,10 @@ body::after {
     top: -150px;
     right: -120px;
     z-index: 0;
+<<<<<<< HEAD
     pointer-events: none;
+=======
+>>>>>>> 5389e9f (Initial commit)
 }
 
 
@@ -54,7 +88,11 @@ body::after {
 
 .layout {
     display: flex;
+<<<<<<< HEAD
     height: 100vh;
+=======
+    min-height: 100vh;
+>>>>>>> 5389e9f (Initial commit)
     position: relative;
     z-index: 1;
 }
@@ -64,54 +102,157 @@ body::after {
 
 .sidebar {
     width: 250px;
+<<<<<<< HEAD
     background: rgba(241, 231, 216, 0.85);
     backdrop-filter: blur(6px);
+=======
+    min-width: 250px;
+    background: rgba(241, 231, 216, 0.85);
+    backdrop-filter: blur(6px);
+    height: 100vh;
+>>>>>>> 5389e9f (Initial commit)
     flex-shrink: 0;
     padding: 20px 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     overflow: hidden;
+<<<<<<< HEAD
     position: relative;
     z-index: 3;
+=======
+    position: sticky;
+    top: 0;
+    box-sizing: border-box;
+}
+
+.logo {
+    margin-top: 20px;
+    margin-bottom: 20px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .logo img {
     width: 220px;
+<<<<<<< HEAD
+=======
+    display: block;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar ul {
     list-style: none;
     padding: 0;
+<<<<<<< HEAD
+=======
+    margin: 0;
+>>>>>>> 5389e9f (Initial commit)
     width: 100%;
 }
 
 .sidebar li {
+<<<<<<< HEAD
     padding: 14px 20px;
     font-weight: 500;
     width: 100%;
     cursor: pointer;
+=======
+    padding: 0;
+    width: 100%;
+}
+
+.sidebar li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+}
+
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar li.active {
     background: var(--accent-light);
 }
 
+<<<<<<< HEAD
 .sidebar li:hover {
     background: rgba(200,169,110,0.25);
 }
 
+=======
+>>>>>>> 5389e9f (Initial commit)
 
 /* MAIN */
 
 .main {
     flex: 1;
+<<<<<<< HEAD
     padding: 60px;
     overflow-y: auto;
 }
 
 .main h1 {
     margin-bottom: 20px;
+=======
+    min-height: 100vh;
+    padding: 40px 60px 60px;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.main h1 {
+    margin-bottom: 36px;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.title-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--accent-glow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 
@@ -155,11 +296,21 @@ body::after {
 /* CARD */
 
 .card {
+<<<<<<< HEAD
     background: var(--card-bg);
     padding: 25px;
     border-radius: 14px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
     margin-top: 20px;
+=======
+    background: var(--bg-card);
+    border: 1px solid rgba(44, 31, 14, 0.1);
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: none;
+    margin-top: 0;
+    margin-bottom: 22px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .card h3 {
@@ -167,6 +318,35 @@ body::after {
     font-size: 16px;
 }
 
+<<<<<<< HEAD
+=======
+.card-title-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-title-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--accent-glow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-title-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+>>>>>>> 5389e9f (Initial commit)
 
 /* FORM */
 

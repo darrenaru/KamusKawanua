@@ -20,4 +20,35 @@ Thumbs.db
 .vscode/
 
 # Logs
+<<<<<<< HEAD
 *.log
+=======
+*.log
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+>>>>>>> 5389e9f (Initial commit)

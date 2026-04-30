@@ -1,8 +1,21 @@
+<<<<<<< HEAD
+=======
+--extra-index-url https://download.pytorch.org/whl/cu124
+>>>>>>> 5389e9f (Initial commit)
 fastapi
 uvicorn
 pandas
 numpy
+<<<<<<< HEAD
 torch
 transformers
 rapidfuzz
 supabase
+=======
+torch==2.6.0+cu124
+transformers
+rapidfuzz
+supabase
+scikit-learn
+sastrawi
+>>>>>>> 5389e9f (Initial commit)

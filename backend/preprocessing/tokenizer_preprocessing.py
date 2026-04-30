@@ -3,6 +3,10 @@ from transformers import AutoTokenizer
 from supabase import create_client
 import json
 import time
+<<<<<<< HEAD
+=======
+import torch
+>>>>>>> 5389e9f (Initial commit)
 
 app = FastAPI()
 
@@ -15,7 +19,16 @@ tokenizer = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
 
 
 def build_text(row):
+<<<<<<< HEAD
     return f"{row.get('manado_clean','')} [SEP] {row.get('indonesia_clean','')} [SEP] {row.get('inggris_clean','')}"
+=======
+    return (
+        f"{row.get('manado_clean','')} [SEP] "
+        f"{row.get('indonesia_clean','')} [SEP] "
+        f"{row.get('kalimat_manado_clean','')} [SEP] "
+        f"{row.get('kalimat_indonesia_clean','')}"
+    )
+>>>>>>> 5389e9f (Initial commit)
 
 
 @app.post("/preprocess/{dataset_id}")
@@ -28,7 +41,11 @@ def preprocess(dataset_id: int):
     # 🔥 PAGINATION FIX
     while True:
         res = supabase.table("preprocessed_data") \
+<<<<<<< HEAD
             .select("*") \
+=======
+            .select("id, manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean") \
+>>>>>>> 5389e9f (Initial commit)
             .eq("dataset_id", dataset_id) \
             .is_("input_ids", None) \
             .range(from_idx, from_idx + limit - 1) \
@@ -48,6 +65,11 @@ def preprocess(dataset_id: int):
 
     total = len(all_data)
     print("TOTAL TOKENIZE:", total)
+<<<<<<< HEAD
+=======
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("PREPROCESS DEVICE:", device)
+>>>>>>> 5389e9f (Initial commit)
 
     for i, row in enumerate(all_data):
         try:
@@ -60,12 +82,26 @@ def preprocess(dataset_id: int):
                 text,
                 padding="max_length",
                 truncation=True,
+<<<<<<< HEAD
                 max_length=64
             )
 
             supabase.table("preprocessed_data").update({
                 "input_ids": json.dumps(encoded["input_ids"]),
                 "attention_mask": json.dumps(encoded["attention_mask"])
+=======
+                max_length=64,
+                return_tensors="pt",
+            )
+            input_ids = encoded["input_ids"].to(device).squeeze(0).detach().cpu().tolist()
+            attention_mask = (
+                encoded["attention_mask"].to(device).squeeze(0).detach().cpu().tolist()
+            )
+
+            supabase.table("preprocessed_data").update({
+                "input_ids": json.dumps(input_ids),
+                "attention_mask": json.dumps(attention_mask)
+>>>>>>> 5389e9f (Initial commit)
             }).eq("id", row["id"]).execute()
 
             print(f"{i+1}/{total}")
@@ -75,4 +111,8 @@ def preprocess(dataset_id: int):
         except Exception as e:
             print("ERROR:", row["id"], e)
 
+<<<<<<< HEAD
     return {"status": "done", "total": total}
+=======
+    return {"status": "done", "total": total, "device": str(device)}
+>>>>>>> 5389e9f (Initial commit)

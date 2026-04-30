@@ -14,6 +14,10 @@ if (!isLoggedIn) {
 
 const buttons = document.querySelectorAll(".algo-btn");
 const info = document.getElementById("selectedInfo");
+<<<<<<< HEAD
+=======
+const nextBtn = document.getElementById("nextBtn");
+>>>>>>> 5389e9f (Initial commit)
 
 // ==============================
 // LABEL MAP
@@ -40,7 +44,11 @@ function applySelection(algo) {
         }
     });
 
+<<<<<<< HEAD
     info.innerText = "Algoritma dipilih: " + labelMap[algo];
+=======
+    info.innerText = "Selected algorithm: " + labelMap[algo];
+>>>>>>> 5389e9f (Initial commit)
 }
 
 // ==============================
@@ -68,3 +76,25 @@ window.onload = () => {
         applySelection(saved);
     }
 };
+<<<<<<< HEAD
+=======
+
+// ==============================
+// NEXT BUTTON VALIDATION
+// ==============================
+
+nextBtn.addEventListener("click", () => {
+    const selected = localStorage.getItem("selectedAlgorithm");
+
+    if (!selected) {
+        alert("Select an algorithm first!");
+        return;
+    }
+
+    // 🔥 SIMPAN STATE (SUDAH ADA)
+    console.log("Continue dengan algoritma:", selected);
+
+    // 🔥 REDIRECT KE DATA COLLECTION
+    window.location.href = "../pages/data-collection.html";
+});
+>>>>>>> 5389e9f (Initial commit)

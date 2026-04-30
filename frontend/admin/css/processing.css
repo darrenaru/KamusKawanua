@@ -4,10 +4,43 @@
   --bg: #f7f5f0;
   --text: #1a1714;
   --accent: #2c1f0e;
+<<<<<<< HEAD
   --success: #2e7d32;
   --warning: #f57c00;
 }
 
+=======
+  --accent-hover: #3a2a12;
+  --accent-soft: rgba(200, 169, 110, 0.4);
+  --accent-glow: rgba(200, 169, 110, 0.2);
+  --text-primary: #1a1714;
+  --text-secondary: #6b5e50;
+  --text-muted: #9a8e7f;
+  --panel: #ebe7df;
+  --panel-2: #f8f6f2;
+  --border-soft: #ddd6c8;
+  --border: rgba(44, 31, 14, 0.1);
+  --border-light: rgba(44, 31, 14, 0.06);
+  --border-strong: rgba(44, 31, 14, 0.18);
+  --bg-card: rgba(255, 252, 245, 0.75);
+  --bg-header: rgba(200, 169, 110, 0.18);
+  --bg-row-alt: rgba(44, 31, 14, 0.025);
+  --bg-row-hover: rgba(200, 169, 110, 0.12);
+  --success: #5a7a3a;
+  --chart-w2v: #2c1f0e;
+  --chart-glove: #c8a96e;
+  --warning: #f57c00;
+}
+
+/* =========================
+   SCROLLBAR (samakan referensi)
+========================= */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(44, 31, 14, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(44, 31, 14, 0.35); }
+
+>>>>>>> 5389e9f (Initial commit)
 * {
   margin: 0;
   padding: 0;
@@ -42,44 +75,76 @@ body::before {
 
 .sidebar {
   width: 250px;
+<<<<<<< HEAD
   background: rgba(241, 231, 216, 0.85);
   backdrop-filter: blur(6px);
   min-height: 100vh;
+=======
+  min-width: 250px;
+  background: rgba(241, 231, 216, 0.85);
+  backdrop-filter: blur(6px);
+  height: 100vh;
+>>>>>>> 5389e9f (Initial commit)
   padding: 20px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+<<<<<<< HEAD
   position: sticky;
   top: 0;
   z-index: 2000;
+=======
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  box-sizing: border-box;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .logo {
   margin-top: 20px;
+<<<<<<< HEAD
   margin-bottom: 30px;
   pointer-events: none;
+=======
+  margin-bottom: 20px;
+>>>>>>> 5389e9f (Initial commit)
 }
 .logo img {
   width: 220px;
   display: block;
+<<<<<<< HEAD
   pointer-events: none;
+=======
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar ul {
   list-style: none;
   padding: 0;
+<<<<<<< HEAD
   width: 100%;
   position: relative;
   z-index: 2;
 }
 
 .sidebar li {
+=======
+  margin: 0;
+  width: 100%;
+}
+
+.sidebar li {
+  padding: 0;
+  font-weight: 500;
+>>>>>>> 5389e9f (Initial commit)
   width: 100%;
   transition: all 0.2s ease;
   color: var(--text);
 }
 
 .sidebar li a {
+<<<<<<< HEAD
   display: block;
   width: 100%;
   padding: 14px 20px;
@@ -87,15 +152,48 @@ body::before {
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+=======
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  color: inherit;
+  text-decoration: none;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .sidebar li:hover {
   background: rgba(200, 169, 110, 0.2);
 }
 
+<<<<<<< HEAD
 .sidebar li.active {
   background: rgba(200, 169, 110, 0.4);
   border-left: 3px solid var(--accent);
+=======
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar li.active {
+  background: rgba(200, 169, 110, 0.4);
+  border-left: 0;
+>>>>>>> 5389e9f (Initial commit)
   font-weight: 600;
   color: var(--accent);
 }
@@ -105,6 +203,7 @@ body::before {
   cursor: not-allowed;
 }
 
+<<<<<<< HEAD
 .sidebar,
 .sidebar * {
   pointer-events: auto;
@@ -113,6 +212,13 @@ body::before {
 .main {
   flex: 1;
   padding: 40px 60px;
+=======
+.main {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 40px 60px 60px;
+>>>>>>> 5389e9f (Initial commit)
   display: flex;
   flex-direction: column;
 }
@@ -121,12 +227,17 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
+<<<<<<< HEAD
   margin-bottom: 30px;
+=======
+  margin-bottom: 36px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .main-header h1 {
   font-weight: 600;
   color: var(--text);
+<<<<<<< HEAD
   font-size: 32px;
 }
 
@@ -146,14 +257,51 @@ body::before {
 .manual-btn:hover {
   background: #4a3520;
   transform: scale(1.1);
+=======
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.title-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .processing-container {
   width: 100%;
+<<<<<<< HEAD
   max-width: 1100px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+=======
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 /* =========================
@@ -161,10 +309,18 @@ body::before {
 ========================= */
 
 .ratio-section {
+<<<<<<< HEAD
   background: #eeebe6;
   border-radius: 20px;
   padding: 25px 30px;
   margin-bottom: 20px;
+=======
+  background: rgba(255, 252, 245, 0.75);
+  border-radius: 8px;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--border);
+  box-shadow: none;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .ratio-header {
@@ -172,7 +328,11 @@ body::before {
 }
 
 .ratio-header h3 {
+<<<<<<< HEAD
   font-size: 18px;
+=======
+  font-size: 16px;
+>>>>>>> 5389e9f (Initial commit)
   font-weight: 600;
   color: var(--text);
   display: flex;
@@ -180,11 +340,45 @@ body::before {
   gap: 8px;
 }
 
+<<<<<<< HEAD
 .ratio-input-group {
   display: flex;
   align-items: flex-end;
   gap: 20px;
   margin-bottom: 25px;
+=======
+.section-heading-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-heading-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-heading-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ratio-input-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 14px;
+>>>>>>> 5389e9f (Initial commit)
   flex-wrap: wrap;
 }
 
@@ -203,9 +397,15 @@ body::before {
 }
 
 .ratio-input input {
+<<<<<<< HEAD
   padding: 12px 15px;
   border-radius: 10px;
   border: 1.5px solid #d9d9d9;
+=======
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+>>>>>>> 5389e9f (Initial commit)
   background: white;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -229,8 +429,13 @@ body::before {
 .btn-ratio-primary {
   background: var(--accent);
   color: white;
+<<<<<<< HEAD
   padding: 12px 25px;
   border-radius: 10px;
+=======
+  padding: 10px 18px;
+  border-radius: 8px;
+>>>>>>> 5389e9f (Initial commit)
   border: none;
   font-weight: 600;
   cursor: pointer;
@@ -250,8 +455,13 @@ body::before {
 
 .ratio-table-container {
   overflow-x: auto;
+<<<<<<< HEAD
   border-radius: 12px;
   border: 1px solid #ddd;
+=======
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+>>>>>>> 5389e9f (Initial commit)
   background: white;
 }
 
@@ -259,6 +469,7 @@ body::before {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+<<<<<<< HEAD
 }
 
 .ratio-table th {
@@ -274,6 +485,50 @@ body::before {
   border-bottom: 1px solid #e0dbd3;
 }
 
+=======
+  table-layout: fixed;
+}
+
+.ratio-table th {
+  background: var(--bg-header);
+  color: var(--accent);
+  padding: 13px 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.ratio-table td {
+  padding: 12px 16px;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #e0dbd3;
+}
+
+.ratio-table th:nth-child(1),
+.ratio-table td:nth-child(1),
+.ratio-table th:nth-child(2),
+.ratio-table td:nth-child(2) {
+  width: 20%;
+}
+
+.ratio-table th:nth-child(3),
+.ratio-table td:nth-child(3) {
+  width: 60%;
+}
+
+.ratio-action-wrap {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+>>>>>>> 5389e9f (Initial commit)
 .ratio-table tbody tr:hover {
   background: #f8f6f2;
 }
@@ -314,7 +569,11 @@ body::before {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
+<<<<<<< HEAD
   margin-right: 8px;
+=======
+  margin-right: 0;
+>>>>>>> 5389e9f (Initial commit)
   transition: all 0.2s;
 }
 
@@ -481,6 +740,7 @@ body::before {
 
 .top-controls {
   display: flex;
+<<<<<<< HEAD
   gap: 15px;
   align-items: center;
   flex-wrap: wrap;
@@ -492,14 +752,56 @@ body::before {
   border: none;
   background: #eeebe6;
   min-width: 200px;
+=======
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: transparent;
+}
+
+.top-controls select {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: #f8f6f2;
+  min-width: 180px;
+>>>>>>> 5389e9f (Initial commit)
   font-size: 14px;
   cursor: pointer;
 }
 
+<<<<<<< HEAD
 .mode-selection {
   display: flex;
   gap: 15px;
   margin-left: auto;
+=======
+#btn-pilih-dataset {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: #f8f6f2;
+  min-width: 200px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+#btn-pilih-dataset:hover {
+  background: #e0dbd3;
+}
+
+.mode-selection {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  background: #f8f6f2;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 6px 10px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .radio-label {
@@ -507,15 +809,24 @@ body::before {
   align-items: center;
   gap: 8px;
   cursor: pointer;
+<<<<<<< HEAD
   padding: 8px 15px;
   background: #eeebe6;
+=======
+  padding: 2px 4px;
+  background: transparent;
+>>>>>>> 5389e9f (Initial commit)
   border-radius: 20px;
   font-size: 14px;
   transition: all 0.2s;
 }
 
 .radio-label:hover {
+<<<<<<< HEAD
   background: #e0dbd3;
+=======
+  background: transparent;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .radio-label input[type="radio"] {
@@ -524,7 +835,11 @@ body::before {
 
 .file-card {
   background: white;
+<<<<<<< HEAD
   border: 1.5px solid #e0dbd3;
+=======
+  border: 1px solid var(--border-soft);
+>>>>>>> 5389e9f (Initial commit)
   border-radius: 14px;
   padding: 16px 24px;
   display: flex;
@@ -546,6 +861,23 @@ body::before {
   flex: 1;
 }
 
+<<<<<<< HEAD
+=======
+.final-best-ratio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  background: #f0ede8;
+  color: #3b2b16;
+  border: 1px solid #d9c9ad;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+>>>>>>> 5389e9f (Initial commit)
 #new-model-name-card input {
   border: none;
   outline: none;
@@ -589,24 +921,77 @@ body::before {
 }
 
 .parameter-card {
+<<<<<<< HEAD
   background: #eeebe6;
   padding: 30px;
   border-radius: 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+=======
+  background: rgba(255, 252, 245, 0.75);
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(44, 31, 14, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.parameter-card h3 {
+  font-size: 16px;
+  margin-bottom: 6px !important;
+}
+
+.layer-card {
+  background: #fcfbf8;
+  border: 1px solid #e4ddd1;
+  border-radius: 16px;
+  padding: 16px 16px 14px;
+  margin-top: 6px;
+}
+
+.layer-header {
+  margin-bottom: 12px;
+}
+
+.layer-header h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.layer-header p {
+  font-size: 11px;
+  color: #7c7268;
+  line-height: 1.45;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .param-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
+<<<<<<< HEAD
   gap: 20px;
+=======
+  gap: 18px;
+  margin-bottom: 10px;
+}
+
+.param-row:last-child {
+  margin-bottom: 0;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .param-group {
   display: flex;
   flex-direction: column;
+<<<<<<< HEAD
   gap: 8px;
+=======
+  gap: 10px;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .param-group label {
@@ -615,11 +1000,72 @@ body::before {
   color: var(--text);
 }
 
+<<<<<<< HEAD
 .param-group input,
 .param-group select {
   padding: 12px 15px;
   border-radius: 10px;
   border: 1.5px solid #d9d9d9;
+=======
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.param-help-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #d7ccbd;
+  color: #2c1f0e;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  line-height: 1;
+}
+
+.param-help-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(320px, 78vw);
+  background: #2b241c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.param-help-tooltip strong {
+  color: #ffdca9;
+}
+
+.param-help-icon:hover .param-help-tooltip,
+.param-help-icon:focus-within .param-help-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.param-group input,
+.param-group select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+>>>>>>> 5389e9f (Initial commit)
   background: white;
   font-size: 14px;
   transition: border-color 0.2s;
@@ -639,9 +1085,16 @@ body::before {
 
 .param-group input:disabled,
 .param-group select:disabled {
+<<<<<<< HEAD
   background: #e8e4de;
   cursor: not-allowed;
   opacity: 0.7;
+=======
+  background: #f1ede6;
+  cursor: not-allowed;
+  opacity: 1;
+  color: #8d8378;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 .param-group small {
@@ -651,9 +1104,15 @@ body::before {
 }
 
 .btn-mulai {
+<<<<<<< HEAD
   background: black;
   color: white;
   padding: 14px 40px;
+=======
+  background: var(--accent);
+  color: white;
+  padding: 12px 28px;
+>>>>>>> 5389e9f (Initial commit)
   border-radius: 12px;
   border: none;
   font-weight: 600;
@@ -663,7 +1122,11 @@ body::before {
 }
 
 .btn-mulai:hover {
+<<<<<<< HEAD
   background: #333;
+=======
+  background: #3a2310;
+>>>>>>> 5389e9f (Initial commit)
   transform: translateY(-2px);
 }
 
@@ -712,9 +1175,16 @@ body::before {
 
 /* Training Card Styles */
 .training-card {
+<<<<<<< HEAD
   background: #eeebe6;
   padding: 30px 35px;
   border-radius: 20px;
+=======
+  background: rgba(255, 252, 245, 0.75);
+  padding: 22px 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(44, 31, 14, 0.1);
+>>>>>>> 5389e9f (Initial commit)
   animation: slideIn 0.4s ease;
 }
 
@@ -757,7 +1227,11 @@ body::before {
 }
 
 .progress-wrap {
+<<<<<<< HEAD
   background: #b0b0b0;
+=======
+  background: #d0c8bc;
+>>>>>>> 5389e9f (Initial commit)
   border-radius: 50px;
   height: 40px;
   overflow: hidden;
@@ -769,10 +1243,13 @@ body::before {
   background: #c8a96e;
 }
 
+<<<<<<< HEAD
 .progress-wrap.error {
   background: #ffd8d8;
 }
 
+=======
+>>>>>>> 5389e9f (Initial commit)
 .progress-bar {
   height: 100%;
   background: #c8a96e;
@@ -794,6 +1271,7 @@ body::before {
   pointer-events: none;
 }
 
+<<<<<<< HEAD
 .progress-meta {
   margin-top: -10px;
   margin-bottom: 18px;
@@ -873,6 +1351,83 @@ body::before {
 .progress-stage-item.error .stage-dot {
   background: #d84343;
   color: white;
+=======
+.loading-visual {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f4efe7;
+  border: 1px solid #e6dccd;
+}
+
+.loading-text {
+  font-size: 12px;
+  color: #5f5346;
+  font-weight: 500;
+}
+
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #c9b08a;
+  border-top-color: #5e4220;
+  animation: spin 0.8s linear infinite;
+}
+
+.progress-visualizer {
+  background: #f8f6f2;
+  border: 1px solid #e0dbd3;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: -6px 0 18px;
+}
+
+.progress-visualizer-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6f6358;
+  margin-bottom: 8px;
+}
+
+.progress-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-log-item {
+  font-size: 12px;
+  color: #4b4036;
+  background: white;
+  border: 1px solid #ebe4db;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.progress-log-item.log-info {
+  border-left: 3px solid #7a6a57;
+}
+
+.progress-log-item.log-success {
+  border-left: 3px solid #2e7d32;
+}
+
+.progress-log-item.log-warning {
+  border-left: 3px solid #ed8b00;
+}
+
+.progress-log-item.log-error {
+  border-left: 3px solid #c62828;
+>>>>>>> 5389e9f (Initial commit)
 }
 
 /* Table Styles */
@@ -891,11 +1446,23 @@ body::before {
 }
 
 .results-table th {
+<<<<<<< HEAD
   background: #2c1f0e;
   color: white;
   padding: 12px 10px;
   text-align: center;
   font-weight: 600;
+=======
+  background: var(--bg-header);
+  color: var(--accent);
+  padding: 13px 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+>>>>>>> 5389e9f (Initial commit)
   white-space: nowrap;
 }
 
@@ -919,7 +1486,11 @@ body::before {
 }
 
 .results-table .best-row td:first-child::before {
+<<<<<<< HEAD
   content: "🏆";
+=======
+  content: "Best";
+>>>>>>> 5389e9f (Initial commit)
   position: absolute;
   left: 5px;
 }
@@ -928,6 +1499,43 @@ body::before {
   padding: 30px !important;
 }
 
+<<<<<<< HEAD
+=======
+/* Confusion Matrix */
+.confusion-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 520px;
+  table-layout: fixed;
+}
+
+.confusion-matrix-table th,
+.confusion-matrix-table td {
+  border: 1px solid rgba(44, 31, 14, 0.12);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.confusion-matrix-table th {
+  background: rgba(200, 169, 110, 0.15);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.confusion-matrix-table td.diag {
+  background: rgba(90, 122, 58, 0.12);
+  font-weight: 700;
+  color: #2f4e24;
+}
+
+.confusion-matrix-table td {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+>>>>>>> 5389e9f (Initial commit)
 .best-params-display {
   margin: 20px 0;
   padding: 15px;
@@ -986,11 +1594,23 @@ body::before {
 }
 
 .comparison-table th {
+<<<<<<< HEAD
   background: #2c1f0e; /* Warna header sama dengan hasil training */
   color: white;
   padding: 12px 10px;
   text-align: center;
   font-weight: 600;
+=======
+  background: var(--bg-header);
+  color: var(--accent);
+  padding: 13px 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+>>>>>>> 5389e9f (Initial commit)
   white-space: nowrap;
 }
 
@@ -1017,9 +1637,16 @@ body::before {
 
 /* Container tabel perbandingan */
 #ratio-comparison-section {
+<<<<<<< HEAD
   background: #eeebe6; /* Sama dengan background training card */
   border-radius: 20px;
   padding: 25px 30px;
+=======
+  background: var(--panel); /* Sama dengan background training card */
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+>>>>>>> 5389e9f (Initial commit)
   margin-top: 30px;
 }
 
@@ -1060,10 +1687,13 @@ body::before {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
 
+<<<<<<< HEAD
 .modal-large {
   width: 700px;
 }
 
+=======
+>>>>>>> 5389e9f (Initial commit)
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -1093,6 +1723,7 @@ body::before {
   color: #555;
 }
 
+<<<<<<< HEAD
 .manual-section {
   margin-bottom: 20px;
   padding-bottom: 15px;
@@ -1125,6 +1756,8 @@ body::before {
   padding-bottom: 5px;
 }
 
+=======
+>>>>>>> 5389e9f (Initial commit)
 .btn-close {
   background: var(--accent);
   color: white;
@@ -1186,11 +1819,23 @@ body::before {
 }
 
 .history-table th {
+<<<<<<< HEAD
   background: #2c1f0e;
   color: white;
   padding: 10px 12px;
   text-align: left;
   font-weight: 600;
+=======
+  background: var(--bg-header);
+  color: var(--accent);
+  padding: 13px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+>>>>>>> 5389e9f (Initial commit)
   white-space: nowrap;
 }
 
@@ -1269,6 +1914,24 @@ body::before {
   transform: translateY(0);
 }
 
+<<<<<<< HEAD
+=======
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+>>>>>>> 5389e9f (Initial commit)
 @keyframes slideIn {
   from {
     opacity: 0;
