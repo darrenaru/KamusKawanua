@@ -634,6 +634,46 @@ def cancel_preprocess(job_id: str):
 # =========================
 @app.get("/search")
 def search(query: str, lang: str):
+    query_original = query or ""
+    lang = (lang or "").lower().strip()
+    if not query_original.strip():
+        return {"query": query_original, "results": [], "message": "Query cannot be empty."}
+    if lang not in ("manado", "indonesia", "inggris"):
+        return {"message": "Parameter 'lang' is required."}
+
+    # Normalize once and reuse everywhere.
+    query_norm = normalize(clean_basic(query_original))
+
+    def format_result(row, lang, query_original, score, method):
+        # `row` bisa berupa dict (Supabase) atau pandas Series (DataFrame).
+        return {
+            "manado": highlight_match(row["manado"], query_original),
+            "indonesia": highlight_match(row["indonesia"], query_original),
+            "inggris": highlight_match(row["inggris"], query_original),
+
+            "kalimat_manado": highlight_match(row.get("kalimat_manado", "-"), query_original),
+            "kalimat_indonesia": highlight_match(row.get("kalimat_indonesia", "-"), query_original),
+            "kalimat_inggris": highlight_match(row.get("kalimat_inggris", "-"), query_original),
+
+            "score": round(float(score), 3),
+            "method": method,
+        }
+
+    # Prioritas 1: exact match langsung ke tabel Supabase `dictionary`.
+    # Ini mencegah fuzzy/semantic mengambil kata yang mirip (mis. "sampah")
+    # ketika exact match tersedia (mis. "sapa").
+    try:
+        # `ilike` tanpa wildcard = case-insensitive exact match.
+        exact_db = supabase.table("dictionary").select("*").ilike(lang, query_norm).limit(5).execute()
+        if exact_db.data:
+            exact_results = [
+                format_result(row, lang, query_original, 1.0, "exact")
+                for row in exact_db.data
+            ]
+            return {"query": query_original, "results": exact_results}
+    except Exception as e:
+        # Jika Supabase error (mis. RLS / network), fallback ke DataFrame-based search di bawah.
+        print("SUPABASE EXACT ERROR:", e)
 
     df = load_data()
 
@@ -642,7 +682,7 @@ def search(query: str, lang: str):
 
     if df.empty:
         return {
-            "query": query,
+            "query": query_original,
             "results": [],
             "error": "The database is empty, RLS is not enabled, or the Supabase request failed."
         }
@@ -677,35 +717,17 @@ def search(query: str, lang: str):
 
         return suggestions if suggestions else None
 
-    def format_result(row, lang, query_original, score, method):
-
-        return {
-            "manado": highlight_match(row['manado'], query_original),
-            "indonesia": highlight_match(row['indonesia'], query_original),
-            "inggris": highlight_match(row['inggris'], query_original),
-
-            "kalimat_manado": highlight_match(row.get('kalimat_manado', '-'), query_original),
-            "kalimat_indonesia": highlight_match(row.get('kalimat_indonesia', '-'), query_original),
-            "kalimat_inggris": highlight_match(row.get('kalimat_inggris', '-'), query_original),
-
-            "score": round(float(score), 3),
-            "method": method
-        }
-
-    query_original = query
-    query_norm = normalize(query)
+    # `format_result` sudah didefinisikan di atas agar bisa dipakai untuk hasil exact_db.
 
     # Prioritas 1: exact match dari dictionary.
     # Jika exact ditemukan, langsung kembalikan hasil exact agar tidak tercampur
     # dengan partial/fuzzy/semantic.
     if lang == "manado":
-        exact_rows = df[df["manado"].astype(str).apply(normalize) == query_norm]
+        exact_rows = df[df["manado"].astype(str).apply(lambda v: normalize(clean_basic(v))) == query_norm]
     elif lang == "indonesia":
-        exact_rows = df[df["indonesia"].astype(str).apply(normalize) == query_norm]
+        exact_rows = df[df["indonesia"].astype(str).apply(lambda v: normalize(clean_basic(v))) == query_norm]
     elif lang == "inggris":
-        exact_rows = df[df["inggris"].astype(str).apply(normalize) == query_norm]
-    else:
-        return {"message": "Parameter 'lang' is required."}
+        exact_rows = df[df["inggris"].astype(str).apply(lambda v: normalize(clean_basic(v))) == query_norm]
 
     if not exact_rows.empty:
         exact_results = []
