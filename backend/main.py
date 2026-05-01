@@ -210,6 +210,28 @@ def normalize(text):
     text = text.replace("ii", "i").replace("oo", "o").replace("uu", "u")
     return text
 
+
+def _get_best_indobert_model_name() -> str | None:
+    try:
+        res = (
+            supabase.table("models")
+            .select("nama_model,algoritma,accuracy,created_at")
+            .order("accuracy", desc=True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception:
+        return None
+
+    for row in rows:
+        algo = str(row.get("algoritma") or "").strip().lower().replace("_", "-")
+        if algo in ("indobert", "indo-bert", "indobenchmark"):
+            name = str(row.get("nama_model") or "").strip()
+            if name:
+                return name
+    return None
+
 def highlight_match(text, query):
     text_str = str(text)
     text_lower = text_str.lower()
@@ -701,7 +723,7 @@ def cancel_preprocess(job_id: str):
 # SEARCH (TIDAK DIUBAH)
 # =========================
 @app.get("/search")
-def search(query: str, lang: str):
+def search(query: str, lang: str, use_model: bool = True):
     query_original = query or ""
     lang = (lang or "").lower().strip()
     if not query_original.strip():
@@ -711,13 +733,36 @@ def search(query: str, lang: str):
 
     # Normalize once and reuse everywhere.
     query_norm = normalize(clean_basic(query_original))
+    predicted_jenis = None
+    model_used = None
+
+    # Gunakan model terbaik IndoBERT (jika tersedia) untuk membantu ranking hasil pencarian.
+    if use_model:
+        try:
+            model_name = _get_best_indobert_model_name()
+            if model_name:
+                from backend.processing.service import predict_indobert_softmax
+
+                pred = predict_indobert_softmax(
+                    text=query_original,
+                    model_name=model_name,
+                    max_length=64,
+                )
+                predicted_jenis = str(pred.get("label") or "").strip() or None
+                model_used = model_name
+        except Exception as e:
+            print("MODEL RERANK WARN:", e)
 
     def format_result(row, lang, query_original, score, method):
         # `row` bisa berupa dict (Supabase) atau pandas Series (DataFrame).
+        row_jenis = str(row.get("jenis") or "").strip()
+        row_jenis_norm = row_jenis.lower()
+        pred_norm = str(predicted_jenis or "").strip().lower()
         return {
             "manado": highlight_match(row["manado"], query_original),
             "indonesia": highlight_match(row["indonesia"], query_original),
             "inggris": highlight_match(row["inggris"], query_original),
+            "jenis": row_jenis,
 
             "kalimat_manado": highlight_match(row.get("kalimat_manado", "-"), query_original),
             "kalimat_indonesia": highlight_match(row.get("kalimat_indonesia", "-"), query_original),
@@ -725,6 +770,7 @@ def search(query: str, lang: str):
 
             "score": round(float(score), 3),
             "method": method,
+            "model_match": bool(pred_norm and row_jenis_norm and row_jenis_norm == pred_norm),
         }
 
     # Prioritas 1: exact match langsung ke tabel Supabase `dictionary`.
@@ -738,7 +784,12 @@ def search(query: str, lang: str):
                 format_result(row, lang, query_original, 1.0, "exact")
                 for row in exact_db.data
             ]
-            return {"query": query_original, "results": exact_results}
+            return {
+                "query": query_original,
+                "results": exact_results,
+                "predicted_jenis": predicted_jenis,
+                "model_used": model_used,
+            }
     except Exception as e:
         # Jika Supabase error (mis. RLS / network), fallback ke DataFrame-based search di bawah.
         print("SUPABASE EXACT ERROR:", e)
@@ -823,15 +874,23 @@ def search(query: str, lang: str):
             return {"message": "Parameter 'lang' is required."}
 
         if query_norm == target:
-            results.append(format_result(row, lang, query_original, 1.0, "exact"))
+            base_score = 1.0
+            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+                base_score = min(1.0, base_score + 0.1)
+            results.append(format_result(row, lang, query_original, base_score, "exact"))
 
         elif query_norm in target and len(query_norm) >= 4:
-            results.append(format_result(row, lang, query_original, 0.85, "partial"))
+            score = 0.85
+            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+                score = min(1.0, score + 0.1)
+            results.append(format_result(row, lang, query_original, score, "partial"))
 
         else:
             fuzzy_score = fuzz.ratio(query_norm, target) / 100
+            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+                fuzzy_score = min(1.0, fuzzy_score + 0.1)
             if fuzzy_score >= 0.8:
-                results.append(format_result(row, lang, query_original, fuzzy_score, "fuzzy"))
+                results.append(format_result(row, lang, query_original, fuzzy_score, "fuzzy+model"))
 
     results = sorted(results, key=lambda x: x['score'], reverse=True)[:5]
 
@@ -850,7 +909,10 @@ def search(query: str, lang: str):
 
         for idx, sim in top_k:
             row = df.iloc[idx]
-            results.append(format_result(row, lang, query_original, sim, "semantic"))
+            score = sim
+            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+                score = min(1.0, score + 0.1)
+            results.append(format_result(row, lang, query_original, score, "semantic+model"))
 
     if not results:
         suggestion = get_suggestion(query_original, lang)
@@ -859,10 +921,14 @@ def search(query: str, lang: str):
             "query": query_original,
             "results": [],
             "message": "No matching kata was found.",
-            "suggestion": suggestion
+            "suggestion": suggestion,
+            "predicted_jenis": predicted_jenis,
+            "model_used": model_used,
         }
 
     return {
         "query": query_original,
-        "results": results
+        "results": results,
+        "predicted_jenis": predicted_jenis,
+        "model_used": model_used,
     }

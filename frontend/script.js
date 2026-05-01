@@ -48,7 +48,8 @@ async function search() {
     if (!query) return;
 
     try {
-        const res = await fetch(`http://127.0.0.1:8000/search?query=${query}&lang=${currentLang}`);
+        const q = encodeURIComponent(query);
+        const res = await fetch(`http://127.0.0.1:8000/search?query=${q}&lang=${currentLang}&use_model=true`);
         const data = await res.json();
 
         displayResults(data);
@@ -67,8 +68,20 @@ function displayResults(data) {
     const container = document.getElementById("results");
     container.innerHTML = "";
 
+    if (data?.model_used) {
+        const modelInfo = document.createElement("div");
+        modelInfo.className = "result-card";
+        modelInfo.innerHTML = `
+            <strong>Model aktif:</strong> ${data.model_used}
+            ${data.predicted_jenis ? `<br><strong>Prediksi jenis:</strong> ${data.predicted_jenis}` : ""}
+        `;
+        container.appendChild(modelInfo);
+    }
+
     if (!data.results || data.results.length === 0) {
-        container.innerHTML = "<p>Tidak ditemukan</p>";
+        const empty = document.createElement("p");
+        empty.textContent = "Tidak ditemukan";
+        container.appendChild(empty);
         return;
     }
 
@@ -94,7 +107,7 @@ function displayResults(data) {
             </div>
 
             <div class="score">
-                ${item.method} | score: ${item.score}
+                ${item.method} | score: ${item.score}${item.model_match ? " | model match" : ""}
             </div>
         `;
 
