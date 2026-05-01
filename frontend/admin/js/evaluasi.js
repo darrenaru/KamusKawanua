@@ -1,13 +1,52 @@
-document.addEventListener('DOMContentLoaded', function () {
+function showChartLoadError() {
+    console.error('Chart.js is not loaded. Check CDN access.');
+    var main = document.querySelector('main.main') || document.body;
+    var p = document.createElement('p');
+    p.style.color = '#c62828';
+    p.style.fontWeight = '600';
+    p.style.margin = '0 0 12px';
+    p.textContent = 'Failed to load Chart.js.';
+    main.prepend(p);
+}
+
+function loadScript(url) {
+    return new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureChartJsLoaded() {
+    if (typeof window.Chart !== 'undefined') {
+        return true;
+    }
+
+    var cdnCandidates = [
+        'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js',
+        'https://unpkg.com/chart.js@4.4.7/dist/chart.umd.min.js'
+    ];
+
+    for (var i = 0; i < cdnCandidates.length; i++) {
+        try {
+            await loadScript(cdnCandidates[i]);
+            if (typeof window.Chart !== 'undefined') {
+                return true;
+            }
+        } catch (e) {
+            console.warn('Failed to load Chart.js from:', cdnCandidates[i], e);
+        }
+    }
+
+    return typeof window.Chart !== 'undefined';
+}
+
+function initEvaluationCharts() {
     if (typeof window.Chart === 'undefined') {
-        console.error('Chart.js is not loaded. Check CDN access.');
-        var main = document.querySelector('main.main') || document.body;
-        var p = document.createElement('p');
-        p.style.color = '#c62828';
-        p.style.fontWeight = '600';
-        p.style.margin = '0 0 12px';
-        p.textContent = 'Failed to load Chart.js.';
-        main.prepend(p);
+        showChartLoadError();
         return;
     }
 
@@ -174,4 +213,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     buildLegend('legendClassic', colors, metricNames);
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+    var loaded = await ensureChartJsLoaded();
+    if (!loaded) {
+        showChartLoadError();
+        return;
+    }
+    initEvaluationCharts();
 });

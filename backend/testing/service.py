@@ -384,3 +384,55 @@ def predict_with_testing_model(
         }
 
     raise ValueError(f"Prediction endpoint for {algorithm} is not implemented yet.")
+
+
+def get_best_models_by_algorithm() -> list[dict]:
+    try:
+        res = (
+            supabase.table("models")
+            .select(
+                "id,nama_model,algoritma,dataset_id,split_ratio,accuracy,precision,recall,f1_score,created_at"
+            )
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        raise ValueError(f"Failed to fetch model evaluation data: {e}")
+
+    best_by_algorithm: dict[str, dict] = {}
+    for row in rows:
+        algorithm = str(row.get("algoritma") or "").strip()
+        if not algorithm:
+            continue
+
+        model_id = row.get("id")
+        model_name = str(row.get("nama_model") or "").strip()
+        if model_id is None or not model_name:
+            continue
+
+        try:
+            accuracy = float(row.get("accuracy"))
+        except Exception:
+            continue
+
+        key = algorithm.lower()
+        current = best_by_algorithm.get(key)
+        if current is None or accuracy > current["accuracy"]:
+            best_by_algorithm[key] = {
+                "id": int(model_id),
+                "algoritma": algorithm,
+                "nama_model": model_name,
+                "dataset_id": row.get("dataset_id"),
+                "split_ratio": row.get("split_ratio"),
+                "accuracy": accuracy,
+                "precision": (
+                    float(row.get("precision")) if row.get("precision") is not None else None
+                ),
+                "recall": float(row.get("recall")) if row.get("recall") is not None else None,
+                "f1_score": float(row.get("f1_score")) if row.get("f1_score") is not None else None,
+                "created_at": row.get("created_at"),
+            }
+
+    # Urutkan dari akurasi terbesar agar mudah dipakai frontend.
+    return sorted(best_by_algorithm.values(), key=lambda x: x["accuracy"], reverse=True)

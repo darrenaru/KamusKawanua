@@ -37,9 +37,11 @@ app.add_middleware(
 # =========================
 from backend.processing.router import router as processing_router
 from backend.testing.router import router as testing_router
+from backend.evaluasi.router import router as evaluasi_router
 
 app.include_router(processing_router)
 app.include_router(testing_router)
+app.include_router(evaluasi_router)
 
 # =========================
 # STEMMER

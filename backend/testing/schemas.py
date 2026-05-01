@@ -70,3 +70,22 @@ class TestingPredictResponse(BaseModel):
     label: str
     score: float
     probs: dict[str, float]
+
+
+class EvaluationBestModelItem(BaseModel):
+    id: int
+    algoritma: str
+    nama_model: str
+    dataset_id: int | None = None
+    split_ratio: str | None = None
+    accuracy: float
+    precision: float | None = None
+    recall: float | None = None
+    f1_score: float | None = None
+    created_at: str | None = None
+
+
+class EvaluationBestModelsResponse(BaseModel):
+    status: str
+    total: int
+    items: list[EvaluationBestModelItem]

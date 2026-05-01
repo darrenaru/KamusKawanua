@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from backend.testing.schemas import (
+    EvaluationBestModelsResponse,
     IndoBertTestingRequest,
     IndoBertTestingResponse,
     TestingModelListResponse,
@@ -9,6 +10,7 @@ from backend.testing.schemas import (
 )
 from backend.testing.service import (
     get_available_testing_models,
+    get_best_models_by_algorithm,
     predict_with_testing_model,
     test_indobert_model,
 )
@@ -54,5 +56,18 @@ def testing_predict(req: TestingPredictRequest):
             text=req.text,
             max_length=req.max_length,
         )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/evaluation/best-models", response_model=EvaluationBestModelsResponse)
+def evaluation_best_models():
+    try:
+        items = get_best_models_by_algorithm()
+        return {
+            "status": "ok",
+            "total": len(items),
+            "items": items,
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
