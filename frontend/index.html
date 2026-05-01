@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kamus Kawanua</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -13,15 +15,14 @@
 </div>
 
 <div class="container">
+    <div class="hero-card">
+        <h1>KAMUS KAWANUA</h1>
 
-    <h1>KAMUS KAWANUA</h1>
+        <div class="language-title">
+            Manado &bull; Indonesia
+        </div>
 
-    <div class="language-title">
-        Manado &bull; Indonesia
-    </div>
-
-    <div class="language-row">
-
+        <div class="language-row">
             <div class="lang-box">
                 <input type="text" id="inputLang" readonly>
             </div>
@@ -32,21 +33,20 @@
 
             <div class="lang-box">
                 <input type="text" id="outputLang" readonly>
-    </div>
+            </div>
+        </div>
 
-</div>
-
-</div>
-
-    <div class="search-box">
-        <input type="text" id="query" placeholder="Masukkan kata..." />
-        <button onclick="search()" class="search-btn">
-            <img src="assets/images/search.png" alt="search">
-        </button>
+        <div class="search-box">
+            <input type="text" id="query" placeholder="Masukkan kata (maks. 2 kata)..." />
+            <button id="searchBtn" onclick="search()" class="search-btn">
+                <img src="assets/images/search.png" alt="search">
+            </button>
+        </div>
+        <p class="search-hint">Tip: gunakan 1-2 kata inti untuk hasil lebih akurat.</p>
+        <div id="searchStatus" class="search-status" aria-live="polite"></div>
     </div>
 
     <div id="results"></div>
-
 </div>
 
 <script src="script.js"></script>

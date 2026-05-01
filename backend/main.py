@@ -143,6 +143,17 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+
+class DictionaryFeedbackRequest(BaseModel):
+    source_lang: str
+    input_text: str
+    manado: str
+    indonesia: str
+    kalimat_manado: str | None = None
+    kalimat_indonesia: str | None = None
+    jenis: str | None = None
+    note: str | None = None
+
 @app.post("/login")
 def login(data: LoginRequest):
     try:
@@ -159,6 +170,120 @@ def login(data: LoginRequest):
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def _get_latest_dataset_id() -> int | None:
+    try:
+        res = (
+            supabase.table("datasets")
+            .select("id")
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        if not row or row.get("id") is None:
+            return None
+        return int(row.get("id"))
+    except Exception:
+        return None
+
+
+def _next_dictionary_id_kata() -> int:
+    try:
+        res = (
+            supabase.table("dictionary")
+            .select("id_kata")
+            .order("id_kata", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        latest = int(row.get("id_kata")) if row and row.get("id_kata") is not None else 0
+        return latest + 1
+    except Exception:
+        return int(time.time() * 1000)
+
+
+@app.post("/feedback/dictionary")
+def submit_dictionary_feedback(req: DictionaryFeedbackRequest):
+    manado = str(req.manado or "").strip()
+    indonesia = str(req.indonesia or "").strip()
+    kalimat_manado = str(req.kalimat_manado or "").strip()
+    kalimat_indonesia = str(req.kalimat_indonesia or "").strip()
+    jenis = str(req.jenis or "").strip() or "kata benda"
+
+    if not manado or not indonesia:
+        return {
+            "success": False,
+            "message": "Kolom manado dan indonesia wajib diisi.",
+        }
+    if not kalimat_manado and not kalimat_indonesia:
+        return {
+            "success": False,
+            "message": "Minimal salah satu kalimat contoh wajib diisi.",
+        }
+
+    dataset_id = _get_latest_dataset_id()
+    if dataset_id is None:
+        return {
+            "success": False,
+            "message": "Dataset tujuan tidak ditemukan. Upload dataset terlebih dahulu.",
+        }
+
+    id_kata_num = _next_dictionary_id_kata()
+    id_kata_raw = str(id_kata_num)
+    kalimat_manado_val = kalimat_manado or f"{manado} (masukan pengguna)"
+    kalimat_indonesia_val = kalimat_indonesia or f"{indonesia} (masukan pengguna)"
+
+    raw_payload = {
+        "dataset_id": dataset_id,
+        "id_kata": id_kata_raw,
+        "jenis": jenis,
+        "manado": manado,
+        "indonesia": indonesia,
+        "inggris": "",
+        "kalimat_manado": kalimat_manado_val,
+        "kalimat_indonesia": kalimat_indonesia_val,
+        "kalimat_inggris": "",
+    }
+    dict_payload = {
+        "id_kata": id_kata_num,
+        "jenis": jenis,
+        "manado": manado,
+        "indonesia": indonesia,
+        "inggris": "",
+        "kalimat_manado": kalimat_manado_val,
+        "kalimat_indonesia": kalimat_indonesia_val,
+        "kalimat_inggris": "",
+    }
+
+    try:
+        supabase.table("raw_data").insert(raw_payload).execute()
+        supabase.table("dictionary").insert(dict_payload).execute()
+    except Exception as e:
+        return {"success": False, "message": f"Gagal menyimpan masukan: {e}"}
+
+    # Simpan ringkas catatan agar tetap terlacak di log backend.
+    if req.note:
+        print(
+            "USER_FEEDBACK:",
+            {
+                "source_lang": req.source_lang,
+                "input_text": req.input_text,
+                "note": req.note,
+                "dataset_id": dataset_id,
+                "id_kata": id_kata_raw,
+            },
+        )
+
+    return {
+        "success": True,
+        "message": "Masukan berhasil disimpan untuk peningkatan dataset.",
+        "dataset_id": dataset_id,
+        "id_kata": id_kata_raw,
+    }
 
 # =========================
 # EMBEDDINGS

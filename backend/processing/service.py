@@ -196,6 +196,7 @@ def train_indobert_softmax(
             "digunakan pada tahap processing."
         )
 
+
     texts: list[str] = []
     raw_labels: list[str] = []
     for r in rows:
@@ -230,15 +231,24 @@ def train_indobert_softmax(
     train_idx = np.array(train_idx)
     val_idx = np.array(val_idx)
 
-    tokenizer = AutoTokenizer.from_pretrained(INDOBERT_MODEL_ID)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+    safe_model_name = _safe_name(model_name)
+    existing_model_dir = os.path.join(model_root, safe_model_name)
+
+    resume_from_existing = bool(os.path.isdir(existing_model_dir))
+    load_from = existing_model_dir if resume_from_existing else INDOBERT_MODEL_ID
+
+    tokenizer = AutoTokenizer.from_pretrained(load_from)
     model = AutoModelForSequenceClassification.from_pretrained(
-        INDOBERT_MODEL_ID,
+        load_from,
         num_labels=len(label2id),
         id2label=id2label,
         label2id=label2id,
         classifier_dropout=dropout,
         hidden_dropout_prob=dropout,
         attention_probs_dropout_prob=dropout,
+        ignore_mismatched_sizes=True,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -370,12 +380,8 @@ def train_indobert_softmax(
         if early_stopping_patience and bad_epochs >= early_stopping_patience:
             break
 
-    # save model
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+    # save model (overwrite/update directory for same model_name)
     os.makedirs(model_root, exist_ok=True)
-
-    safe_model_name = _safe_name(model_name)
     model_dir = os.path.join(model_root, safe_model_name)
     os.makedirs(model_dir, exist_ok=True)
 
@@ -387,6 +393,8 @@ def train_indobert_softmax(
     return {
         "status": "ok",
         "data_source": data_source,
+        "resume_from_existing": resume_from_existing,
+        "loaded_from": existing_model_dir if resume_from_existing else INDOBERT_MODEL_ID,
         "device": str(device),
         "num_labels": len(label2id),
         "label2id": label2id,

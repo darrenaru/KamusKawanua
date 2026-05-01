@@ -392,6 +392,7 @@
 
     initRatioManager();
     loadPreprocessedDatasets();
+    loadTrainedModels();
 
     algoSelect.addEventListener("change", onAlgoChange);
     modelSelect.addEventListener("change", onModelSelectChange);
@@ -478,7 +479,9 @@
 
     const { data, error } = await supabaseClient
       .from("datasets")
-      .select("id,name,file_name,is_preprocessed,created_at")
+      .select(
+        "id,name,file_name,is_preprocessed,created_at,uploaded_by,total_data,kata_kerja,kata_benda,kata_sifat,kata_keterangan",
+      )
       .eq("is_preprocessed", true)
       .order("id", { ascending: false });
 
@@ -496,12 +499,169 @@
     list.innerHTML = data
       .map((ds) => {
         const label = ds.name || ds.file_name || `dataset_${ds.id}`;
-        return `<li data-dataset-id="${ds.id}">${label}</li>`;
+        const dateLabel = ds.created_at
+          ? new Date(ds.created_at).toLocaleDateString("id-ID")
+          : "-";
+        const total = Number(ds.total_data ?? 0);
+        const kerja = Number(ds.kata_kerja ?? 0);
+        const benda = Number(ds.kata_benda ?? 0);
+        const sifat = Number(ds.kata_sifat ?? 0);
+        const ket = Number(ds.kata_keterangan ?? 0);
+        const uploader = ds.uploaded_by || "-";
+        const meta = `ID ${ds.id} | total ${total} | kerja ${kerja} | benda ${benda} | sifat ${sifat} | ket ${ket} | by ${uploader} | ${dateLabel}`;
+        return `
+          <li
+            data-dataset-id="${ds.id}"
+            data-dataset-name="${String(label).replace(/"/g, "&quot;")}"
+            data-total="${total}"
+            data-kerja="${kerja}"
+            data-benda="${benda}"
+            data-sifat="${sifat}"
+            data-ket="${ket}"
+            data-uploader="${String(uploader).replace(/"/g, "&quot;")}"
+            data-created-at="${String(ds.created_at || "").replace(/"/g, "&quot;")}"
+          >
+            <strong>${label}</strong><br />
+            <span style="font-size:12px; color:#777;">${meta}</span>
+          </li>
+        `;
       })
       .join("");
 
     // Auto-select dataset yang dibawa dari halaman Pre Processing.
     applyPreferredDatasetSelection(data);
+  }
+
+  function renderTrainedModelList(listEl, models, algoFilter = "") {
+    const normAlgo = String(algoFilter || "").trim().toLowerCase();
+    const filtered = normAlgo
+      ? (models || []).filter(
+          (m) => String(m.algoritma || "").trim().toLowerCase() === normAlgo,
+        )
+      : models || [];
+
+    if (!filtered.length) {
+      const msg = normAlgo
+        ? `No trained model found for ${normAlgo}`
+        : "No trained model found";
+      listEl.innerHTML = `<li style="opacity:.7;">${msg}</li>`;
+      return;
+    }
+
+    listEl.innerHTML = filtered
+      .map((m) => {
+        const modelName = m.nama_model || `Model_${m.id ?? ""}`;
+        const algo = String(m.algoritma || "").toLowerCase();
+        const createdAt = m.created_at
+          ? new Date(m.created_at).toLocaleString("id-ID", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "-";
+        const acc = Number(m.accuracy || 0);
+        const meta = [
+          algo ? algo.toUpperCase() : "UNKNOWN",
+          m.split_ratio || "-",
+          `Acc ${acc.toFixed(2)}%`,
+          createdAt,
+        ].join(" | ");
+
+        return `
+          <li
+            data-model-name="${String(modelName).replace(/"/g, "&quot;")}"
+            data-model-id="${m.id ?? ""}"
+            data-algo="${algo}"
+            data-dataset-id="${m.dataset_id ?? ""}"
+            data-ratio="${m.split_ratio ?? ""}"
+            data-kfold="${m.k_fold ?? ""}"
+            data-lr="${m.learning_rate ?? ""}"
+            data-epoch="${m.epoch ?? ""}"
+            data-batch="${m.batch_size ?? ""}"
+            data-maxlen="${m.max_length ?? ""}"
+            data-optimizer="${m.optimizer ?? ""}"
+            data-weight-decay="${m.weight_decay ?? ""}"
+            data-scheduler="${m.scheduler ?? ""}"
+            data-dropout="${m.dropout ?? ""}"
+            data-early-stopping="${m.early_stopping ?? ""}"
+            data-grad-accum="${m.gradient_accumulation ?? ""}"
+          >
+            <strong>${modelName}</strong><br />
+            <span style="font-size:12px; color:#777;">${meta}</span>
+          </li>
+        `;
+      })
+      .join("");
+  }
+
+  async function loadTrainedModels(algoFilter = "") {
+    const list = document.getElementById("model-list");
+    if (!list) return;
+
+    list.innerHTML = `<li style="opacity:.7;">Loading models...</li>`;
+
+    // 1) Prioritas: backend endpoint (biasanya lebih aman dari issue RLS frontend).
+    try {
+      const res = await fetch(`${API_BASE}/testing/models`);
+      const json = await res.json();
+      if (res.ok && Array.isArray(json?.items)) {
+        const fromBackend = json.items.map((m) => ({
+          id: m.id,
+          nama_model: m.nama_model,
+          algoritma: m.algoritma,
+          dataset_id: m.dataset_id,
+          split_ratio: m.split_ratio,
+          learning_rate: m.learning_rate,
+          epoch: m.epoch,
+          batch_size: m.batch_size,
+          max_length: m.max_length,
+          optimizer: m.optimizer,
+          weight_decay: m.weight_decay,
+          scheduler: m.scheduler,
+          dropout: m.dropout,
+          early_stopping: m.early_stopping,
+          gradient_accumulation: m.gradient_accumulation,
+          accuracy: m.accuracy,
+          precision: m.precision,
+          recall: m.recall,
+          f1_score: m.f1_score,
+          created_at: m.created_at,
+        }));
+        renderTrainedModelList(list, fromBackend, algoFilter);
+        return;
+      }
+    } catch (e) {
+      console.warn("Load models via backend failed, fallback to Supabase:", e);
+    }
+
+    // 2) Fallback: direct Supabase query.
+    if (!supabaseClient) {
+      list.innerHTML = `<li style="color:#c62828;">Failed to load models</li>`;
+      return;
+    }
+
+    try {
+      let query = supabaseClient
+        .from("models")
+        .select(
+          "id,nama_model,algoritma,dataset_id,split_ratio,k_fold,learning_rate,epoch,batch_size,max_length,optimizer,weight_decay,scheduler,dropout,early_stopping,gradient_accumulation,accuracy,precision,recall,f1_score,created_at",
+        )
+        .order("created_at", { ascending: false });
+
+      const normAlgo = String(algoFilter || "").trim().toLowerCase();
+      if (normAlgo) {
+        query = query.ilike("algoritma", normAlgo);
+      }
+
+      const { data, error } = await query.limit(300);
+      if (error) throw error;
+      renderTrainedModelList(list, data || [], algoFilter);
+    } catch (error) {
+      console.error(error);
+      list.innerHTML = `<li style="color:#c62828;">Failed to load models</li>`;
+    }
   }
 
   function applyPreferredDatasetSelection(datasets) {
@@ -514,8 +674,21 @@
       selectedDatasetId = preferredId;
       const datasetName = found.name || found.file_name || `dataset_${preferredId}`;
       const datasetCardName = document.getElementById("dataset-card-name");
+      const datasetCardMeta = document.getElementById("dataset-card-meta");
       const datasetCard = document.getElementById("dataset-card");
       if (datasetCardName) datasetCardName.innerText = datasetName;
+      if (datasetCardMeta) {
+        const total = Number(found.total_data ?? 0);
+        const kerja = Number(found.kata_kerja ?? 0);
+        const benda = Number(found.kata_benda ?? 0);
+        const sifat = Number(found.kata_sifat ?? 0);
+        const ket = Number(found.kata_keterangan ?? 0);
+        const uploader = found.uploaded_by || "-";
+        const createdAt = found.created_at
+          ? new Date(found.created_at).toLocaleDateString("id-ID")
+          : "-";
+        datasetCardMeta.innerText = `ID ${preferredId} | total ${total} | kerja ${kerja} | benda ${benda} | sifat ${sifat} | ket ${ket} | by ${uploader} | ${createdAt}`;
+      }
       if (datasetCard) datasetCard.style.display = "flex";
 
       const selectedLi = document.querySelector(
@@ -577,6 +750,7 @@
 
   function onAlgoChange(e) {
     currentAlgo = e.target.value;
+    loadTrainedModels(currentAlgo);
 
     if (globalBestParams && globalBestParams.algo === currentAlgo) {
       renderParameters(currentMode, () => {
@@ -721,7 +895,9 @@
         .getElementById("btn-simpan-nama")
         .addEventListener("click", simpanNamaModel);
     } else if (value === "lama") {
-      document.getElementById("modal-lama").style.display = "flex";
+      loadTrainedModels(currentAlgo).finally(() => {
+        document.getElementById("modal-lama").style.display = "flex";
+      });
       if (datasetCard) datasetCard.style.display = "none";
       modelCard.style.display = "flex";
       newModelNameCard.style.display = "none";
@@ -1542,13 +1718,29 @@
       return;
     }
 
-    const datasetName = selected.innerText.trim();
+    const datasetName =
+      (selected.dataset.datasetName || "").trim() ||
+      selected.querySelector("strong")?.innerText?.trim() ||
+      selected.innerText.trim().split("\n")[0].trim();
     selectedDatasetId = parseInt(selected.dataset.datasetId || "0", 10) || null;
     if (selectedDatasetId) {
       localStorage.setItem(STORAGE_SELECTED_DATASET_ID, String(selectedDatasetId));
       localStorage.setItem(STORAGE_SELECTED_DATASET_NAME, datasetName);
     }
     document.getElementById("dataset-card-name").innerText = datasetName;
+    const metaEl = document.getElementById("dataset-card-meta");
+    if (metaEl) {
+      const total = selected.dataset.total || "-";
+      const kerja = selected.dataset.kerja || "-";
+      const benda = selected.dataset.benda || "-";
+      const sifat = selected.dataset.sifat || "-";
+      const ket = selected.dataset.ket || "-";
+      const uploader = selected.dataset.uploader || "-";
+      const createdAt = selected.dataset.createdAt
+        ? new Date(selected.dataset.createdAt).toLocaleDateString("id-ID")
+        : "-";
+      metaEl.innerText = `ID ${selectedDatasetId} | total ${total} | kerja ${kerja} | benda ${benda} | sifat ${sifat} | ket ${ket} | by ${uploader} | ${createdAt}`;
+    }
     document.getElementById("dataset-card").style.display = "flex";
 
     const ratio = selected.dataset.ratio;
@@ -1577,7 +1769,10 @@
     modal.style.display = "none";
 
     if (selectedModel) {
-      const modelName = selectedModel.innerText.trim();
+      const modelName =
+        (selectedModel.dataset.modelName || "").trim() ||
+        selectedModel.querySelector("strong")?.innerText?.trim() ||
+        selectedModel.innerText.trim().split("\n")[0].trim();
       document.getElementById("model-card-name").innerText = modelName;
       document.getElementById("model-card").style.display = "flex";
 
@@ -1585,6 +1780,17 @@
       modelSelect.value = "lama";
 
       const algo = selectedModel.dataset.algo;
+      const datasetIdFromModel = parseInt(
+        selectedModel.dataset.datasetId || "0",
+        10,
+      );
+      if (datasetIdFromModel) {
+        selectedDatasetId = datasetIdFromModel;
+        localStorage.setItem(
+          STORAGE_SELECTED_DATASET_ID,
+          String(datasetIdFromModel),
+        );
+      }
       if (algo) {
         document.getElementById("algo-select").value = algo;
         currentAlgo = algo;
@@ -1608,6 +1814,7 @@
               dropout: selectedModel.dataset.dropout,
               earlyStopping: selectedModel.dataset.earlyStopping,
               gradAccum: selectedModel.dataset.gradAccum,
+              warmup: selectedModel.dataset.warmup || "0.1",
               vectorSize: selectedModel.dataset.vectorSize,
               windowSize: selectedModel.dataset.windowSize,
               minCount: selectedModel.dataset.minCount,
@@ -1717,9 +1924,16 @@
   }
 
   function startTraining(mode) {
+    // Mode training-final ada 2 jalur:
+    // 1) final training pakai globalBestParams (hasil Find Best Ratio)
+    // 2) retrain/fine-tune dari old model (tidak perlu globalBestParams)
     if (mode === "training-final" && !globalBestParams) {
-      showToast("Please run Find the Best Ratio first.");
-      return;
+      const modelSelectValue =
+        document.getElementById("model-select")?.value || "";
+      if (modelSelectValue !== "lama") {
+        showToast("Please run Find the Best Ratio first.");
+        return;
+      }
     }
 
     const splitSelect = document.getElementById("split-ratio-select");
