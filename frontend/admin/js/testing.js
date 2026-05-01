@@ -83,10 +83,6 @@ for (var k = 0; k < kI2M.length; k++) {
     kamusI2M[kamusM2I[kI2M[k]]] = kI2M[k];
 }
 
-var modelVariation = {
-    default: { wrong: 0.10 }
-};
-
 var algorithmModelMap = {
     transformer: [
         { value: '', label: 'No saved model available yet' }
@@ -110,6 +106,38 @@ var testingModels = [];
 var progressTimer = null;
 var progressStartedAt = null;
 var progressStepOrder = ['prepare', 'connect', 'process', 'metrics', 'finish'];
+
+function normalizeAlgorithmKey(str) {
+    return String(str || '')
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-');
+}
+
+async function predictWordWithSelectedModel(word) {
+    var algorithm = document.getElementById('selAlgorithm').value;
+    var modelName = document.getElementById('selModel').value;
+
+    if (!modelName) {
+        throw new Error('Model is not available yet. Save the model first from the Processing page.');
+    }
+
+    var res = await fetch(API_BASE + '/testing/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            algorithm: algorithm,
+            model_name: modelName,
+            text: word,
+            max_length: selectedModelMaxLength || 64
+        })
+    });
+    var data = await res.json();
+    if (!res.ok) {
+        throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Prediction request failed.');
+    }
+    return data;
+}
 
 function showTestingError(message) {
     var box = document.getElementById('testingError');
@@ -156,13 +184,6 @@ function initAlgorithmModelSelect() {
     var algorithmSelect = document.getElementById('selAlgorithm');
     var modelSelect = document.getElementById('selModel');
     if (!algorithmSelect || !modelSelect) return;
-
-    function toKey(str) {
-        return String(str || '')
-            .toLowerCase()
-            .trim()
-            .replace(/\s+/g, '-');
-    }
 
     function refreshSelectedModelMeta() {
         var selectedModelName = modelSelect.value;
@@ -219,7 +240,7 @@ function initAlgorithmModelSelect() {
             for (var i = 0; i < testingModels.length; i++) {
                 var model = testingModels[i];
                 var algoName = model.algoritma || 'Unknown';
-                var key = toKey(algoName);
+                var key = normalizeAlgorithmKey(algoName);
                 if (!grouped[key]) {
                     grouped[key] = {
                         label: algoName,
@@ -443,11 +464,11 @@ function testKata() {
 
     var words = val.split(/\s+/);
     var direction = document.getElementById('selDirection').value;
+    var algorithm = document.getElementById('selAlgorithm').value;
     var model = document.getElementById('selModel').value;
     var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
     var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
     var kamus = direction === 'm2i' ? kamusM2I : kamusI2M; // fallback jika backend gagal
-    var variation = modelVariation[model] || modelVariation.default;
 
     var sourceLang = direction === 'm2i' ? 'manado' : 'indonesia';
     var targetKey = direction === 'm2i' ? 'indonesia' : 'manado';
@@ -472,6 +493,8 @@ function testKata() {
 
                 var lowerWord = String(word).toLowerCase();
                 var translated = '[not found]';
+                var predictedLabel = 'prediction unavailable';
+                var confidenceLabel = '-';
 
                 // Buat item dulu agar UI responsif, lalu update setelah backend selesai.
                 var item = document.createElement('div');
@@ -481,7 +504,11 @@ function testKata() {
                     '<div class="kata-result-content">' +
                     '<div class="kata-result-word">' + word + '</div>' +
                     '<div class="kata-result-arrow">↓</div>' +
-                    '<div class="kata-result-translated">...</div>' +
+                    '<div class="kata-result-translated">' +
+                    '<div>Terjemahan: ...</div>' +
+                    '<div>Jenis kata: ...</div>' +
+                    '<div>Confidence: ...</div>' +
+                    '</div>' +
                     '</div>' +
                     '<span class="kata-result-time">...</span>';
 
@@ -503,28 +530,31 @@ function testKata() {
                     } else {
                         translated = '[not found]';
                     }
-
-                    // Simulasi "wrong" untuk konsistensi tampilan lama.
-                    if (translated !== '[not found]' && Math.random() < variation.wrong) {
-                        translated = '[' + translated + ']';
-                    }
                 } catch (e) {
                     // Fallback: kalau backend gagal, gunakan kamus lokal.
                     if (kamus[lowerWord]) {
-                        if (Math.random() < variation.wrong) {
-                            translated = '[' + kamus[lowerWord] + ']';
-                        } else {
-                            translated = kamus[lowerWord];
-                        }
+                        translated = kamus[lowerWord];
                     } else {
                         translated = '[not found]';
                     }
                 }
 
+                try {
+                    var predictionData = await predictWordWithSelectedModel(lowerWord);
+                    predictedLabel = predictionData.label || 'prediction unavailable';
+                    confidenceLabel = (Number(predictionData.score || 0) * 100).toFixed(0) + '%';
+                } catch (e2) {
+                    predictedLabel = 'prediction unavailable';
+                    confidenceLabel = '-';
+                }
+
                 var wordEnd = performance.now();
                 var wordTime = ((wordEnd - wordStart) / 1000).toFixed(2);
 
-                item.querySelector('.kata-result-translated').innerHTML = translated;
+                item.querySelector('.kata-result-translated').innerHTML =
+                    '<div>Terjemahan: ' + translated + '</div>' +
+                    '<div>Jenis kata: ' + predictedLabel + '</div>' +
+                    '<div>Confidence: ' + confidenceLabel + '</div>';
                 item.querySelector('.kata-result-time').textContent = wordTime + 's';
 
                 finishedCount++;

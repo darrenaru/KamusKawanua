@@ -4,8 +4,14 @@ from backend.testing.schemas import (
     IndoBertTestingRequest,
     IndoBertTestingResponse,
     TestingModelListResponse,
+    TestingPredictRequest,
+    TestingPredictResponse,
 )
-from backend.testing.service import get_available_testing_models, test_indobert_model
+from backend.testing.service import (
+    get_available_testing_models,
+    predict_with_testing_model,
+    test_indobert_model,
+)
 
 
 router = APIRouter(prefix="/testing", tags=["testing"])
@@ -34,6 +40,19 @@ def testing_indobert(req: IndoBertTestingRequest):
             max_length=req.max_length,
             limit=req.limit,
             save_result=req.save_result,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/predict", response_model=TestingPredictResponse)
+def testing_predict(req: TestingPredictRequest):
+    try:
+        return predict_with_testing_model(
+            algorithm=req.algorithm,
+            model_name=req.model_name,
+            text=req.text,
+            max_length=req.max_length,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

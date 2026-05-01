@@ -53,3 +53,20 @@ class TestingModelListResponse(BaseModel):
     status: str
     total: int
     items: list[TestingModelItem]
+
+
+class TestingPredictRequest(BaseModel):
+    algorithm: str = Field(..., min_length=1)
+    model_name: str = Field(..., min_length=1, max_length=80)
+    text: str = Field(..., min_length=1)
+    max_length: int = Field(64, ge=8, le=512)
+
+
+class TestingPredictResponse(BaseModel):
+    status: str
+    algorithm: str
+    model_name: str
+    text: str
+    label: str
+    score: float
+    probs: dict[str, float]

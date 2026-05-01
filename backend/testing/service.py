@@ -13,7 +13,12 @@ from sklearn.metrics import (
 )
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from backend.processing.service import _build_text, _fetch_preprocessed_rows, _safe_name
+from backend.processing.service import (
+    _build_text,
+    _fetch_preprocessed_rows,
+    _safe_name,
+    predict_indobert_softmax,
+)
 from backend.supabase_client import supabase
 
 
@@ -351,3 +356,31 @@ def test_indobert_model(
         "mcc": float(mcc),
         "results": sample_results,
     }
+
+
+def predict_with_testing_model(
+    *,
+    algorithm: str,
+    model_name: str,
+    text: str,
+    max_length: int,
+) -> dict:
+    algorithm_norm = str(algorithm or "").strip().lower().replace("_", "-")
+
+    if algorithm_norm in {"indobert", "indo-bert", "indobenchmark"}:
+        result = predict_indobert_softmax(
+            text=text,
+            model_name=model_name,
+            max_length=max_length,
+        )
+        return {
+            "status": "ok",
+            "algorithm": algorithm,
+            "model_name": model_name,
+            "text": text,
+            "label": str(result.get("label") or ""),
+            "score": float(result.get("score") or 0.0),
+            "probs": result.get("probs") or {},
+        }
+
+    raise ValueError(f"Prediction endpoint for {algorithm} is not implemented yet.")
