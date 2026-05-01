@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.env/
+
+# Data besar / model
+*.npy
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+# Env examples are safe to commit
+!.env.example
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
+
+.venv/
+__pycache__/
+*.pyc
+.env
+backend/trained_models/
+backend/data/embeddings.npy
