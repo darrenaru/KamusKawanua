@@ -307,7 +307,7 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             raw_res = (
                 supabase.table("raw_data")
                 .select(
-                    "dataset_id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, kategori, sumber"
+                    "dataset_id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia"
                 )
                 .eq("dataset_id", dataset_id)
                 .range(raw_from, raw_from + raw_limit - 1)
@@ -362,8 +362,6 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                         "indonesia": r.get("indonesia"),
                         "kalimat_manado": r.get("kalimat_manado"),
                         "kalimat_indonesia": r.get("kalimat_indonesia"),
-                        "kategori": r.get("kategori"),
-                        "sumber": r.get("sumber"),
                         "manado_clean": manado_clean,
                         "indonesia_clean": indonesia_clean,
                         "kalimat_manado_clean": kal_manado_clean,
@@ -394,10 +392,19 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             supabase.table("preprocessed_data")
             .select(
                 "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
-                "manado_clean, indonesia_clean"
+                "manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean"
             )
             .eq("dataset_id", dataset_id)
-            .or_("input_ids.is.null,input_ids.eq.[],input_ids.eq.\"\",attention_mask.is.null,attention_mask.eq.[],attention_mask.eq.\"\"")
+            .or_(
+                "input_ids.is.null,input_ids.eq.[],input_ids.eq.\"\","
+                "attention_mask.is.null,attention_mask.eq.[],attention_mask.eq.\"\","
+                "bert_tokens.is.null,bert_tokens.eq.[],bert_tokens.eq.\"\","
+                "manado_tokens.is.null,manado_tokens.eq.[],manado_tokens.eq.\"\","
+                "indonesia_tokens.is.null,indonesia_tokens.eq.[],indonesia_tokens.eq.\"\","
+                "kalimat_manado_tokens.is.null,kalimat_manado_tokens.eq.[],kalimat_manado_tokens.eq.\"\","
+                "kalimat_indonesia_tokens.is.null,kalimat_indonesia_tokens.eq.[],kalimat_indonesia_tokens.eq.\"\","
+                "final_text.is.null,final_text.eq.\"\",jenis_label.is.null"
+            )
             .range(from_idx, from_idx + limit - 1)
             .execute()
         )
@@ -428,6 +435,14 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
 
     success = 0
     failed = 0
+    jenis_values = sorted(
+        {
+            str(r.get("jenis") or "").strip()
+            for r in all_data
+            if str(r.get("jenis") or "").strip()
+        }
+    )
+    jenis_label_map = {jenis: idx for idx, jenis in enumerate(jenis_values)}
 
     for row in all_data:
         if _is_preprocess_cancelled(job_id):
@@ -447,11 +462,19 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                 "device": str(device),
             }
         try:
+            manado_clean = clean_basic(row.get("manado_clean") or row.get("manado"))
+            indonesia_clean = clean_basic(row.get("indonesia_clean") or row.get("indonesia"))
+            kalimat_manado_clean = clean_basic(
+                row.get("kalimat_manado_clean") or row.get("kalimat_manado")
+            )
+            kalimat_indonesia_clean = clean_basic(
+                row.get("kalimat_indonesia_clean") or row.get("kalimat_indonesia")
+            )
             # =========================
             # WORD TOKEN
             # =========================
-            manado_tokens = process_word(row.get("manado_clean"), slang_dict, tok)
-            indonesia_tokens = process_word(row.get("indonesia_clean"), slang_dict, tok)
+            manado_tokens = process_word(manado_clean, slang_dict, tok)
+            indonesia_tokens = process_word(indonesia_clean, slang_dict, tok)
 
             # =========================
             # SENTENCE PIPELINE (FULL NLP)
@@ -487,10 +510,17 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             # =========================
             # FINAL TEXT FOR BERT
             # =========================
-            final_text = (
-                " ".join(manado_tokens) + " [SEP] " +
-                " ".join(indonesia_tokens) + " [SEP] " +
-                " ".join(kal_indo)
+            final_text = " [SEP] ".join(
+                [
+                    p
+                    for p in [
+                        " ".join(manado_tokens),
+                        " ".join(indonesia_tokens),
+                        " ".join(kal_manado),
+                        " ".join(kal_indo),
+                    ]
+                    if p
+                ]
             )
 
             # NOTE: gunakan tokenizer sesuai pilihan (mBERT / IndoBERT).
@@ -528,28 +558,33 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                         jenis_val = jenis_res.data[0].get("jenis")
                 except Exception as e:
                     print("WARN: failed to backfill jenis:", e)
+            jenis_key = str(jenis_val or "").strip()
+            if jenis_key and jenis_key not in jenis_label_map:
+                jenis_label_map[jenis_key] = len(jenis_label_map)
 
             supabase.table("preprocessed_data").update({
+                "manado_clean": manado_clean,
+                "indonesia_clean": indonesia_clean,
+                "kalimat_manado_clean": kalimat_manado_clean,
+                "kalimat_indonesia_clean": kalimat_indonesia_clean,
 
                 # WORD
                 "manado_tokens": json.dumps(manado_tokens),
                 "indonesia_tokens": json.dumps(indonesia_tokens),
-
-                # SENTENCE CLEAN
-                "kalimat_manado_clean": " ".join(kal_manado),
-                "kalimat_indonesia_clean": " ".join(kal_indo),
 
                 # SENTENCE TOKENS
                 "kalimat_manado_tokens": json.dumps(kal_manado),
                 "kalimat_indonesia_tokens": json.dumps(kal_indo),
 
                 # FINAL BERT
+                "final_text": final_text,
                 "bert_tokens": json.dumps(tokens),
                 "input_ids": json.dumps(input_ids),
                 "attention_mask": json.dumps(attention_mask),
 
                 # LABEL
                 "jenis": jenis_val,
+                "jenis_label": jenis_label_map.get(jenis_key),
 
             }).eq("id", row["id"]).execute()
 

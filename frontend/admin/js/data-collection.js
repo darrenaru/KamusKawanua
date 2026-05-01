@@ -198,8 +198,9 @@ function parseCSVStrict(text) {
     // Handle header
     const header = parseCSVLine(lines[0]);
 
-    // Format baru (8 kolom) untuk project saat ini:
+    // Format baru (8 kolom) yang sempat dipakai:
     // id_kata, manado, indonesia, jenis, kalimat_manado, kalimat_indonesia, kategori, sumber
+    // Catatan: kolom kategori/sumber sekarang diabaikan saat insert ke raw_data.
     const expected8New = [
         "id_kata",
         "manado",
@@ -237,7 +238,7 @@ function parseCSVStrict(text) {
 
     if (!isHeader8 && !isHeader6 && !isHeader8New) {
         console.log("HEADER:", header);
-        throw new Error("Invalid CSV format! Use a supported header (6-col legacy, 8-col legacy, or 8-col new: kategori+sumber).");
+        throw new Error("Invalid CSV format! Use a supported header (6-col legacy, 8-col legacy, or 8-col new).");
     }
 
     // Parse data
@@ -254,8 +255,6 @@ function parseCSVStrict(text) {
                 jenis: c[3],
                 kalimat_manado: c[4],
                 kalimat_indonesia: c[5],
-                kategori: c[6] || "",
-                sumber: c[7] || "",
                 inggris: "",
                 kalimat_inggris: ""
             };
@@ -271,9 +270,7 @@ function parseCSVStrict(text) {
                 inggris: "",
                 kalimat_manado: c[4],
                 kalimat_indonesia: c[5],
-                kalimat_inggris: "",
-                kategori: "",
-                sumber: ""
+                kalimat_inggris: ""
             };
         }
 
@@ -285,9 +282,7 @@ function parseCSVStrict(text) {
             inggris: c[4],
             kalimat_manado: c[5],
             kalimat_indonesia: c[6],
-            kalimat_inggris: c[7],
-            kategori: "",
-            sumber: ""
+            kalimat_inggris: c[7]
         };
     });
 }
@@ -400,11 +395,20 @@ async function uploadDataset() {
         if (err1) throw err1;
 
         // FILTER DATA
+        // Whitelist kolom raw_data agar field lama (mis. kategori/sumber)
+        // tidak ikut terkirim ke Supabase.
         const rawRows = rows
             .filter(r => r.id_kata && r.id_kata !== "")
             .map(r => ({
                 dataset_id: dataset.id,
-                ...r
+                id_kata: r.id_kata,
+                jenis: r.jenis,
+                manado: r.manado,
+                indonesia: r.indonesia,
+                inggris: r.inggris ?? "",
+                kalimat_manado: r.kalimat_manado,
+                kalimat_indonesia: r.kalimat_indonesia,
+                kalimat_inggris: r.kalimat_inggris ?? "",
             }));
 
         const chunkSize = 200;

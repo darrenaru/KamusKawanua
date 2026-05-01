@@ -48,9 +48,6 @@ def _build_text(row: dict) -> str:
         row.get("indonesia_clean") or row.get("indonesia") or "",
         row.get("kalimat_manado_clean") or row.get("kalimat_manado") or "",
         row.get("kalimat_indonesia_clean") or row.get("kalimat_indonesia") or "",
-        # Fitur tambahan (opsional) bila kolom tersedia di dataset.
-        row.get("kategori") or "",
-        row.get("sumber") or "",
     ]
     parts = [str(p).strip() for p in parts if p is not None]
     return " [SEP] ".join([p for p in parts if p])
@@ -103,8 +100,7 @@ def _fetch_preprocessed_rows(dataset_id: int) -> list[dict]:
             supabase.table("preprocessed_data")
             .select(
                 "id, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
-                "manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean, "
-                "kategori, sumber"
+                "manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean"
             )
             .eq("dataset_id", dataset_id)
             .range(from_idx, from_idx + limit - 1)
@@ -128,7 +124,7 @@ def _fetch_raw_rows(dataset_id: int) -> list[dict]:
         res = (
             supabase.table("raw_data")
             .select(
-                "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, kategori, sumber"
+                "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia"
             )
             .eq("dataset_id", dataset_id)
             .range(from_idx, from_idx + limit - 1)
