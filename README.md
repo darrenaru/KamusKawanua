@@ -3,7 +3,12 @@
 Project ini membangun sistem penerjemahan/klasifikasi berbasis data kamus bahasa Manado (kamarna) dengan pipeline:
 `Data Collection -> Pre Processing -> Processing (Training) -> Testing (Evaluasi)`.
 
-Backend menggunakan **FastAPI**, training/inferensi menggunakan **IndoBERT**, dan penyimpanan data menggunakan **Supabase**.
+Backend menggunakan **FastAPI**, penyimpanan data menggunakan **Supabase**, dan project ini menargetkan 5 algoritma utama:
+- **mBERT**
+- **IndoBERT**
+- **XLM-R**
+- **Word2Vec**
+- **GloVe**
 
 ## Konfigurasi Environment (WAJIB)
 Backend membaca konfigurasi Supabase dari environment variable atau file `.env` di root project.
@@ -81,7 +86,14 @@ Catatan implementasi (untuk kesesuaian dengan IndoBERT):
 - Deduplikasi dan filtering panjang diterapkan saat seed awal.
 
 ## Processing / Training (Backend)
-Endpoint training IndoBERT (async):
+Roadmap algoritma pada tahap processing/testing:
+- mBERT
+- IndoBERT
+- XLM-R
+- Word2Vec
+- GloVe
+
+Implementasi endpoint yang sudah tersedia saat ini (aktif):
 - `POST /processing/train/indobert/async`
 - `GET  /processing/train/status/{job_id}`
 
@@ -89,9 +101,8 @@ Training memakai model klasifikasi `AutoModelForSequenceClassification` dan meny
 - `trained_models/<model_name>/...`
 - `label_map.json`
 
-Input text untuk training dibangun dari kolom (bila tersedia):
+Input text untuk training dibangun dari kolom:
 - `manado_clean`, `indonesia_clean`, `kalimat_manado_clean`, `kalimat_indonesia_clean`
-- opsional: `kategori`, `sumber` (dipisah dengan `[SEP]`)
 
 ## Testing (Backend)
 Registry model untuk dropdown UI:
