@@ -1609,7 +1609,37 @@
       return;
     }
 
-    const modelName = selectedModel.innerText.trim();
+    const picked = selectedModel;
+    const modelName = picked.innerText.trim();
+    const ds = picked.dataset;
+    const modelData = {
+      ratio: ds.ratio,
+      kfold: ds.kfold,
+      lr: ds.lr,
+      epoch: ds.epoch,
+      batch: ds.batch,
+      maxlen: ds.maxlen,
+      optimizer: ds.optimizer,
+      weightDecay: ds.weightDecay,
+      scheduler: ds.scheduler,
+      warmup: ds.warmup,
+      dropout: ds.dropout,
+      earlyStopping: ds.earlyStopping,
+      gradAccum: ds.gradAccum,
+      vectorSize: ds.vectorSize,
+      windowSize: ds.windowSize,
+      minCount: ds.minCount,
+      modelType: ds.modelType,
+      negative: ds.negative,
+      xMax: ds.xMax,
+      alpha: ds.alpha,
+    };
+
+    document
+      .querySelectorAll("#model-list li")
+      .forEach((el) => el.classList.remove("selected"));
+    selectedModel = null;
+
     const modelCardName = document.getElementById("model-card-name");
     const modelCardMeta = document.getElementById("model-card-meta");
     const modelCard = document.getElementById("model-card");
@@ -1624,7 +1654,7 @@
     if (modelCard) modelCard.style.display = "flex";
     if (modelSelect) modelSelect.value = "lama";
 
-    const algo = selectedModel.dataset.algo;
+    const algo = ds.algo;
     if (algo) {
       document.getElementById("algo-select").value = algo;
       currentAlgo = algo;
@@ -1632,33 +1662,15 @@
 
     renderParameters(currentMode, () => {
       setTimeout(() => {
-        const modelData = {
-          ratio: selectedModel.dataset.ratio,
-          kfold: selectedModel.dataset.kfold,
-          lr: selectedModel.dataset.lr,
-          epoch: selectedModel.dataset.epoch,
-          batch: selectedModel.dataset.batch,
-          maxlen: selectedModel.dataset.maxlen,
-          optimizer: selectedModel.dataset.optimizer,
-          weightDecay: selectedModel.dataset.weightDecay,
-          scheduler: selectedModel.dataset.scheduler,
-          warmup: selectedModel.dataset.warmup,
-          dropout: selectedModel.dataset.dropout,
-          earlyStopping: selectedModel.dataset.earlyStopping,
-          gradAccum: selectedModel.dataset.gradAccum,
-          vectorSize: selectedModel.dataset.vectorSize,
-          windowSize: selectedModel.dataset.windowSize,
-          minCount: selectedModel.dataset.minCount,
-          modelType: selectedModel.dataset.modelType,
-          negative: selectedModel.dataset.negative,
-          xMax: selectedModel.dataset.xMax,
-          alpha: selectedModel.dataset.alpha,
-        };
         fillParametersFromModel(modelData);
         updateRatioDropdown();
         if (modelData.ratio) {
           const splitSelect = document.getElementById("split-ratio-select");
           if (splitSelect) splitSelect.value = modelData.ratio;
+        }
+        const trainingNameEl = document.getElementById("training-name");
+        if (trainingNameEl && !String(trainingNameEl.value || "").trim()) {
+          trainingNameEl.value = modelName;
         }
         showToast(`Model "${modelName}" was loaded successfully.`, "success");
         setModelSelectionStatus(
@@ -1667,11 +1679,6 @@
         );
       }, 150);
     });
-
-    document
-      .querySelectorAll("#model-list li")
-      .forEach((el) => el.classList.remove("selected"));
-    selectedModel = null;
   }
 
   window.pilihModelLama = function () {
@@ -1768,8 +1775,18 @@
   }
 
   function startTraining(mode) {
-    if (mode === "training-final" && !globalBestParams) {
-      showToast("Please run Find the Best Ratio first.");
+    const modelCard = document.getElementById("model-card");
+    const modelSelected =
+      modelCard && modelCard.style.display === "flex";
+
+    if (
+      mode === "training-final" &&
+      !globalBestParams &&
+      !modelSelected
+    ) {
+      showToast(
+        "Please run Find the Best Ratio first, or select an old model (Select Old Model) to reuse its split and hyperparameters.",
+      );
       return;
     }
 
@@ -1797,8 +1814,6 @@
 
     const datasetSelected =
       document.getElementById("dataset-card").style.display === "flex";
-    const modelSelected =
-      document.getElementById("model-card").style.display === "flex";
     const modelNameCardShown =
       document.getElementById("new-model-name-card").style.display === "flex";
 

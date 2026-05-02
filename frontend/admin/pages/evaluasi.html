@@ -53,7 +53,7 @@
                             <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                         </div>
                         <span class="section-card-title">Data Split Ratio</span>
-                        <span class="section-card-badge">5 Iterasi</span>
+                        <span class="section-card-badge">Supabase</span>
                     </div>
                     <div class="section-card-body">
                         <div style="overflow-x: auto;">
@@ -68,55 +68,7 @@
                                         <th>GLOVE</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Iteration 1</td>
-                                        <td><span class="ratio-cell">60 - 40</span></td>
-                                        <td><span class="ratio-cell">60 - 40</span></td>
-                                        <td><span class="ratio-cell">60 - 40</span></td>
-                                        <td><span class="ratio-cell">60 - 40</span></td>
-                                        <td><span class="ratio-cell">60 - 40</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Iteration 2</td>
-                                        <td><span class="ratio-cell">70 - 30</span></td>
-                                        <td><span class="ratio-cell">70 - 30</span></td>
-                                        <td><span class="ratio-cell">70 - 30</span></td>
-                                        <td><span class="ratio-cell">70 - 30</span></td>
-                                        <td><span class="ratio-cell">70 - 30</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Iteration 3</td>
-                                        <td><span class="ratio-cell">80 - 20</span></td>
-                                        <td><span class="ratio-cell">80 - 20</span></td>
-                                        <td><span class="ratio-cell">80 - 20</span></td>
-                                        <td><span class="ratio-cell">80 - 20</span></td>
-                                        <td><span class="ratio-cell">80 - 20</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Iteration 4</td>
-                                        <td><span class="ratio-cell">90 - 10</span></td>
-                                        <td><span class="ratio-cell">90 - 10</span></td>
-                                        <td><span class="ratio-cell">90 - 10</span></td>
-                                        <td><span class="ratio-cell">90 - 10</span></td>
-                                        <td><span class="ratio-cell">90 - 10</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Iteration 5</td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                    </tr>
-                                    <tr class="row-average">
-                                        <td>Average</td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                        <td><span class="ratio-cell">75 - 25</span></td>
-                                    </tr>
+                                <tbody id="split-ratio-tbody">
                                 </tbody>
                             </table>
                         </div>
@@ -149,133 +101,7 @@
                                         <th class="th-cl">GLOVE</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <!-- Similarity Metrics -->
-                                    <tr class="cat-row"><td colspan="6">Similarity Metrics</td></tr>
-                                    <tr>
-                                        <td class="metric-name">Recall</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.89</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.84</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.86</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.72</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.65</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Spearman Correlation</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.91</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.85</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.88</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.68</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.60</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Mean Cosine Similarity</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.96</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.92</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.94</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.91</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.83</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Pearson Correlation</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.93</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.87</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.90</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.70</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.62</span></td>
-                                    </tr>
-                                    <!-- Classification Metrics -->
-                                    <tr class="cat-row"><td colspan="6">Classification Metrics</td></tr>
-                                    <tr>
-                                        <td class="metric-name">Accuracy</td>
-                                        <td class="cell-tf"><span class="metric-value hl">94%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">89%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">91%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">87%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">81%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Precision</td>
-                                        <td class="cell-tf"><span class="metric-value hl">93%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">88%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">90%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">85%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">79%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Recall</td>
-                                        <td class="cell-tf"><span class="metric-value hl">89%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">84%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">86%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">72%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">65%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">F1-Score</td>
-                                        <td class="cell-tf"><span class="metric-value hl">93%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">88%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">91%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">86%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">80%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Macro Average</td>
-                                        <td class="cell-tf"><span class="metric-value hl">92%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">87%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">90%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">83%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">77%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Weighted Average</td>
-                                        <td class="cell-tf"><span class="metric-value hl">93%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">88%</span></td>
-                                        <td class="cell-tf"><span class="metric-value">91%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">86%</span></td>
-                                        <td class="cell-cl"><span class="metric-value">80%</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">MCC</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.88</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.82</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.85</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.74</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.65</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">ROC-AUC</td>
-                                        <td class="cell-tf"><span class="metric-value hl">0.97</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.94</span></td>
-                                        <td class="cell-tf"><span class="metric-value">0.95</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.91</span></td>
-                                        <td class="cell-cl"><span class="metric-value">0.85</span></td>
-                                    </tr>
-                                    <!-- Efficiency -->
-                                    <tr class="cat-row"><td colspan="6">Efficiency</td></tr>
-                                    <tr>
-                                        <td class="metric-name">Training Time</td>
-                                        <td class="cell-tf"><span class="metric-value">18 menit</span></td>
-                                        <td class="cell-tf"><span class="metric-value hl">12 menit</span></td>
-                                        <td class="cell-tf"><span class="metric-value">15 menit</span></td>
-                                        <td class="cell-cl"><span class="metric-value">45 detik</span></td>
-                                        <td class="cell-cl"><span class="metric-value hl">30 detik</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Inference Time</td>
-                                        <td class="cell-tf"><span class="metric-value">45 ms</span></td>
-                                        <td class="cell-tf"><span class="metric-value hl">38 ms</span></td>
-                                        <td class="cell-tf"><span class="metric-value">42 ms</span></td>
-                                        <td class="cell-cl"><span class="metric-value">12 ms</span></td>
-                                        <td class="cell-cl"><span class="metric-value hl">8 ms</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="metric-name">Parameters</td>
-                                        <td class="cell-tf"><span class="metric-value">270M</span></td>
-                                        <td class="cell-tf"><span class="metric-value">110M</span></td>
-                                        <td class="cell-tf"><span class="metric-value hl">84M</span></td>
-                                        <td class="cell-cl"><span class="metric-value">1.450 kata</span></td>
-                                        <td class="cell-cl"><span class="metric-value">400K kata</span></td>
-                                    </tr>
+                                <tbody id="comparative-tbody">
                                 </tbody>
                             </table>
                         </div>

@@ -382,6 +382,11 @@ body::after {
     color: var(--success);
     font-weight: 600;
 }
+
+.metric-value.empty {
+    color: var(--text-muted);
+    font-weight: 400;
+}
 /* =========================
    CHART
 ========================= */

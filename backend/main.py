@@ -382,6 +382,295 @@ def _get_best_indobert_model_name() -> str | None:
                 return name
     return None
 
+
+def _normalize_algo_name(algoritma: str) -> str:
+    return str(algoritma or "").strip().lower().replace("_", "-")
+
+
+def _algo_family_from_row(algoritma: str) -> str | None:
+    a = _normalize_algo_name(algoritma)
+    if a in ("indobert", "indo-bert", "indobenchmark"):
+        return "indobert"
+    if a in ("mbert", "m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
+        return "mbert"
+    return None
+
+
+def _fetch_models_ordered() -> list[dict]:
+    try:
+        res = (
+            supabase.table("models")
+            .select("*")
+            .order("accuracy", desc=True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return list(res.data or [])
+    except Exception:
+        return []
+
+
+def _get_best_model_row_for_family(family: str) -> dict | None:
+    for row in _fetch_models_ordered():
+        if _algo_family_from_row(str(row.get("algoritma") or "")) == family:
+            return row
+    return None
+
+
+def _params_from_model_row(row: dict | None) -> dict | None:
+    if not row:
+        return None
+    keys = (
+        "nama_model",
+        "algoritma",
+        "split_ratio",
+        "k_fold",
+        "learning_rate",
+        "epoch",
+        "batch_size",
+        "max_length",
+        "optimizer",
+        "weight_decay",
+        "scheduler",
+        "warmup",
+        "dropout",
+        "early_stopping",
+        "gradient_accumulation",
+        "accuracy",
+    )
+    out = {}
+    for k in keys:
+        if k in row and row[k] is not None:
+            out[k] = row[k]
+    return out or None
+
+
+def _max_length_from_model_row(row: dict | None, default: int = 64) -> int:
+    if not row:
+        return default
+    try:
+        n = int(row.get("max_length") or default)
+        if n <= 0:
+            return default
+        return min(n, 512)
+    except (TypeError, ValueError):
+        return default
+
+
+def _empty_search_model_bundle() -> dict:
+    return {
+        "model_analyses": [],
+        "predicted_jenis": None,
+        "model_used": None,
+        "predicted_jenis_mbert": None,
+        "model_used_mbert": None,
+        "model_consensus": None,
+    }
+
+
+def _compute_model_consensus(analyses: list | None) -> dict | None:
+    """Majority vote over algorithm labels; tie-break by higher average confidence."""
+    if not analyses:
+        return None
+
+    votes: list[dict] = []
+    for a in analyses:
+        if not a.get("available"):
+            continue
+        lab = a.get("label")
+        if lab is None or str(lab).strip() == "":
+            continue
+        votes.append(
+            {
+                "norm": str(lab).strip().lower(),
+                "display": str(lab).strip(),
+                "confidence": float(a.get("confidence") or 0.0),
+            }
+        )
+
+    consensus_norm: str | None = None
+    consensus_display: str | None = None
+    majority_count = 0
+    total_with_prediction = len(votes)
+    vote_counts: dict[str, int] = {}
+
+    if votes:
+        by_norm: dict[str, list] = {}
+        for v in votes:
+            by_norm.setdefault(v["norm"], []).append(v)
+
+        counts = {k: len(v) for k, v in by_norm.items()}
+        majority_count = max(counts.values())
+        candidates = [k for k, c in counts.items() if c == majority_count]
+
+        if len(candidates) == 1:
+            consensus_norm = candidates[0]
+        else:
+            best_avg = -1.0
+            for cn in candidates:
+                confs = [x["confidence"] for x in by_norm[cn]]
+                avg = sum(confs) / len(confs)
+                if avg > best_avg:
+                    best_avg = avg
+                    consensus_norm = cn
+
+        consensus_display = by_norm[consensus_norm][0]["display"]
+        vote_counts = {
+            by_norm[k][0]["display"]: len(by_norm[k]) for k in by_norm
+        }
+
+    per_algorithm: list[dict] = []
+    for a in analyses:
+        dn = str(a.get("display_name") or a.get("algorithm") or "?")
+        algo = str(a.get("algorithm") or "")
+        if not a.get("available"):
+            per_algorithm.append(
+                {
+                    "display_name": dn,
+                    "algorithm": algo,
+                    "label": None,
+                    "confidence": None,
+                    "matches_consensus": None,
+                    "role": "unavailable",
+                    "detail": a.get("error"),
+                }
+            )
+            continue
+        lab = a.get("label")
+        if lab is None or str(lab).strip() == "":
+            per_algorithm.append(
+                {
+                    "display_name": dn,
+                    "algorithm": algo,
+                    "label": None,
+                    "confidence": a.get("confidence"),
+                    "matches_consensus": None,
+                    "role": "no_prediction",
+                    "detail": None,
+                }
+            )
+            continue
+        nrm = str(lab).strip().lower()
+        disp = str(lab).strip()
+        matches = consensus_norm is not None and nrm == consensus_norm
+        per_algorithm.append(
+            {
+                "display_name": dn,
+                "algorithm": algo,
+                "label": disp,
+                "confidence": a.get("confidence"),
+                "matches_consensus": matches,
+                "role": "majority" if matches else "minority",
+                "detail": None,
+            }
+        )
+
+    return {
+        "consensus_label": consensus_display,
+        "consensus_label_normalized": consensus_norm,
+        "majority_count": majority_count,
+        "total_with_prediction": total_with_prediction,
+        "vote_counts": vote_counts,
+        "per_algorithm": per_algorithm,
+    }
+
+
+def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
+    bundle = _empty_search_model_bundle()
+    if not use_model:
+        return bundle
+
+    try:
+        from backend.processing.service import predict_indobert_softmax, predict_mbert_softmax
+    except Exception:
+        return bundle
+
+    def append_failure(
+        family: str,
+        display_name: str,
+        *,
+        error: str,
+        nama: str | None = None,
+        params: dict | None = None,
+        ml: int | None = None,
+    ):
+        bundle["model_analyses"].append(
+            {
+                "algorithm": family,
+                "display_name": display_name,
+                "available": False,
+                "error": error,
+                "label": None,
+                "confidence": None,
+                "model_name": nama,
+                "parameters": params,
+                "max_length_used": ml,
+            }
+        )
+
+    def run_one(family: str, display_name: str, predict_fn):
+        row = _get_best_model_row_for_family(family)
+        if not row:
+            append_failure(
+                family,
+                display_name,
+                error=f"No trained {display_name} model found in the database.",
+            )
+            return
+
+        nama = str(row.get("nama_model") or "").strip()
+        ml = _max_length_from_model_row(row)
+        params = _params_from_model_row(row)
+
+        if not nama:
+            append_failure(
+                family,
+                display_name,
+                error="Model row has empty nama_model.",
+                params=params,
+                ml=ml,
+            )
+            return
+
+        try:
+            pred = predict_fn(text=query_original, model_name=nama, max_length=ml)
+            label = str(pred.get("label") or "").strip() or None
+            conf = pred.get("score")
+            bundle["model_analyses"].append(
+                {
+                    "algorithm": family,
+                    "display_name": display_name,
+                    "available": True,
+                    "error": None,
+                    "label": label,
+                    "confidence": round(float(conf), 6) if conf is not None else None,
+                    "model_name": nama,
+                    "parameters": params,
+                    "max_length_used": ml,
+                }
+            )
+            if family == "indobert":
+                bundle["predicted_jenis"] = label
+                bundle["model_used"] = nama
+            elif family == "mbert":
+                bundle["predicted_jenis_mbert"] = label
+                bundle["model_used_mbert"] = nama
+        except Exception as e:
+            append_failure(
+                family,
+                display_name,
+                error=str(e),
+                nama=nama,
+                params=params,
+                ml=ml,
+            )
+
+    run_one("indobert", "IndoBERT", predict_indobert_softmax)
+    run_one("mbert", "mBERT", predict_mbert_softmax)
+    bundle["model_consensus"] = _compute_model_consensus(bundle["model_analyses"])
+    return bundle
+
+
 def highlight_match(text, query):
     text_str = str(text)
     text_lower = text_str.lower()
@@ -870,44 +1159,48 @@ def cancel_preprocess(job_id: str):
     return {"job_id": job_id, "status": "cancelling", "message": "cancel requested"}
 
 # =========================
-# SEARCH (TIDAK DIUBAH)
+# SEARCH (multi-model: IndoBERT + mBERT)
 # =========================
 @app.get("/search")
 def search(query: str, lang: str, use_model: bool = True):
     query_original = query or ""
     lang = (lang or "").lower().strip()
     if not query_original.strip():
-        return {"query": query_original, "results": [], "message": "Query cannot be empty."}
+        return {
+            "query": query_original,
+            "results": [],
+            "message": "Query cannot be empty.",
+            **_empty_search_model_bundle(),
+        }
     if lang not in ("manado", "indonesia", "inggris"):
-        return {"message": "Parameter 'lang' is required."}
+        return {"message": "Parameter 'lang' is required.", **_empty_search_model_bundle()}
 
     # Normalize once and reuse everywhere.
     query_norm = normalize(clean_basic(query_original))
-    predicted_jenis = None
-    model_used = None
 
-    # Gunakan model terbaik IndoBERT (jika tersedia) untuk membantu ranking hasil pencarian.
-    if use_model:
-        try:
-            model_name = _get_best_indobert_model_name()
-            if model_name:
-                from backend.processing.service import predict_indobert_softmax
+    model_bundle = _run_dual_model_analysis(query_original, use_model)
+    predicted_jenis_indo = model_bundle.get("predicted_jenis")
+    predicted_jenis_mbert = model_bundle.get("predicted_jenis_mbert")
 
-                pred = predict_indobert_softmax(
-                    text=query_original,
-                    model_name=model_name,
-                    max_length=64,
-                )
-                predicted_jenis = str(pred.get("label") or "").strip() or None
-                model_used = model_name
-        except Exception as e:
-            print("MODEL RERANK WARN:", e)
+    def row_boost_matches(jenis_norm: str) -> bool:
+        if not jenis_norm:
+            return False
+        pi = str(predicted_jenis_indo or "").strip().lower()
+        pm = str(predicted_jenis_mbert or "").strip().lower()
+        return (bool(pi) and jenis_norm == pi) or (bool(pm) and jenis_norm == pm)
 
     def format_result(row, lang, query_original, score, method):
         # `row` bisa berupa dict (Supabase) atau pandas Series (DataFrame).
         row_jenis = str(row.get("jenis") or "").strip()
         row_jenis_norm = row_jenis.lower()
-        pred_norm = str(predicted_jenis or "").strip().lower()
+        pred_indo_norm = str(predicted_jenis_indo or "").strip().lower()
+        pred_mbert_norm = str(predicted_jenis_mbert or "").strip().lower()
+        match_indo = bool(
+            pred_indo_norm and row_jenis_norm and row_jenis_norm == pred_indo_norm
+        )
+        match_mbert = bool(
+            pred_mbert_norm and row_jenis_norm and row_jenis_norm == pred_mbert_norm
+        )
         return {
             "manado": highlight_match(row["manado"], query_original),
             "indonesia": highlight_match(row["indonesia"], query_original),
@@ -920,7 +1213,9 @@ def search(query: str, lang: str, use_model: bool = True):
 
             "score": round(float(score), 3),
             "method": method,
-            "model_match": bool(pred_norm and row_jenis_norm and row_jenis_norm == pred_norm),
+            "model_match": match_indo or match_mbert,
+            "model_match_indobert": match_indo,
+            "model_match_mbert": match_mbert,
         }
 
     # Prioritas 1: exact match langsung ke tabel Supabase `dictionary`.
@@ -937,8 +1232,7 @@ def search(query: str, lang: str, use_model: bool = True):
             return {
                 "query": query_original,
                 "results": exact_results,
-                "predicted_jenis": predicted_jenis,
-                "model_used": model_used,
+                **model_bundle,
             }
     except Exception as e:
         # Jika Supabase error (mis. RLS / network), fallback ke DataFrame-based search di bawah.
@@ -953,7 +1247,8 @@ def search(query: str, lang: str, use_model: bool = True):
         return {
             "query": query_original,
             "results": [],
-            "error": "The database is empty, RLS is not enabled, or the Supabase request failed."
+            "error": "The database is empty, RLS is not enabled, or the Supabase request failed.",
+            **model_bundle,
         }
 
     manado_words = set(df['manado'].astype(str))
@@ -1004,7 +1299,8 @@ def search(query: str, lang: str, use_model: bool = True):
             exact_results.append(format_result(row, lang, query_original, 1.0, "exact"))
         return {
             "query": query_original,
-            "results": exact_results
+            "results": exact_results,
+            **model_bundle,
         }
 
     results = []
@@ -1021,23 +1317,23 @@ def search(query: str, lang: str, use_model: bool = True):
         elif lang == "inggris":
             target = eng
         else:
-            return {"message": "Parameter 'lang' is required."}
+            return {"message": "Parameter 'lang' is required.", **model_bundle}
 
         if query_norm == target:
             base_score = 1.0
-            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+            if row_boost_matches(str(row.get("jenis") or "").strip().lower()):
                 base_score = min(1.0, base_score + 0.1)
             results.append(format_result(row, lang, query_original, base_score, "exact"))
 
         elif query_norm in target and len(query_norm) >= 4:
             score = 0.85
-            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+            if row_boost_matches(str(row.get("jenis") or "").strip().lower()):
                 score = min(1.0, score + 0.1)
             results.append(format_result(row, lang, query_original, score, "partial"))
 
         else:
             fuzzy_score = fuzz.ratio(query_norm, target) / 100
-            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+            if row_boost_matches(str(row.get("jenis") or "").strip().lower()):
                 fuzzy_score = min(1.0, fuzzy_score + 0.1)
             if fuzzy_score >= 0.8:
                 results.append(format_result(row, lang, query_original, fuzzy_score, "fuzzy+model"))
@@ -1060,7 +1356,7 @@ def search(query: str, lang: str, use_model: bool = True):
         for idx, sim in top_k:
             row = df.iloc[idx]
             score = sim
-            if predicted_jenis and str(row.get("jenis") or "").strip().lower() == predicted_jenis.lower():
+            if row_boost_matches(str(row.get("jenis") or "").strip().lower()):
                 score = min(1.0, score + 0.1)
             results.append(format_result(row, lang, query_original, score, "semantic+model"))
 
@@ -1072,13 +1368,11 @@ def search(query: str, lang: str, use_model: bool = True):
             "results": [],
             "message": "No matching kata was found.",
             "suggestion": suggestion,
-            "predicted_jenis": predicted_jenis,
-            "model_used": model_used,
+            **model_bundle,
         }
 
     return {
         "query": query_original,
         "results": results,
-        "predicted_jenis": predicted_jenis,
-        "model_used": model_used,
+        **model_bundle,
     }

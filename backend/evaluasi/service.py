@@ -1,13 +1,29 @@
 from backend.supabase_client import supabase
 
 
+def _canonical_algo_key(algoritma: str) -> str | None:
+    """Match frontend column keys: indobert, mbert, xlm-r, word2vec, glove."""
+    if not algoritma:
+        return None
+    k = str(algoritma).strip().lower().replace("_", "-")
+    if k in ("indo-bert", "indobenchmark"):
+        return "indobert"
+    if k in ("m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
+        return "mbert"
+    if k in ("xlmr", "xlm-r"):
+        return "xlm-r"
+    if k in ("word2vec", "word-2-vec"):
+        return "word2vec"
+    if k == "glove":
+        return "glove"
+    return k or None
+
+
 def get_best_models_by_algorithm() -> list[dict]:
     try:
         res = (
             supabase.table("models")
-            .select(
-                "id,nama_model,algoritma,dataset_id,split_ratio,accuracy,precision,recall,f1_score,created_at"
-            )
+            .select("*")
             .order("created_at", desc=True)
             .execute()
         )
@@ -46,7 +62,8 @@ def get_best_models_by_algorithm() -> list[dict]:
     best_by_algorithm: dict[str, dict] = {}
     for row in rows:
         algorithm = str(row.get("algoritma") or "").strip()
-        if not algorithm:
+        key = _canonical_algo_key(algorithm)
+        if not key:
             continue
 
         model_id = row.get("id")
@@ -59,39 +76,28 @@ def get_best_models_by_algorithm() -> list[dict]:
         except Exception:
             continue
 
-        key = algorithm.lower()
         current = best_by_algorithm.get(key)
-        if current is None or accuracy > current["accuracy"]:
+        if current is None or accuracy > float(current.get("accuracy") or 0):
             dataset_id = row.get("dataset_id")
             dataset_id_int = int(dataset_id) if dataset_id is not None else None
-            best_by_algorithm[key] = {
-                "id": int(model_id),
-                "algoritma": algorithm,
-                "nama_model": model_name,
-                "dataset_id": dataset_id_int,
-                "dataset_name": (
-                    dataset_name_map.get(dataset_id_int)
-                    if dataset_id_int is not None
-                    else None
-                ),
-                "split_ratio": row.get("split_ratio"),
-                "accuracy": accuracy,
-                "precision": (
-                    float(row.get("precision"))
-                    if row.get("precision") is not None
-                    else None
-                ),
-                "recall": (
-                    float(row.get("recall"))
-                    if row.get("recall") is not None
-                    else None
-                ),
-                "f1_score": (
-                    float(row.get("f1_score"))
-                    if row.get("f1_score") is not None
-                    else None
-                ),
-                "created_at": row.get("created_at"),
-            }
+            merged = dict(row)
+            merged["id"] = int(model_id)
+            merged["algoritma"] = algorithm
+            merged["nama_model"] = model_name
+            merged["canonical_algorithm"] = key
+            merged["accuracy"] = accuracy
+            merged["dataset_id"] = dataset_id_int
+            merged["dataset_name"] = (
+                dataset_name_map.get(dataset_id_int)
+                if dataset_id_int is not None
+                else None
+            )
+            for fld in ("precision", "recall", "f1_score", "mcc", "roc_auc"):
+                if merged.get(fld) is not None:
+                    try:
+                        merged[fld] = float(merged[fld])
+                    except Exception:
+                        pass
+            best_by_algorithm[key] = merged
 
-    return sorted(best_by_algorithm.values(), key=lambda x: x["accuracy"], reverse=True)
+    return sorted(best_by_algorithm.values(), key=lambda x: float(x.get("accuracy") or 0), reverse=True)
