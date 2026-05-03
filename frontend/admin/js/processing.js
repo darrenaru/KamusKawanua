@@ -420,6 +420,7 @@
     if (!currentAlgo && algoSelect && algoSelect.value) {
       currentAlgo = algoSelect.value;
     }
+    updateTrainingNamePlaceholder();
     renderParameters(currentMode, () => {
       if (currentMode === "training-final" && globalBestParams) {
         updateRatioDropdown();
@@ -604,6 +605,7 @@
   function onAlgoChange(e) {
     currentAlgo = e.target.value;
     localStorage.setItem("selectedAlgorithm", currentAlgo);
+    updateTrainingNamePlaceholder();
 
     if (currentMode === "training-final") {
       const modelSelect = document.getElementById("model-select");
@@ -782,6 +784,17 @@
     if (a === "word2vec") return "Word2Vec";
     if (a === "glove") return "GloVe";
     return a || "selected algorithm";
+  }
+
+  function updateTrainingNamePlaceholder() {
+    const input = document.getElementById("training-name");
+    if (!input) return;
+    const a = String(currentAlgo || "").toLowerCase().trim();
+    if (!a) {
+      input.placeholder = "Example: ModelName-Final-v2";
+      return;
+    }
+    input.placeholder = `Example: ${getAlgorithmLabel(currentAlgo)}-Final-v2`;
   }
 
   function setModelSelectionStatus(message, tone = "info") {
@@ -1104,13 +1117,14 @@
       "<strong>Function:</strong> Frequency weighting exponent in GloVe.<br><strong>Impact:</strong> Determines sensitivity to kata frequency.<br><strong>Risk:</strong> Extreme values may destabilize embeddings.",
   };
 
-  // ==================== INDOBERT PARAMETERS (DROPDOWN) ====================
-  function generateIndoBERTParams() {
+  // ==================== BERT FAMILY (IndoBERT / mBERT) PARAMETERS (DROPDOWN) ====================
+  function generateBertTransformerParams(bertDisplayName) {
+    const bert = bertDisplayName || "IndoBERT";
     return `
     <div class="layer-card">
       <div class="layer-header">
         <h4>1. Input Layer</h4>
-        <p>Input parameters are separated from other layers to align with text token handling in IndoBERT.</p>
+        <p>Input parameters are separated from other layers to align with text token handling in ${bert}.</p>
       </div>
       <div class="param-row">
         <div class="param-group">
@@ -1137,7 +1151,7 @@
         <div class="param-group">
           <label>Input Representation</label>
           <input type="text" value="WordPiece Tokens + [CLS]/[SEP]" disabled>
-          <small>Input representation follows the default IndoBERT tokenizer.</small>
+          <small>Input representation follows the default ${bert} tokenizer.</small>
         </div>
         <div class="param-group">
           <label>Attention Mask</label>
@@ -1150,7 +1164,7 @@
     <div class="layer-card">
       <div class="layer-header">
         <h4>2. Hidden Layer</h4>
-        <p>Hyperparameter fine-tuning encoder IndoBERT dan classifier head.</p>
+        <p>Hyperparameter fine-tuning encoder ${bert} dan classifier head.</p>
       </div>
       <div class="param-row">
         <div class="param-group">
@@ -1272,11 +1286,13 @@
   `;
   }
 
-  // ==================== mBERT PARAMETERS  ====================
+  function generateIndoBERTParams() {
+    return generateBertTransformerParams("IndoBERT");
+  }
+
   // ==================== mBERT PARAMETERS (DATALIST) ====================
   function generateMBERTParams() {
-    // Samakan UI parameter mBERT dengan IndoBERT.
-    return generateIndoBERTParams();
+    return generateBertTransformerParams("mBERT");
   }
 
   // ==================== XLM-R PARAMETERS (DROPDOWN + INPUT MANUAL) ====================

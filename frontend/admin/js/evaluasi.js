@@ -343,7 +343,7 @@ function renderEvaluationTheads(cols) {
     if (!compHead) return;
 
     var row1 =
-        '<tr><th style="text-align:left; padding-left:24px;">Metrik</th>' +
+        '<tr><th style="text-align:left; padding-left:24px;">Metric</th>' +
         (tfCount
             ? '<th class="th-tf" colspan="' +
               tfCount +
@@ -383,7 +383,7 @@ function renderSplitRatioTable(byAlgo, cols) {
     var tbody = document.getElementById('split-ratio-tbody');
     if (!tbody) return;
     var tr =
-        '<tr><td class="metric-name">Split ratio (model terbaik per algoritma)</td>';
+        '<tr><td class="metric-name">Split ratio (best model per algorithm)</td>';
     for (var j = 0; j < cols.length; j++) {
         var m = byAlgo[cols[j]];
         var sr = m && m.split_ratio != null && m.split_ratio !== '' ? String(m.split_ratio) : '';
@@ -489,7 +489,7 @@ function renderEvaluationConclusion(byAlgo, cols) {
     if (!picked) {
         el.innerHTML =
             '<div class="conclusion-stack conclusion-stack--empty">' +
-            '<p class="conclusion-muted">Belum ada data model per algoritma untuk menyusun kesimpulan. Pastikan backend berjalan dan data pelatihan sudah tersimpan.</p>' +
+            '<p class="conclusion-muted">No per-algorithm model data is available to build a conclusion yet. Make sure the backend is running and training data has been saved.</p>' +
             '</div>';
         root.style.display = 'block';
         return;
@@ -511,23 +511,23 @@ function renderEvaluationConclusion(byAlgo, cols) {
     var konteksTeknis = '';
     if (isTransformer) {
         konteksTeknis =
-            'Transformer mempelajari konteks kata dalam kalimat sekaligus, sehingga cocok ketika variasi penulisan dan struktur kalimat Manado perlu ditangkap lebih halus. Ini adalah pembanding yang kuat dibanding model yang hanya melihat kata secara terpisah.';
+            'Transformers learn word context within whole sentences, which suits Manado text when spelling variation and sentence structure need finer modeling. They are a strong comparison to models that treat words in isolation.';
     } else if (isClassic) {
         konteksTeknis =
-            'Model ini memakai vektor kata statistik: umumnya lebih ringan dan cepat, cocok sebagai baseline. Untuk pola kalimat kompleks, hasilnya sering dibandingkan lagi dengan Transformer jika sumber daya memungkinkan.';
+            'This model uses static word vectors: typically lighter and faster, useful as a baseline. For complex sentence patterns, results are often compared again with a Transformer when resources allow.';
     } else {
         konteksTeknis =
-            'Angka di atas membandingkan semua algoritma pada snapshot dataset yang sama di halaman ini.';
+            'The figures above compare every algorithm on the same dataset snapshot shown on this page.';
     }
 
     var dlRows = '';
-    dlRows += '<div><dt>Nama model</dt><dd>' + namaModel + '</dd></div>';
+    dlRows += '<div><dt>Model name</dt><dd>' + namaModel + '</dd></div>';
     dlRows +=
         '<div><dt>Dataset</dt><dd>' +
         (ds ? ds : '<span class="conclusion-dl-empty">\u2014</span>') +
         '</dd></div>';
     dlRows +=
-        '<div><dt>Split data</dt><dd>' +
+        '<div><dt>Data split</dt><dd>' +
         (split ? split : '<span class="conclusion-dl-empty">\u2014</span>') +
         '</dd></div>';
 
@@ -547,35 +547,35 @@ function renderEvaluationConclusion(byAlgo, cols) {
     el.innerHTML =
         '<div class="conclusion-stack">' +
         '<div class="conclusion-winner">' +
-        '<p class="conclusion-winner-eyebrow">Berdasarkan akurasi tertinggi di halaman ini</p>' +
+        '<p class="conclusion-winner-eyebrow">Based on the highest accuracy on this page</p>' +
         '<p class="conclusion-winner-title">' +
         escapeHtml(algoLabel) +
         '</p>' +
-        '<p class="conclusion-winner-lead">Untuk klasifikasi teks berbahasa Manado pada setup data yang sama, pilih ini sebagai <strong>kandidat utama</strong> mengikuti metrik di bawah.</p>' +
+        '<p class="conclusion-winner-lead">For Manado-language text classification under the same data setup, treat this as the <strong>primary candidate</strong> according to the metrics below.</p>' +
         '</div>' +
         '<section class="conclusion-block" aria-labelledby="conclusion-metrics-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-metrics-h">Ringkasan metrik</h3>' +
+        '<h3 class="conclusion-block-title" id="conclusion-metrics-h">Metric summary</h3>' +
         '<div class="conclusion-metrics" role="list">' +
-        metricCell('Akurasi', escapeHtml(accStr)) +
-        metricCell('Presisi', escapeHtml(precStr)) +
+        metricCell('Accuracy', escapeHtml(accStr)) +
+        metricCell('Precision', escapeHtml(precStr)) +
         metricCell('Recall', escapeHtml(recStr)) +
         metricCell('F1-score', escapeHtml(f1Str)) +
         '</div>' +
         '</section>' +
         '<section class="conclusion-block" aria-labelledby="conclusion-detail-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-detail-h">Detail model</h3>' +
+        '<h3 class="conclusion-block-title" id="conclusion-detail-h">Model details</h3>' +
         '<dl class="conclusion-dl">' +
         dlRows +
         '</dl>' +
         '</section>' +
         '<section class="conclusion-block" aria-labelledby="conclusion-why-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-why-h">Mengapa ini disarankan?</h3>' +
+        '<h3 class="conclusion-block-title" id="conclusion-why-h">Why this is recommended</h3>' +
         '<p class="conclusion-prose">' +
         escapeHtml(konteksTeknis) +
         '</p>' +
         '</section>' +
         '<aside class="conclusion-note" role="note">' +
-        '<strong>Catatan penting.</strong> Kesimpulan ini mengikuti perbandingan angka di dashboard (bukan uji lapangan). Jika korpus, label, atau domain berubah, lakukan evaluasi ulang.' +
+        '<strong>Important note.</strong> This conclusion follows numeric comparison on the dashboard (not field testing). If the corpus, labels, or domain change, run the evaluation again.' +
         '</aside>' +
         '</div>';
 
