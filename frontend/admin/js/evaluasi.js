@@ -480,6 +480,103 @@ function pickBestModelAmong(byAlgo, cols) {
     return { key: bestKey, model: byAlgo[bestKey], accuracyPct: bestAcc, f1Pct: Number.isFinite(bestF1) ? bestF1 : null };
 }
 
+/**
+ * Rank algorithms by the same rule as pickBestModelAmong; build English outcome paragraphs.
+ */
+function buildEnglishEvaluationOutcomeHtml(byAlgo, cols) {
+    var rows = [];
+    for (var i = 0; i < cols.length; i++) {
+        var k = cols[i];
+        var m = byAlgo[k];
+        if (!m) continue;
+        var acc = normalizeCompare(m.accuracy);
+        if (!Number.isFinite(acc)) continue;
+        var f1Raw = normalizeCompare(m.f1_score);
+        var f1v = Number.isFinite(f1Raw) ? f1Raw : -Infinity;
+        rows.push({ key: k, acc: acc, f1: f1v, idx: i });
+    }
+    rows.sort(function (a, b) {
+        if (b.acc !== a.acc) return b.acc - a.acc;
+        if (b.f1 !== a.f1) return b.f1 - a.f1;
+        return a.idx - b.idx;
+    });
+    if (rows.length === 0) return '';
+
+    var best = rows[0];
+    var bestLabel = escapeHtml(ALGO_LABELS[best.key] || best.key);
+    var bestAccStr = escapeHtml(formatPercentDisplay(byAlgo[best.key].accuracy) || '\u2014');
+    var n = rows.length;
+    var parts = [];
+    parts.push(
+        'In this evaluation snapshot, <strong>' +
+            bestLabel +
+            '</strong> achieves the highest accuracy (<strong>' +
+            bestAccStr +
+            '</strong>) among <strong>' +
+            n +
+            '</strong> algorithm' +
+            (n === 1 ? '' : 's') +
+            ' with reported metrics on this dashboard.',
+    );
+
+    if (rows.length >= 2) {
+        var second = rows[1];
+        var runnerLabel = escapeHtml(ALGO_LABELS[second.key] || second.key);
+        var runnerAccStr = escapeHtml(formatPercentDisplay(byAlgo[second.key].accuracy) || '\u2014');
+        var gap = Math.abs(best.acc - second.acc);
+        var gapStr = (Math.round(gap * 10) / 10).toFixed(1);
+        parts.push(
+            '<strong>' +
+                runnerLabel +
+                '</strong> ranks second at <strong>' +
+                runnerAccStr +
+                '</strong> accuracy (<strong>' +
+                gapStr +
+                '</strong> percentage points behind on this ranking).',
+        );
+    }
+
+    var bm = byAlgo[best.key];
+    var p = bm ? normalizeCompare(bm.precision) : NaN;
+    var r = bm ? normalizeCompare(bm.recall) : NaN;
+    if (Number.isFinite(p) && Number.isFinite(r)) {
+        var delta = p - r;
+        if (Math.abs(delta) >= 2) {
+            if (delta > 0) {
+                parts.push(
+                    'For the leading model, precision is higher than recall, suggesting relatively fewer false positives among predicted positive cases.',
+                );
+            } else {
+                parts.push(
+                    'For the leading model, recall is higher than precision, suggesting broader detection of true positives at the cost of more false positives.',
+                );
+            }
+        } else {
+            parts.push(
+                'Precision and recall for the leading model are close, indicating a balanced trade-off between false positives and missed positives on this split.',
+            );
+        }
+    }
+
+    parts.push(
+        'Together, these results summarize the current offline evaluation only; they should be validated against your target use case before deployment.',
+    );
+
+    var inner = parts
+        .map(function (html) {
+            return '<p class="conclusion-prose">' + html + '</p>';
+        })
+        .join('');
+    return (
+        '<section class="conclusion-block" aria-labelledby="conclusion-outcome-h">' +
+        '<h3 class="conclusion-block-title" id="conclusion-outcome-h">Evaluation outcome</h3>' +
+        '<div class="conclusion-prose-stack">' +
+        inner +
+        '</div>' +
+        '</section>'
+    );
+}
+
 function renderEvaluationConclusion(byAlgo, cols) {
     var root = document.getElementById('eval-conclusion');
     var el = document.getElementById('eval-conclusion-content');
@@ -553,6 +650,7 @@ function renderEvaluationConclusion(byAlgo, cols) {
         '</p>' +
         '<p class="conclusion-winner-lead">For Manado-language text classification under the same data setup, treat this as the <strong>primary candidate</strong> according to the metrics below.</p>' +
         '</div>' +
+        buildEnglishEvaluationOutcomeHtml(byAlgo, cols) +
         '<section class="conclusion-block" aria-labelledby="conclusion-metrics-h">' +
         '<h3 class="conclusion-block-title" id="conclusion-metrics-h">Metric summary</h3>' +
         '<div class="conclusion-metrics" role="list">' +

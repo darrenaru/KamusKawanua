@@ -569,6 +569,10 @@ body::after {
     color: var(--text-primary);
 }
 
+.conclusion-prose-stack .conclusion-prose + .conclusion-prose {
+    margin-top: 12px;
+}
+
 .conclusion-muted {
     color: var(--text-secondary);
     font-size: 14px;
