@@ -2243,6 +2243,13 @@
             `Training completed (${st.result?.device || "device"})`,
             "success",
           );
+          if (st.result?.model_dir) {
+            appendProgressLog(
+              card,
+              `Checkpoint folder (backend disk): ${st.result.model_dir}`,
+              "info",
+            );
+          }
 
           finishTrainingInCard(card, mode, params, epochResults);
           showToast(

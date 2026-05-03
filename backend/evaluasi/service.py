@@ -1,5 +1,42 @@
 from backend.supabase_client import supabase
 
+_TESTING_MERGE_FLOAT_FIELDS = (
+    "std_deviation",
+    "weighted_avg",
+    "roc_auc",
+    "mcc",
+)
+
+
+def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
+    """Ambil baris testing_results terbaru per model_id (untuk metrik uji coba)."""
+    if not model_ids:
+        return {}
+    try:
+        res = (
+            supabase.table("testing_results")
+            .select("*")
+            .in_("model_id", model_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception:
+        return {}
+
+    by_model: dict[int, dict] = {}
+    for row in rows:
+        mid = row.get("model_id")
+        if mid is None:
+            continue
+        try:
+            mid_int = int(mid)
+        except Exception:
+            continue
+        if mid_int not in by_model:
+            by_model[mid_int] = row
+    return by_model
+
 
 def _canonical_algo_key(algoritma: str) -> str | None:
     """Match frontend column keys: indobert, mbert, xlm-r, word2vec, glove."""
@@ -100,4 +137,38 @@ def get_best_models_by_algorithm() -> list[dict]:
                         pass
             best_by_algorithm[key] = merged
 
-    return sorted(best_by_algorithm.values(), key=lambda x: float(x.get("accuracy") or 0), reverse=True)
+    items = sorted(
+        best_by_algorithm.values(),
+        key=lambda x: float(x.get("accuracy") or 0),
+        reverse=True,
+    )
+
+    model_ids = [
+        int(row["id"])
+        for row in items
+        if row.get("id") is not None
+    ]
+    testing_map = _fetch_latest_testing_by_model_ids(model_ids)
+
+    for row in items:
+        mid = row.get("id")
+        if mid is None:
+            continue
+        tr = testing_map.get(int(mid))
+        if not tr:
+            continue
+        nested: dict[str, float] = {}
+        for k in _TESTING_MERGE_FLOAT_FIELDS:
+            if tr.get(k) is None:
+                continue
+            try:
+                nested[k] = float(tr[k])
+            except Exception:
+                continue
+        if not nested:
+            continue
+        row["testing_result"] = nested
+        for k, v in nested.items():
+            row[k] = v
+
+    return items
