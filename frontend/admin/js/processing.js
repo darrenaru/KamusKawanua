@@ -2253,7 +2253,7 @@
 
           finishTrainingInCard(card, mode, params, epochResults);
           showToast(
-            `IndoBERT training completed (${st.result?.device || "device"})`,
+            `${algoLabel} training completed (${st.result?.device || "device"})`,
             "success",
           );
           return;

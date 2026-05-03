@@ -260,30 +260,6 @@ function cellFloat(byAlgo, field, decimals, hiIdx, cols) {
     return html;
 }
 
-function cellPlain(byAlgo, formatter, hiIdx, cols) {
-    var html = '';
-    for (var j = 0; j < cols.length; j++) {
-        var key = cols[j];
-        var m = byAlgo[key];
-        var cls = TRANSFORMER_KEYS.indexOf(key) >= 0 ? 'cell-tf' : 'cell-cl';
-        var text = formatter(m);
-        var hl = j === hiIdx && hiIdx >= 0;
-        if (text === '\u2014' || text === '-' || text === '') {
-            html += '<td class="' + cls + '">' + emDashSpan() + '</td>';
-        } else {
-            html +=
-                '<td class="' +
-                cls +
-                '"><span class="metric-value' +
-                (hl ? ' hl' : '') +
-                '">' +
-                escapeHtml(text) +
-                '</span></td>';
-        }
-    }
-    return html;
-}
-
 function cellRocAuc(byAlgo, hiIdx, cols) {
     var html = '';
     for (var j = 0; j < cols.length; j++) {
@@ -340,40 +316,6 @@ function rowAllDash(cols) {
         html += '<td class="' + cls + '">' + emDashSpan() + '</td>';
     }
     return html;
-}
-
-function formatTrainingTime(m) {
-    if (!m) return '\u2014';
-    var s =
-        m.training_time_seconds != null
-            ? m.training_time_seconds
-            : m.training_duration_seconds != null
-              ? m.training_duration_seconds
-              : m.train_time_sec;
-    if (s === undefined || s === null || s === '') return '\u2014';
-    var n = Number(s);
-    if (!Number.isFinite(n)) return '\u2014';
-    if (n >= 60) return (Math.round((n / 60) * 10) / 10).toFixed(1) + ' menit';
-    return Math.round(n) + ' detik';
-}
-
-function formatInferenceTime(m) {
-    if (!m) return '\u2014';
-    var ms = m.inference_time_ms != null ? m.inference_time_ms : m.inference_ms;
-    if (ms === undefined || ms === null || ms === '') return '\u2014';
-    var n = Number(ms);
-    if (!Number.isFinite(n)) return '\u2014';
-    return Math.round(n) + ' ms';
-}
-
-function formatParametersSummary(m) {
-    if (!m) return '\u2014';
-    if (m.vector_size != null && m.vector_size !== '') return String(m.vector_size) + ' dim';
-    var bits = [];
-    if (m.max_length != null && m.max_length !== '') bits.push('max_len ' + m.max_length);
-    if (m.epoch != null && m.epoch !== '') bits.push('epoch ' + m.epoch);
-    if (m.batch_size != null && m.batch_size !== '') bits.push('batch ' + m.batch_size);
-    return bits.length ? bits.join(', ') : '\u2014';
 }
 
 function renderEvaluationTheads(cols) {
@@ -503,40 +445,141 @@ function renderComparativeTable(byAlgo, cols) {
     addClassificationRow('MCC', 'mcc', 'mcc');
     addClassificationRow('ROC-AUC', 'roc_auc', 'roc');
 
-    function rowPlainHasValue(byAlgo, cols, formatter) {
-        for (var ri = 0; ri < cols.length; ri++) {
-            var t = formatter(byAlgo[cols[ri]]);
-            if (t && t !== '\u2014' && t !== '-') return true;
-        }
-        return false;
-    }
-
-    var showTrain = rowPlainHasValue(byAlgo, cols, formatTrainingTime);
-    var showInfer = rowPlainHasValue(byAlgo, cols, formatInferenceTime);
-    var showParams = rowPlainHasValue(byAlgo, cols, formatParametersSummary);
-    if (showTrain || showInfer || showParams) {
-        html += '<tr class="cat-row"><td colspan="' + cp + '">Efficiency</td></tr>';
-        if (showTrain) {
-            html +=
-                '<tr><td class="metric-name">Training Time</td>' +
-                cellPlain(byAlgo, formatTrainingTime, -1, cols) +
-                '</tr>';
-        }
-        if (showInfer) {
-            html +=
-                '<tr><td class="metric-name">Inference Time</td>' +
-                cellPlain(byAlgo, formatInferenceTime, -1, cols) +
-                '</tr>';
-        }
-        if (showParams) {
-            html +=
-                '<tr><td class="metric-name">Parameters</td>' +
-                cellPlain(byAlgo, formatParametersSummary, -1, cols) +
-                '</tr>';
-        }
-    }
-
     tbody.innerHTML = html;
+}
+
+/**
+ * Pilih model dengan akurasi tertinggi pada kolom aktif; imbang F1-score.
+ */
+function pickBestModelAmong(byAlgo, cols) {
+    var bestKey = null;
+    var bestAcc = -Infinity;
+    var bestF1 = -Infinity;
+    var bestIdx = 999;
+    for (var i = 0; i < cols.length; i++) {
+        var k = cols[i];
+        var m = byAlgo[k];
+        if (!m) continue;
+        var acc = normalizeCompare(m.accuracy);
+        if (!Number.isFinite(acc)) continue;
+        var f1Raw = normalizeCompare(m.f1_score);
+        var f1v = Number.isFinite(f1Raw) ? f1Raw : -Infinity;
+        var better = false;
+        if (bestKey === null) better = true;
+        else if (acc > bestAcc) better = true;
+        else if (acc === bestAcc && f1v > bestF1) better = true;
+        else if (acc === bestAcc && f1v === bestF1 && i < bestIdx) better = true;
+        if (better) {
+            bestKey = k;
+            bestAcc = acc;
+            bestF1 = f1v;
+            bestIdx = i;
+        }
+    }
+    if (!bestKey) return null;
+    return { key: bestKey, model: byAlgo[bestKey], accuracyPct: bestAcc, f1Pct: Number.isFinite(bestF1) ? bestF1 : null };
+}
+
+function renderEvaluationConclusion(byAlgo, cols) {
+    var root = document.getElementById('eval-conclusion');
+    var el = document.getElementById('eval-conclusion-content');
+    if (!el || !root) return;
+
+    var picked = pickBestModelAmong(byAlgo, cols);
+    if (!picked) {
+        el.innerHTML =
+            '<div class="conclusion-stack conclusion-stack--empty">' +
+            '<p class="conclusion-muted">Belum ada data model per algoritma untuk menyusun kesimpulan. Pastikan backend berjalan dan data pelatihan sudah tersimpan.</p>' +
+            '</div>';
+        root.style.display = 'block';
+        return;
+    }
+
+    var m = picked.model;
+    var algoLabel = ALGO_LABELS[picked.key] || picked.key;
+    var namaModel = escapeHtml(String(m.nama_model || '\u2014').trim() || '\u2014');
+    var accStr = formatPercentDisplay(m.accuracy) || '\u2014';
+    var precStr = formatPercentDisplay(m.precision) || '\u2014';
+    var recStr = formatPercentDisplay(m.recall) || '\u2014';
+    var f1Str = formatPercentDisplay(m.f1_score) || '\u2014';
+    var ds = m.dataset_name ? escapeHtml(String(m.dataset_name)) : null;
+    var split = m.split_ratio != null && m.split_ratio !== '' ? escapeHtml(String(m.split_ratio)) : null;
+
+    var isTransformer = TRANSFORMER_KEYS.indexOf(picked.key) >= 0;
+    var isClassic = CLASSIC_KEYS.indexOf(picked.key) >= 0;
+
+    var konteksTeknis = '';
+    if (isTransformer) {
+        konteksTeknis =
+            'Transformer mempelajari konteks kata dalam kalimat sekaligus, sehingga cocok ketika variasi penulisan dan struktur kalimat Manado perlu ditangkap lebih halus. Ini adalah pembanding yang kuat dibanding model yang hanya melihat kata secara terpisah.';
+    } else if (isClassic) {
+        konteksTeknis =
+            'Model ini memakai vektor kata statistik: umumnya lebih ringan dan cepat, cocok sebagai baseline. Untuk pola kalimat kompleks, hasilnya sering dibandingkan lagi dengan Transformer jika sumber daya memungkinkan.';
+    } else {
+        konteksTeknis =
+            'Angka di atas membandingkan semua algoritma pada snapshot dataset yang sama di halaman ini.';
+    }
+
+    var dlRows = '';
+    dlRows += '<div><dt>Nama model</dt><dd>' + namaModel + '</dd></div>';
+    dlRows +=
+        '<div><dt>Dataset</dt><dd>' +
+        (ds ? ds : '<span class="conclusion-dl-empty">\u2014</span>') +
+        '</dd></div>';
+    dlRows +=
+        '<div><dt>Split data</dt><dd>' +
+        (split ? split : '<span class="conclusion-dl-empty">\u2014</span>') +
+        '</dd></div>';
+
+    function metricCell(label, valueHtml) {
+        return (
+            '<div class="conclusion-metric">' +
+            '<span class="conclusion-metric-label">' +
+            label +
+            '</span>' +
+            '<span class="conclusion-metric-value">' +
+            valueHtml +
+            '</span>' +
+            '</div>'
+        );
+    }
+
+    el.innerHTML =
+        '<div class="conclusion-stack">' +
+        '<div class="conclusion-winner">' +
+        '<p class="conclusion-winner-eyebrow">Berdasarkan akurasi tertinggi di halaman ini</p>' +
+        '<p class="conclusion-winner-title">' +
+        escapeHtml(algoLabel) +
+        '</p>' +
+        '<p class="conclusion-winner-lead">Untuk klasifikasi teks berbahasa Manado pada setup data yang sama, pilih ini sebagai <strong>kandidat utama</strong> mengikuti metrik di bawah.</p>' +
+        '</div>' +
+        '<section class="conclusion-block" aria-labelledby="conclusion-metrics-h">' +
+        '<h3 class="conclusion-block-title" id="conclusion-metrics-h">Ringkasan metrik</h3>' +
+        '<div class="conclusion-metrics" role="list">' +
+        metricCell('Akurasi', escapeHtml(accStr)) +
+        metricCell('Presisi', escapeHtml(precStr)) +
+        metricCell('Recall', escapeHtml(recStr)) +
+        metricCell('F1-score', escapeHtml(f1Str)) +
+        '</div>' +
+        '</section>' +
+        '<section class="conclusion-block" aria-labelledby="conclusion-detail-h">' +
+        '<h3 class="conclusion-block-title" id="conclusion-detail-h">Detail model</h3>' +
+        '<dl class="conclusion-dl">' +
+        dlRows +
+        '</dl>' +
+        '</section>' +
+        '<section class="conclusion-block" aria-labelledby="conclusion-why-h">' +
+        '<h3 class="conclusion-block-title" id="conclusion-why-h">Mengapa ini disarankan?</h3>' +
+        '<p class="conclusion-prose">' +
+        escapeHtml(konteksTeknis) +
+        '</p>' +
+        '</section>' +
+        '<aside class="conclusion-note" role="note">' +
+        '<strong>Catatan penting.</strong> Kesimpulan ini mengikuti perbandingan angka di dashboard (bukan uji lapangan). Jika korpus, label, atau domain berubah, lakukan evaluasi ulang.' +
+        '</aside>' +
+        '</div>';
+
+    root.style.display = 'block';
 }
 
 function showChartLoadError(message) {
@@ -848,9 +891,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         renderEvaluationTheads(cols);
         renderSplitRatioTable(byAlgo, cols);
         renderComparativeTable(byAlgo, cols);
+        renderEvaluationConclusion(byAlgo, cols);
     } catch (e) {
         showChartLoadError(e && e.message ? e.message : 'Failed to load evaluation tables.');
         items = [];
+        renderEvaluationConclusion({}, []);
     }
 
     var loaded = await ensureChartJsLoaded();
