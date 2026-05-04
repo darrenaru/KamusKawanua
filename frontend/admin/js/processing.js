@@ -21,11 +21,216 @@
   const API_BASE = "http://127.0.0.1:8000";
   const STORAGE_SELECTED_DATASET_ID = "processing_selected_dataset_id";
   const STORAGE_SELECTED_DATASET_NAME = "processing_selected_dataset_name";
+  const STORAGE_RATIO_SEARCH_BY_CONTEXT = "processing_ratio_search_by_context";
 
   // Variable untuk menyimpan parameter terbaik global
   let globalBestParams = null;
   let ratioComparisonData = {}; // Untuk menyimpan data perbandingan rasio
   let epochResultsData = []; // Untuk menyimpan hasil per epoch
+
+  function normalizeAlgoKey(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function getCurrentRatioContextKey() {
+    const algoKey = normalizeAlgoKey(currentAlgo);
+    const datasetKey = Number(selectedDatasetId) || 0;
+    if (!algoKey || !datasetKey) return "";
+    return `${algoKey}::${datasetKey}`;
+  }
+
+  function parseContextKey(contextKey) {
+    const [algo = "", datasetIdRaw = ""] = String(contextKey || "").split("::");
+    const datasetId = Number(datasetIdRaw);
+    if (!algo || !Number.isFinite(datasetId) || datasetId <= 0) {
+      return { algo: "", datasetId: 0 };
+    }
+    return { algo: normalizeAlgoKey(algo), datasetId };
+  }
+
+  function sanitizeRatioComparisonData(value) {
+    if (!value || typeof value !== "object") return {};
+    const sanitized = {};
+    Object.entries(value).forEach(([ratio, metrics]) => {
+      if (!/^\d{1,2}:\d{1,2}$/.test(String(ratio || ""))) return;
+      sanitized[ratio] = {
+        accuracy: Number(metrics?.accuracy) || 0,
+        precision: Number(metrics?.precision) || 0,
+        recall: Number(metrics?.recall) || 0,
+        f1: Number(metrics?.f1) || 0,
+        loss: Number(metrics?.loss) || 0,
+        mcc: Number(metrics?.mcc) || 0,
+      };
+    });
+    return sanitized;
+  }
+
+  function loadRatioSearchContextStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_RATIO_SEARCH_BY_CONTEXT);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return {};
+      const sanitizedStore = {};
+      Object.entries(parsed).forEach(([contextKey, contextState]) => {
+        const meta = parseContextKey(contextKey);
+        if (!meta.algo || !meta.datasetId) return;
+        sanitizedStore[contextKey] = {
+          algo: meta.algo,
+          datasetId: meta.datasetId,
+          globalBestParams:
+            contextState?.globalBestParams &&
+            typeof contextState.globalBestParams === "object"
+              ? contextState.globalBestParams
+              : null,
+          ratioComparisonData: sanitizeRatioComparisonData(
+            contextState?.ratioComparisonData,
+          ),
+          updatedAt: contextState?.updatedAt || null,
+        };
+      });
+      return sanitizedStore;
+    } catch (err) {
+      console.warn("Failed to parse ratio search context store", err);
+      return {};
+    }
+  }
+
+  function saveRatioSearchContextStore(store) {
+    localStorage.setItem(STORAGE_RATIO_SEARCH_BY_CONTEXT, JSON.stringify(store || {}));
+  }
+
+  function renderGlobalBestParamsDisplay() {
+    const bestParamsDisplay = document.getElementById("best-params-display");
+    const globalBestContent = document.querySelector(
+      "#best-params-display .best-params-content",
+    );
+
+    if (!bestParamsDisplay || !globalBestContent) return;
+
+    if (!globalBestParams) {
+      bestParamsDisplay.style.display = "none";
+      globalBestContent.innerHTML = "";
+      return;
+    }
+
+    globalBestContent.innerHTML = `
+      <p><strong>Split Ratio:</strong> ${globalBestParams.splitRatio || "-"}</p>
+      <p><strong>Learning Rate:</strong> ${globalBestParams.lr || "-"}</p>
+      <p><strong>Epoch:</strong> ${globalBestParams.epoch || "-"}</p>
+      <p><strong>Batch Size:</strong> ${globalBestParams.batchSize || "-"}</p>
+      <p><strong>Max Length:</strong> ${globalBestParams.maxLength || "-"}</p>
+      <p><strong>Best F1-Score:</strong> ${Number(globalBestParams.avgF1 || 0).toFixed(2)}%</p>
+    `;
+    bestParamsDisplay.style.display = currentMode === "cari-rasio" ? "block" : "none";
+  }
+
+  function renderRatioComparisonTable() {
+    const section = document.getElementById("ratio-comparison-section");
+    const tbody = document.getElementById("comparison-body");
+    if (!section || !tbody) return;
+
+    const entries = Object.entries(ratioComparisonData || {});
+    if (entries.length === 0) {
+      tbody.innerHTML =
+        '<tr class="empty-row"><td colspan="7" style="text-align:center; color:#999; padding: 30px;">No comparison data is available yet. Run training to view results.</td></tr>';
+      section.style.display = "none";
+      return;
+    }
+
+    let bestF1 = 0;
+    let bestRatio = "";
+    entries.forEach(([ratio, data]) => {
+      if ((Number(data?.f1) || 0) > bestF1) {
+        bestF1 = Number(data?.f1) || 0;
+        bestRatio = ratio;
+      }
+    });
+
+    const sortedEntries = entries.sort(
+      (a, b) => (Number(b[1]?.f1) || 0) - (Number(a[1]?.f1) || 0),
+    );
+
+    tbody.innerHTML = sortedEntries
+      .map(([ratio, data]) => {
+        const metrics = {
+          accuracy: Number(data?.accuracy) || 0,
+          precision: Number(data?.precision) || 0,
+          recall: Number(data?.recall) || 0,
+          f1: Number(data?.f1) || 0,
+          loss: Number(data?.loss) || 0,
+          mcc: Number(data?.mcc) || 0,
+        };
+        const isBest = ratio === bestRatio;
+        return `
+        <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.2); font-weight: 600;" : ""}">
+          <td style="padding: 12px 15px; text-align: center;">
+            <strong>${ratio}</strong>
+            ${isBest ? " (Best)" : ""}
+          </td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.accuracy.toFixed(2)}%</td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.precision.toFixed(2)}%</td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.recall.toFixed(2)}%</td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.f1.toFixed(2)}%</td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.loss.toFixed(4)}</td>
+          <td style="padding: 12px 15px; text-align: center;">${metrics.mcc.toFixed(4)}</td>
+        </tr>
+      `;
+      })
+      .join("");
+
+    section.style.display = currentMode === "cari-rasio" ? "block" : "none";
+  }
+
+  function persistRatioSearchContextState() {
+    const contextKey = getCurrentRatioContextKey();
+    if (!contextKey) return;
+    const meta = parseContextKey(contextKey);
+    if (!meta.algo || !meta.datasetId) return;
+    const store = loadRatioSearchContextStore();
+    store[contextKey] = {
+      algo: meta.algo,
+      datasetId: meta.datasetId,
+      globalBestParams: globalBestParams || null,
+      ratioComparisonData: sanitizeRatioComparisonData(ratioComparisonData),
+      updatedAt: new Date().toISOString(),
+    };
+    saveRatioSearchContextStore(store);
+  }
+
+  function applyRatioSearchContextState(options = {}) {
+    const { rerenderParams = false } = options;
+    const contextKey = getCurrentRatioContextKey();
+    const store = loadRatioSearchContextStore();
+    const contextState = contextKey ? store[contextKey] : null;
+
+    const isMatchingContext =
+      normalizeAlgoKey(contextState?.algo) === normalizeAlgoKey(currentAlgo) &&
+      Number(contextState?.datasetId) === (Number(selectedDatasetId) || 0);
+    globalBestParams =
+      isMatchingContext && contextState?.globalBestParams
+        ? contextState.globalBestParams
+        : null;
+    ratioComparisonData =
+      isMatchingContext && contextState?.ratioComparisonData
+        ? sanitizeRatioComparisonData(contextState.ratioComparisonData)
+        : {};
+
+    if (rerenderParams) {
+      renderParameters(currentMode, () => {
+        updateRatioDropdown();
+        if (currentMode === "training-final" && globalBestParams) {
+          fillParametersFromGlobalBest();
+        }
+        renderGlobalBestParamsDisplay();
+        renderRatioComparisonTable();
+      });
+      return;
+    }
+
+    renderGlobalBestParamsDisplay();
+    renderRatioComparisonTable();
+  }
   // ==================== RASIO DATA SPLIT MANAGER ====================
   let ratioData = [];
   let editingIndex = -1;
@@ -426,6 +631,7 @@
         updateRatioDropdown();
         fillParametersFromGlobalBest();
       }
+      applyRatioSearchContextState();
     });
 
     const datasetList = document.getElementById("dataset-list");
@@ -543,6 +749,8 @@
         selectDatasetListItem(selectedLi);
       }
 
+      applyRatioSearchContextState({ rerenderParams: true });
+
       return;
     }
 
@@ -617,14 +825,7 @@
       modelNameSaved = false;
     }
 
-    if (globalBestParams && globalBestParams.algo === currentAlgo) {
-      renderParameters(currentMode, () => {
-        updateRatioDropdown();
-        fillParametersFromGlobalBest();
-      });
-    } else {
-      renderParameters(currentMode);
-    }
+    applyRatioSearchContextState({ rerenderParams: true });
   }
 
   function onModeChange(e) {
@@ -905,22 +1106,30 @@
 
     let html = generateSplitValidationParams();
 
-    switch (currentAlgo) {
-      case "indobert":
-        html += generateIndoBERTParams();
-        break;
-      case "mbert":
-        html += generateMBERTParams();
-        break;
-      case "xlm-r":
-        html += generateXLMRParams();
-        break;
-      case "glove":
-        html += generateGloVEParams();
-        break;
-      case "word2vec":
-        html += generateWord2VecParams();
-        break;
+    const useCoreOnlyForRatio =
+      mode === "cari-rasio" &&
+      (currentAlgo === "indobert" || currentAlgo === "mbert");
+
+    if (useCoreOnlyForRatio) {
+      html += generateFindBestRatioCoreParams(currentAlgo);
+    } else {
+      switch (currentAlgo) {
+        case "indobert":
+          html += generateIndoBERTParams();
+          break;
+        case "mbert":
+          html += generateMBERTParams();
+          break;
+        case "xlm-r":
+          html += generateXLMRParams();
+          break;
+        case "glove":
+          html += generateGloVEParams();
+          break;
+        case "word2vec":
+          html += generateWord2VecParams();
+          break;
+      }
     }
 
     container.innerHTML = html;
@@ -1060,6 +1269,74 @@
       </div>
     </div>
   `;
+  }
+
+  function generateFindBestRatioCoreParams(algo) {
+    const a = normalizeAlgoKey(algo);
+    const lrOptions =
+      a === "xlm-r"
+        ? `
+          <option value="1e-5">1e-5 (Recommended)</option>
+          <option value="1.5e-5">1.5e-5</option>
+          <option value="2e-5">2e-5</option>
+        `
+        : a === "glove"
+          ? `
+          <option value="0.01">0.01</option>
+          <option value="0.05">0.05 (Recommended)</option>
+          <option value="0.1">0.1</option>
+        `
+          : a === "word2vec"
+            ? `
+          <option value="0.01">0.01</option>
+          <option value="0.025">0.025 (Recommended)</option>
+          <option value="0.05">0.05</option>
+        `
+            : `
+          <option value="1e-5">1e-5</option>
+          <option value="2e-5">2e-5 (Recommended)</option>
+          <option value="3e-5">3e-5</option>
+          <option value="5e-5">5e-5</option>
+        `;
+
+    return `
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Learning Rate", "lr")}
+          <input type="text" id="lr" list="lr-options-core" placeholder="Select or type manually" value="">
+          <datalist id="lr-options-core">
+            ${lrOptions}
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Epoch", "epoch")}
+          <input type="number" id="epoch" placeholder="Example: 3" value="" min="1" max="200">
+        </div>
+      </div>
+      <div class="param-row">
+        <div class="param-group">
+          ${renderLabelWithTooltip("Batch Size", "batch_size")}
+          <input type="text" id="batch-size" list="batch-size-options-core" placeholder="Select or type manually" value="">
+          <datalist id="batch-size-options-core">
+            <option value="8">8</option>
+            <option value="16">16 (Recommended)</option>
+            <option value="32">32</option>
+            <option value="64">64</option>
+          </datalist>
+        </div>
+        <div class="param-group">
+          ${renderLabelWithTooltip("Max Length", "max_length")}
+          <input type="text" id="max-length" list="max-length-options-core" placeholder="Select or type manually" value="">
+          <datalist id="max-length-options-core">
+            <option value="8">8</option>
+            <option value="16">16</option>
+            <option value="32">32</option>
+            <option value="64">64 (Recommended)</option>
+            <option value="128">128</option>
+          </datalist>
+        </div>
+      </div>
+    `;
   }
 
   function renderLabelWithTooltip(label, key) {
@@ -1601,11 +1878,13 @@
     const kfold = selected.dataset.kfold;
 
     setTimeout(() => {
-      if (ratio) {
+      if (ratio && !globalBestParams) {
         const splitSelect = document.getElementById("split-ratio-select");
         if (splitSelect) splitSelect.value = ratio;
       }
     }, 100);
+
+    applyRatioSearchContextState({ rerenderParams: true });
 
     closeModalDataset();
     showToast("Dataset was selected successfully.");
@@ -1784,6 +2063,11 @@
       btnGunakanTerbaik.style.display = "none";
     }
 
+    const btnSimpan = card.querySelector(".btn-simpan-card");
+    if (btnSimpan && mode === "cari-rasio") {
+      btnSimpan.style.display = "none";
+    }
+
     // Simpan parameter ke dataset card
     card.dataset.params = JSON.stringify(params);
 
@@ -1819,6 +2103,7 @@
       return;
     }
 
+    // Find Best Ratio hanya butuh 4 parameter inti untuk perbandingan metrics.
     const requiredFields = ["lr", "epoch", "batch-size", "max-length"];
     for (let field of requiredFields) {
       const element = document.getElementById(field);
@@ -1859,29 +2144,41 @@
       }
     }
 
+    const isCoreOnlyRatioSearch =
+      mode === "cari-rasio" &&
+      (currentAlgo === "indobert" || currentAlgo === "mbert");
+
     const params = {
       splitRatio: splitRatio,
       lr: document.getElementById("lr")?.value || "",
       epoch: parseInt(document.getElementById("epoch")?.value) || 3,
       batchSize: document.getElementById("batch-size")?.value || "",
       maxLength: document.getElementById("max-length")?.value || "",
-      optimizer: document.getElementById("optimizer")?.value || "",
-      weightDecay: document.getElementById("weight-decay")?.value || "",
-      scheduler: document.getElementById("scheduler")?.value || "",
-      warmup: document.getElementById("warmup")?.value || "",
-      dropout: document.getElementById("dropout")?.value || "",
-      earlyStopping: document.getElementById("early-stopping")?.value || "",
-      gradAccum: document.getElementById("grad-accum")?.value || "",
-      vectorSize: document.getElementById("vector-size")?.value || "",
-      windowSize: document.getElementById("window-size")?.value || "",
-      minCount: document.getElementById("min-count")?.value || "",
-      modelType: document.getElementById("model-type")?.value || "",
-      negative: document.getElementById("negative")?.value || "",
-      xMax: document.getElementById("x-max")?.value || "",
-      alpha: document.getElementById("alpha")?.value || "",
       algo: currentAlgo,
       mode: mode,
     };
+
+    // Parameter lanjutan dipakai untuk:
+    // 1) training-final semua algoritma
+    // 2) cari-rasio untuk selain IndoBERT/mBERT (agar tetap seperti sebelumnya)
+    if (mode === "training-final" || !isCoreOnlyRatioSearch) {
+      Object.assign(params, {
+        optimizer: document.getElementById("optimizer")?.value || "",
+        weightDecay: document.getElementById("weight-decay")?.value || "",
+        scheduler: document.getElementById("scheduler")?.value || "",
+        warmup: document.getElementById("warmup")?.value || "",
+        dropout: document.getElementById("dropout")?.value || "",
+        earlyStopping: document.getElementById("early-stopping")?.value || "",
+        gradAccum: document.getElementById("grad-accum")?.value || "",
+        vectorSize: document.getElementById("vector-size")?.value || "",
+        windowSize: document.getElementById("window-size")?.value || "",
+        minCount: document.getElementById("min-count")?.value || "",
+        modelType: document.getElementById("model-type")?.value || "",
+        negative: document.getElementById("negative")?.value || "",
+        xMax: document.getElementById("x-max")?.value || "",
+        alpha: document.getElementById("alpha")?.value || "",
+      });
+    }
 
     // 🔧 Buat training card untuk SEMUA mode
     const card = createTrainingCard(mode, params);
@@ -2522,11 +2819,20 @@
 
     // Hitung dan tampilkan average
     const avgData = calculateAndDisplayAverage(card, epochResults);
+    if (avgData) {
+      card.dataset.avgMetrics = JSON.stringify(avgData);
+    }
 
     // Simpan ke comparison data (untuk tabel perbandingan rasio)
     if (avgData && params.splitRatio) {
-      ratioComparisonData[params.splitRatio] = avgData;
-      updateComparisonTable();
+      const existingRatioMetrics = ratioComparisonData[params.splitRatio];
+      const existingF1 = Number(existingRatioMetrics?.f1) || 0;
+      const incomingF1 = Number(avgData?.f1) || 0;
+      // Untuk rasio yang sama, simpan hanya hasil tertinggi (berdasarkan F1).
+      if (!existingRatioMetrics || incomingF1 >= existingF1) {
+        ratioComparisonData[params.splitRatio] = avgData;
+      }
+      renderRatioComparisonTable();
     }
 
     // 🔧 TAMBAHAN: Simpan ke history jika mode training-final
@@ -2613,61 +2919,20 @@
       showToast("Final training was saved to history.", "success");
     }
 
-    // Fungsi untuk update tabel perbandingan
-    function updateComparisonTable() {
-      const section = document.getElementById("ratio-comparison-section");
-      const tbody = document.getElementById("comparison-body");
-
-      if (!section || !tbody) return;
-
-      const entries = Object.entries(ratioComparisonData);
-
-      if (entries.length === 0) {
-        tbody.innerHTML =
-          '<tr class="empty-row"><td colspan="7" style="text-align:center; color:#999; padding: 30px;">No comparison data is available yet. Run training to view results.</td></tr>';
-        section.style.display = "none";
-        return;
-      }
-
-      section.style.display = "block";
-
-      // Cari F1 tertinggi
-      let bestF1 = 0;
-      let bestRatio = "";
-      entries.forEach(([ratio, data]) => {
-        if (data.f1 > bestF1) {
-          bestF1 = data.f1;
-          bestRatio = ratio;
-        }
-      });
-
-      // Urutkan berdasarkan F1-Score (tertinggi ke terendah)
-      const sortedEntries = entries.sort((a, b) => b[1].f1 - a[1].f1);
-
-      tbody.innerHTML = sortedEntries
-        .map(([ratio, data]) => {
-          const isBest = ratio === bestRatio;
-          return `
-        <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.2); font-weight: 600;" : ""}">
-          <td style="padding: 12px 15px; text-align: center;">
-            <strong>${ratio}</strong>
-            ${isBest ? " (Best)" : ""}
-          </td>
-          <td style="padding: 12px 15px; text-align: center;">${data.accuracy.toFixed(2)}%</td>
-          <td style="padding: 12px 15px; text-align: center;">${data.precision.toFixed(2)}%</td>
-          <td style="padding: 12px 15px; text-align: center;">${data.recall.toFixed(2)}%</td>
-          <td style="padding: 12px 15px; text-align: center;">${data.f1.toFixed(2)}%</td>
-          <td style="padding: 12px 15px; text-align: center;">${data.loss.toFixed(4)}</td>
-          <td style="padding: 12px 15px; text-align: center;">${data.mcc.toFixed(4)}</td>
-        </tr>
-      `;
-        })
-        .join("");
-    }
-
     if (mode === "training-final") {
-      // Auto-save untuk final training agar hasil tidak hilang jika user lupa klik Save.
-      saveModelFromCard(card, { silent: true, auto: true });
+      // Auto-save final training ke database, dan boleh fallback local.
+      saveModelFromCard(card, {
+        silent: true,
+        auto: true,
+        allowLocalFallback: true,
+      });
+    } else if (mode === "cari-rasio") {
+      // Cari rasio tetap disimpan ke database, tanpa fallback ke local saved_models.
+      saveModelFromCard(card, {
+        silent: true,
+        auto: true,
+        allowLocalFallback: false,
+      });
     }
 
     if (mode === "cari-rasio") {
@@ -2727,22 +2992,10 @@
           avgAccuracy: avgData.accuracy,
         };
 
-        // Update global best params display
-        const globalBestContent = document.querySelector(
-          "#best-params-display .best-params-content",
-        );
-        if (globalBestContent) {
-          globalBestContent.innerHTML = `
-          <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
-          <p><strong>Learning Rate:</strong> ${params.lr}</p>
-          <p><strong>Epoch:</strong> ${params.epoch}</p>
-          <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-          <p><strong>Max Length:</strong> ${params.maxLength}</p>
-          <p><strong>Best F1-Score:</strong> ${avgData.f1.toFixed(2)}%</p>
-        `;
-        }
-        document.getElementById("best-params-display").style.display = "block";
+        renderGlobalBestParamsDisplay();
       }
+
+      persistRatioSearchContextState();
 
       showToast(
         "Find Best Ratio completed. Click 'Use Best Model' on the card you want to use for Final Training.",
@@ -2777,6 +3030,7 @@
       document.getElementById("algo-select").value = params.algo;
       currentAlgo = params.algo;
     }
+    persistRatioSearchContextState();
 
     // Switch ke mode Training Final
     const modeRadios = document.querySelectorAll('input[name="training-mode"]');
@@ -2879,6 +3133,7 @@
     const opts = {
       silent: false,
       auto: false,
+      allowLocalFallback: true,
       ...options,
     };
 
@@ -2913,12 +3168,25 @@
 
     const tableBody = card.querySelector(".results-table tbody");
     const lastRow = tableBody.querySelector("tr:last-child");
+    const avgMetrics = (() => {
+      try {
+        return JSON.parse(card.dataset.avgMetrics || "null");
+      } catch (err) {
+        return null;
+      }
+    })();
     let accuracy = 0,
       precision = 0,
       recall = 0,
       f1 = 0;
 
-    if (lastRow) {
+    if (avgMetrics) {
+      accuracy = Number(avgMetrics.accuracy) || 0;
+      precision = Number(avgMetrics.precision) || 0;
+      recall = Number(avgMetrics.recall) || 0;
+      f1 = Number(avgMetrics.f1) || 0;
+    } else if (lastRow) {
+      // Fallback jika average belum tersedia.
       accuracy = parseFloat(lastRow.cells[1]?.innerText) || 0;
       precision = parseFloat(lastRow.cells[2]?.innerText) || 0;
       recall = parseFloat(lastRow.cells[3]?.innerText) || 0;
@@ -2980,8 +3248,12 @@
             .then(({ error: fallbackError }) => {
               if (fallbackError) {
                 console.error("Error saving (full + fallback):", error, fallbackError);
-                if (!opts.silent) showToast("Model was saved locally.");
-                saveToLocalStorage(modelData);
+                if (opts.allowLocalFallback) {
+                  if (!opts.silent) showToast("Model was saved locally.");
+                  saveToLocalStorage(modelData);
+                } else if (!opts.silent) {
+                  showToast("Failed to save model to database.", "error");
+                }
               } else {
                 card.dataset.savedToModels = "1";
                 if (!opts.silent) showToast("Model was saved to the database.");
@@ -2989,8 +3261,12 @@
             });
         });
     } else {
-      if (!opts.silent) showToast("Model was saved successfully.");
-      saveToLocalStorage(modelData);
+      if (opts.allowLocalFallback) {
+        if (!opts.silent) showToast("Model was saved successfully.");
+        saveToLocalStorage(modelData);
+      } else if (!opts.silent) {
+        showToast("Supabase is unavailable. Model was not saved locally.", "error");
+      }
     }
 
     console.log("Model saved:", modelData);

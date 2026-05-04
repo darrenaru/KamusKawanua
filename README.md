@@ -121,7 +121,65 @@ Confusion matrix ditampilkan pada modal “Training Results” (halaman `fronten
 - epoch validasi dengan **akurasi tertinggi**
 - confusion matrix yang dihitung backend per-epoch
 
-## Menjalankan Backend (dev)
-Jalankan dari root project:
-- `uvicorn backend.main:app --reload`
+## Menjalankan Aplikasi
+
+### Backend (Python + FastAPI)
+
+1. **Setup Virtual Environment**
+   ```bash
+   python -m venv .venv
+   
+   # Windows (PowerShell)
+   .\.venv\Scripts\Activate.ps1
+   
+   # Linux / macOS
+   source .venv/bin/activate
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   pip install -r backend/requirements.txt
+   ```
+
+3. **Jalankan Backend Server**
+   ```bash
+   uvicorn backend.main:app --reload
+   ```
+   Backend akan berjalan di `http://localhost:8000`
+   
+   Dokumentasi API: `http://localhost:8000/docs` (Swagger UI)
+
+### Frontend (Static HTML + JavaScript)
+
+1. **Buka di Browser**
+   - Halaman utama: `frontend/index.html`
+   - Halaman admin: `frontend/admin/pages/` (dashboard, data-collection, preprocessing, processing, testing, evaluasi)
+
+2. **Jalankan dengan Live Server (opsional)**
+   Jika menggunakan VS Code, install extension **Live Server** (5500):
+   - Klik kanan di `frontend/index.html` → "Open with Live Server"
+   - Atau gunakan `python -m http.server 8080` di folder `frontend/`
+
+3. **Konfigurasi Supabase di Frontend**
+   - Update `SUPABASE_URL` dan `SUPABASE_ANON_KEY` di file-file JavaScript:
+     - `frontend/admin/js/data-collection.js`
+     - `frontend/admin/js/preprocessing.js`
+     - `frontend/admin/js/processing.js`
+     - `frontend/admin/js/testing.js`
+     - `frontend/admin/js/evaluasi.js`
+
+### Struktur Folder Backend
+```
+backend/
+├── main.py                    # Entry point FastAPI
+├── config.py                  # Konfigurasi
+├── model.py                   # Model utility
+├── supabase_client.py         # Klien Supabase
+├── requirements.txt           # Dependencies Python
+├── preprocessing/             # Pipeline preprocessing
+├── processing/                # Pipeline training/processing
+├── testing/                   # Pipeline testing
+├── evaluasi/                  # Pipeline evaluasi
+└── trained_models/            # Folder model yang sudah di-train
+```
 
