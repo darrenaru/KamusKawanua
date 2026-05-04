@@ -39,6 +39,21 @@ class IndoBertTestingResponse(BaseModel):
     results: list[IndoBertTestingResultItem]
 
 
+class TestingLatestResultSummary(BaseModel):
+    id: int | None = None
+    dataset_id: int | None = None
+    dataset_name: str | None = None
+    accuracy: float
+    precision_macro: float
+    recall_macro: float
+    f1_macro: float
+    std_deviation: float
+    weighted_avg: float
+    roc_auc: float
+    mcc: float
+    created_at: str | None = None
+
+
 class TestingModelItem(BaseModel):
     id: int
     nama_model: str
@@ -47,6 +62,7 @@ class TestingModelItem(BaseModel):
     dataset_name: str | None = None
     max_length: int | None = None
     created_at: str | None = None
+    latest_testing: TestingLatestResultSummary | None = None
 
 
 class TestingModelListResponse(BaseModel):

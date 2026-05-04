@@ -98,6 +98,7 @@ var selectedDatasetId = null;
 var selectedDatasetName = null;
 var selectedModelId = null;
 var selectedModelMaxLength = 64;
+var selectedLatestTesting = null;
 var testingModels = [];
 var progressTimer = null;
 var progressStartedAt = null;
@@ -164,6 +165,86 @@ function showTestingError(message) {
     box.textContent = message;
 }
 
+function showTestingInfo(message) {
+    var box = document.getElementById('testingInfo');
+    if (!box) return;
+    if (!message) {
+        box.style.display = 'none';
+        box.textContent = '';
+        return;
+    }
+    box.style.display = 'block';
+    box.textContent = message;
+}
+
+function updateStartButtonState() {
+    var btn = document.getElementById('btnStart');
+    var algorithm = document.getElementById('selAlgorithm');
+    var model = document.getElementById('selModel');
+    if (!btn) return;
+
+    var hasAlgorithm = !!(algorithm && algorithm.value);
+    var hasModel = !!(model && model.value);
+    var hasDataset = !!selectedDatasetId;
+    btn.disabled = isRunning || !hasAlgorithm || !hasModel || !hasDataset;
+}
+
+function applyStoredTestingMetrics(summary) {
+    if (!summary) return;
+    var toPct = function(v) { return Number(v || 0) * 100; };
+    var m = {
+        acc: toPct(summary.accuracy),
+        prec: toPct(summary.precision_macro),
+        f1: toPct(summary.f1_macro),
+        macro: toPct(summary.f1_macro),
+        rec: toPct(summary.recall_macro),
+        std: toPct(summary.std_deviation),
+        weighted: toPct(summary.weighted_avg),
+        roc: toPct(summary.roc_auc),
+        mcc: Number(summary.mcc || 0)
+    };
+
+    metricIds.forEach(function(id, i) {
+        var headerEl = document.getElementById(metricHeaderIds[i]);
+        var metricEl = document.getElementById(id);
+        if (headerEl) headerEl.classList.add('revealed');
+        if (metricEl) metricEl.classList.add('revealed');
+        if (!metricEl) return;
+        metricEl.textContent = id === 'mcc' ? m[id].toFixed(2) : Math.round(m[id]) + '%';
+    });
+
+    var createdAt = summary.created_at ? new Date(summary.created_at).toLocaleString('id-ID') : '-';
+    var progressText = document.getElementById('progressText');
+    if (progressText) {
+        progressText.textContent = 'Loaded latest testing result from Supabase.';
+    }
+    setStatus('tested');
+    var datasetMsg = summary.dataset_name
+        ? ' Previous testing used dataset: ' + summary.dataset_name + '.'
+        : '';
+    showTestingInfo(
+        'This model has been tested before (latest result: ' + createdAt + ').' +
+        datasetMsg +
+        ' If you run Start Testing again, the previous testing result will be replaced by the new one.'
+    );
+}
+
+function syncTestingStateForSelection() {
+    if (isRunning) return;
+    showTestingError('');
+    if (selectedLatestTesting) {
+        applyStoredTestingMetrics(selectedLatestTesting);
+    } else {
+        resetMetrics();
+        setStatus('idle');
+        var datasetHint = selectedDatasetName
+            ? ' Linked dataset for this model: ' + selectedDatasetName + '.'
+            : '';
+        showTestingInfo('This model does not have any saved testing result yet.' + datasetHint + ' Select algorithm, model, and dataset, then click Start Testing.');
+    }
+    updateStartButtonState();
+}
+
 function setTestingUiBusy(busy) {
     var btn = document.getElementById('btnStart');
     if (btn) {
@@ -191,6 +272,7 @@ function setTestingUiBusy(busy) {
         options[j].style.pointerEvents = busy ? 'none' : '';
         options[j].style.opacity = busy ? '0.6' : '';
     }
+    updateStartButtonState();
 }
 
 function initAlgorithmModelSelect() {
@@ -211,19 +293,26 @@ function initAlgorithmModelSelect() {
 
         if (found) {
             selectedModelId = found.id || null;
-            selectedDatasetId = found.dataset_id || null;
-            selectedDatasetName = found.dataset_name || null;
+            selectedLatestTesting = found.latest_testing || null;
+            selectedDatasetId =
+                (selectedLatestTesting && selectedLatestTesting.dataset_id) ||
+                found.dataset_id ||
+                null;
+            selectedDatasetName =
+                (selectedLatestTesting && selectedLatestTesting.dataset_name) ||
+                found.dataset_name ||
+                null;
             selectedModelMaxLength = found.max_length || 64;
-            document.getElementById('dsTitle').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
-            document.getElementById('dsSubtitle').textContent = 'Dataset based on the selected model';
-            document.getElementById('dsFile').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
-            document.getElementById('dsImporter').textContent = 'Model Registry';
+            // Do not auto-fill dataset card UI for old models.
+            // Keep dataset reference internally and show it through info messages only.
         } else {
             selectedModelId = null;
             selectedDatasetId = null;
             selectedDatasetName = null;
             selectedModelMaxLength = 64;
+            selectedLatestTesting = null;
         }
+        syncTestingStateForSelection();
     }
 
     function populateModelOptions(algorithmKey) {
@@ -237,6 +326,7 @@ function initAlgorithmModelSelect() {
             modelSelect.appendChild(emptyOption);
             modelSelect.disabled = true;
             showTestingError('No saved model for ' + getAlgorithmDisplayName(algorithmKey) + '. Train and save the model first from Processing.');
+            showTestingInfo('');
         } else {
             models.forEach(function(model) {
                 var option = document.createElement('option');
@@ -248,6 +338,7 @@ function initAlgorithmModelSelect() {
             showTestingError('');
         }
         refreshSelectedModelMeta();
+        updateStartButtonState();
     }
 
     fetch(API_BASE + '/testing/models')
@@ -300,6 +391,7 @@ function initAlgorithmModelSelect() {
                 algorithmSelect.value = preferred;
             }
             populateModelOptions(algorithmSelect.value);
+            updateStartButtonState();
         })
         .catch(function(err) {
             algorithmModelMap = {
@@ -308,14 +400,18 @@ function initAlgorithmModelSelect() {
             algorithmSelect.innerHTML = '<option value="unavailable">Unavailable</option>';
             populateModelOptions('unavailable');
             showTestingError(err.message || 'Failed to load testing model data.');
+            showTestingInfo('');
+            updateStartButtonState();
         });
 
     algorithmSelect.addEventListener('change', function() {
         populateModelOptions(algorithmSelect.value);
+        updateStartButtonState();
     });
 
     modelSelect.addEventListener('change', function() {
         refreshSelectedModelMeta();
+        updateStartButtonState();
     });
 }
 
@@ -432,7 +528,7 @@ function initKataInput() {
         var words = val === '' ? [] : val.split(/\s+/);
         var count = words.length;
 
-        hint.textContent = count + ' / 2 kata';
+        hint.textContent = count + ' / 2 words';
 
         if (count > 2) {
             hint.classList.add('over');
@@ -450,9 +546,9 @@ function initKataInput() {
 
         if (count > 0 && count <= 2) {
             document.getElementById('dsTitle').textContent = '"' + val + '"';
-            document.getElementById('dsSubtitle').textContent = 'Manual kata input';
-            document.getElementById('dsFile').textContent = 'Input langsung';
-            document.getElementById('dsTotal').textContent = count + ' kata';
+            document.getElementById('dsSubtitle').textContent = 'Manual word input';
+            document.getElementById('dsFile').textContent = 'Direct input';
+            document.getElementById('dsTotal').textContent = count + ' words';
             document.getElementById('katVerb').textContent = '0';
             document.getElementById('katNoun').textContent = '0';
             document.getElementById('katAdj').textContent = '0';
@@ -468,7 +564,7 @@ function initKataInput() {
             setStatus('idle');
         } else if (count === 0) {
             document.getElementById('dsTitle').textContent = 'No dataset selected yet';
-            document.getElementById('dsSubtitle').textContent = 'Upload a file or input kata to start';
+            document.getElementById('dsSubtitle').textContent = 'Upload a file or enter words to start';
             document.getElementById('dsFile').textContent = '—';
             document.getElementById('dsTotal').textContent = '—';
             document.getElementById('katVerb').textContent = '0';
@@ -538,8 +634,8 @@ function testKata() {
                     '<div class="kata-result-word">' + word + '</div>' +
                     '<div class="kata-result-arrow">↓</div>' +
                     '<div class="kata-result-translated">' +
-                    '<div>Terjemahan: ...</div>' +
-                    '<div>Jenis kata: ...</div>' +
+                    '<div>Translation: ...</div>' +
+                    '<div>Word class: ...</div>' +
                     '<div>Confidence: ...</div>' +
                     '</div>' +
                     '</div>' +
@@ -585,8 +681,8 @@ function testKata() {
                 var wordTime = ((wordEnd - wordStart) / 1000).toFixed(2);
 
                 item.querySelector('.kata-result-translated').innerHTML =
-                    '<div>Terjemahan: ' + translated + '</div>' +
-                    '<div>Jenis kata: ' + predictedLabel + '</div>' +
+                    '<div>Translation: ' + translated + '</div>' +
+                    '<div>Word class: ' + predictedLabel + '</div>' +
                     '<div>Confidence: ' + confidenceLabel + '</div>';
                 item.querySelector('.kata-result-time').textContent = wordTime + 's';
 
@@ -603,7 +699,7 @@ function testKata() {
                     document.getElementById('krTime').textContent = totalTime + ' seconds';
 
                     btnTest.disabled = false;
-                    btnTest.textContent = 'Test Kata';
+                    btnTest.textContent = 'Test Word';
                     isTestingKata = false;
                 }
             }, delay);
@@ -733,11 +829,11 @@ async function startTesting() {
 
     if (currentMode === 'input') {
         if (!kataVal) {
-            showTestingError('Please input kata first.');
+            showTestingError('Please enter words first.');
             return;
         }
         if (!kataValid) {
-            showTestingError('Kata input cannot exceed 2 kata.');
+            showTestingError('Word input cannot exceed 2 words.');
             return;
         }
     }
@@ -745,6 +841,15 @@ async function startTesting() {
     if (!selectedDatasetId || isNaN(selectedDatasetId)) {
         showTestingError('Dataset was not found for the selected model. Make sure dataset_id in the models table is filled.');
         return;
+    }
+
+    if (selectedLatestTesting) {
+        var proceed = window.confirm(
+            'This model already has a saved testing result. If you run testing again, the previous result will be replaced by the new one. Continue?'
+        );
+        if (!proceed) {
+            return;
+        }
     }
 
     isRunning = true;
@@ -771,7 +876,7 @@ async function startTesting() {
         document.getElementById('sumDataset').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
         document.getElementById('sumKata').textContent = '—';
     } else {
-        document.getElementById('sumDataset').textContent = 'Input Kata';
+        document.getElementById('sumDataset').textContent = 'Word Input';
         document.getElementById('sumKata').textContent = kataVal;
     }
     document.getElementById('sumModel').textContent = modelLabel;
@@ -859,6 +964,18 @@ function finishTesting(result, direction) {
 
     setProgressStep('finish', 100, 'Testing completed.');
     stopProgressElapsedTimer();
+    selectedLatestTesting = {
+        accuracy: Number(result.accuracy || 0),
+        precision_macro: Number(result.precision_macro || 0),
+        recall_macro: Number(result.recall_macro || 0),
+        f1_macro: Number(result.f1_macro || 0),
+        std_deviation: Number(result.std_deviation || 0),
+        weighted_avg: Number(result.weighted_avg || 0),
+        roc_auc: Number(result.roc_auc || 0),
+        mcc: Number(result.mcc || 0),
+        created_at: new Date().toISOString()
+    };
+    showTestingInfo('Testing result saved successfully. If you run testing again, the previous result will be replaced by the new one.');
     setTestingUiBusy(false);
     isRunning = false;
 }
@@ -869,3 +986,4 @@ function finishTesting(result, direction) {
 initUpload();
 initKataInput();
 initAlgorithmModelSelect();
+updateStartButtonState();

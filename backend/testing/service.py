@@ -60,6 +60,69 @@ def get_available_testing_models() -> list[dict]:
         except Exception:
             dataset_name_map = {}
 
+    latest_testing_by_model_dataset: dict[tuple[int, int], dict[str, Any]] = {}
+    model_ids = sorted({int(row.get("id")) for row in models if row.get("id") is not None})
+    testing_dataset_ids: set[int] = set()
+    if model_ids:
+        try:
+            testing_res = (
+                supabase.table("testing_results")
+                .select(
+                    "id,model_id,dataset_id,accuracy,precision_macro,recall_macro,f1_macro,std_deviation,weighted_avg,roc_auc,mcc,created_at"
+                )
+                .in_("model_id", model_ids)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            for row in testing_res.data or []:
+                model_id_raw = row.get("model_id")
+                dataset_id_raw = row.get("dataset_id")
+                if model_id_raw is None or dataset_id_raw is None:
+                    continue
+                dataset_id_int = int(dataset_id_raw)
+                key = (int(model_id_raw), dataset_id_int)
+                if key in latest_testing_by_model_dataset:
+                    continue
+                testing_dataset_ids.add(dataset_id_int)
+                latest_testing_by_model_dataset[key] = {
+                    "id": row.get("id"),
+                    "dataset_id": dataset_id_int,
+                    "accuracy": float(row.get("accuracy") or 0),
+                    "precision_macro": float(row.get("precision_macro") or 0),
+                    "recall_macro": float(row.get("recall_macro") or 0),
+                    "f1_macro": float(row.get("f1_macro") or 0),
+                    "std_deviation": float(row.get("std_deviation") or 0),
+                    "weighted_avg": float(row.get("weighted_avg") or 0),
+                    "roc_auc": float(row.get("roc_auc") or 0),
+                    "mcc": float(row.get("mcc") or 0),
+                    "created_at": row.get("created_at"),
+                }
+        except Exception:
+            latest_testing_by_model_dataset = {}
+
+    all_dataset_ids = sorted(set(dataset_ids) | testing_dataset_ids)
+    if all_dataset_ids:
+        try:
+            ds_all_res = (
+                supabase.table("datasets")
+                .select("id,name,file_name")
+                .in_("id", all_dataset_ids)
+                .execute()
+            )
+            for row in ds_all_res.data or []:
+                ds_id = row.get("id")
+                if ds_id is None:
+                    continue
+                dataset_name_map[int(ds_id)] = (
+                    row.get("name") or row.get("file_name") or f"Dataset {ds_id}"
+                )
+        except Exception:
+            pass
+
+    for summary in latest_testing_by_model_dataset.values():
+        ds_id = summary.get("dataset_id")
+        summary["dataset_name"] = dataset_name_map.get(int(ds_id)) if ds_id is not None else None
+
     items: list[dict] = []
     for row in models:
         model_id = row.get("id")
@@ -84,6 +147,9 @@ def get_available_testing_models() -> list[dict]:
                 "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
                 "max_length": row.get("max_length"),
                 "created_at": row.get("created_at"),
+                "latest_testing": latest_testing_by_model_dataset.get((int(model_id), int(dataset_id)))
+                if dataset_id is not None
+                else None,
             }
         )
 

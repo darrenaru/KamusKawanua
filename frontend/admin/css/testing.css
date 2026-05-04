@@ -274,6 +274,12 @@ body::after {
     color: #991b1b;
 }
 
+.inline-alert.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #92400e;
+}
+
 
 /* CARD */
 

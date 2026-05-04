@@ -59,7 +59,7 @@
                                 </div>
                                 <div class="ds-option" data-mode="input" onclick="switchMode('input')">
                                     <span class="radio-circle"></span>
-                                    <span class="opt-label">Input kata</span>
+                                    <span class="opt-label">Word Input</span>
                                 </div>
                             </div>
 
@@ -75,12 +75,12 @@
                             <!-- Panel Input Kata -->
                             <div class="ds-panel" id="panelInput">
                                 <input type="text" id="inputKata" class="input-text" placeholder="Example: nda pigi torang">
-                                <span class="kata-hint" id="kataHint">0 / 2 kata</span>
+                                <span class="kata-hint" id="kataHint">0 / 2 words</span>
 
-                                <button class="btn-test-kata" id="btnTestKata" onclick="testKata()" disabled>Test kata</button>
+                                <button class="btn-test-kata" id="btnTestKata" onclick="testKata()" disabled>Test Word</button>
 
                                 <div class="kata-result" id="kataResult">
-                                    <div class="kata-result-title">Kata Test Result</div>
+                                    <div class="kata-result-title">Word Test Result</div>
                                     <div class="kata-result-list" id="kataResultList"></div>
                                     <div class="kata-result-divider" id="kataResultDivider" style="display:none"></div>
                                     <div class="kata-result-summary" id="kataResultSummary" style="display:none">
@@ -184,6 +184,7 @@
                         </div>
 
                         <div class="inline-alert error" id="testingError" role="alert" aria-live="polite" style="display:none"></div>
+                        <div class="inline-alert warning" id="testingInfo" role="status" aria-live="polite" style="display:none"></div>
 
                         <div class="progress-container">
                             <div class="progress-bar" id="progressBar"></div>
