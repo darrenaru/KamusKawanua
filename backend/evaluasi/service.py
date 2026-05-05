@@ -1,10 +1,19 @@
+from typing import Any
+
 from backend.supabase_client import supabase
 
-_TESTING_MERGE_FLOAT_FIELDS = (
+# Metrik testing: hanya disematkan di `testing_result` agar tidak menimpa
+# kolom training di baris `models` (train_loss, train_mcc, accuracy, dll.).
+_TESTING_NEST_KEYS = (
+    "accuracy",
+    "precision_macro",
+    "recall_macro",
+    "f1_macro",
     "std_deviation",
     "weighted_avg",
     "roc_auc",
     "mcc",
+    "max_length",
 )
 
 
@@ -129,7 +138,14 @@ def get_best_models_by_algorithm() -> list[dict]:
                 if dataset_id_int is not None
                 else None
             )
-            for fld in ("precision", "recall", "f1_score", "mcc", "roc_auc"):
+            for fld in (
+                "precision",
+                "recall",
+                "f1_score",
+                "train_loss",
+                "train_mcc",
+                "warmup_ratio",
+            ):
                 if merged.get(fld) is not None:
                     try:
                         merged[fld] = float(merged[fld])
@@ -157,18 +173,18 @@ def get_best_models_by_algorithm() -> list[dict]:
         tr = testing_map.get(int(mid))
         if not tr:
             continue
-        nested: dict[str, float] = {}
-        for k in _TESTING_MERGE_FLOAT_FIELDS:
+        nested: dict[str, Any] = {}
+        for k in _TESTING_NEST_KEYS:
             if tr.get(k) is None:
                 continue
             try:
-                nested[k] = float(tr[k])
+                if k == "max_length":
+                    nested[k] = int(tr[k])
+                else:
+                    nested[k] = float(tr[k])
             except Exception:
                 continue
-        if not nested:
-            continue
-        row["testing_result"] = nested
-        for k, v in nested.items():
-            row[k] = v
+        if nested:
+            row["testing_result"] = nested
 
     return items

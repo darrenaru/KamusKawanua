@@ -39,6 +39,49 @@ function escapeHtml(s) {
     return t.innerHTML;
 }
 
+var METRIC_TOOLTIPS = {
+    default:
+        '<strong>Metric info:</strong> Metrics use different scales. Scores that naturally fall in 0-1 are shown as percentages for readability, while error/dispersion values are often kept as decimals.',
+    accuracy:
+        '<strong>Accuracy:</strong> Overall fraction of correct predictions.<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is a proportion, so percentage is easier to read quickly.',
+    precision:
+        '<strong>Precision:</strong> Of all predicted positive cases, how many are truly positive.<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is a proportion/ratio.',
+    recall:
+        '<strong>Recall:</strong> Of all actual positive cases, how many are correctly found by the model.<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is a proportion/ratio.',
+    f1_score:
+        '<strong>F1-Score (F1 = harmonic mean of Precision and Recall):</strong> Balances precision and recall into one score.<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is derived from ratio-based metrics.',
+    macro_avg:
+        '<strong>Macro avg (F1):</strong> Unweighted average of per-class F1 values (each class contributes equally).<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is still an F1-type proportion.',
+    weighted_avg:
+        '<strong>Weighted F1:</strong> Average F1 weighted by class support (class sample count).<br><strong>Range:</strong> 0 to 1 (displayed here as 0% to 100%).<br><strong>Why %:</strong> It is a weighted proportion-based score.',
+    std_deviation:
+        '<strong>Std dev (F1/class):</strong> Standard deviation of class-wise F1 values (how spread out class performance is).<br><strong>Range:</strong> 0 and above (no fixed upper bound).<br><strong>Why decimal:</strong> It is a dispersion magnitude, not a direct success ratio.',
+    train_loss:
+        '<strong>Loss (avg.):</strong> Average training objective value (model error signal used by optimizer).<br><strong>Range:</strong> Usually 0 and above for common losses (exact scale depends on loss function/setup).<br><strong>Why decimal:</strong> Loss is an optimization value, not a probability or ratio.',
+    mcc:
+        '<strong>MCC (Matthews Correlation Coefficient):</strong> Correlation-style score between predictions and true labels, robust under class imbalance.<br><strong>Range:</strong> -1 to 1 (here shown as -100% to 100%).<br><strong>Interpretation:</strong> 1 = perfect, 0 = random-like, -1 = total disagreement.<br><strong>Why % on this page:</strong> The dashboard rescales the native -1..1 value for easier visual comparison.',
+    roc_auc:
+        '<strong>ROC-AUC (Receiver Operating Characteristic - Area Under the Curve):</strong> Measures class-separation ability across all thresholds.<br><strong>Range:</strong> 0 to 1 (typically displayed here as 0% to 100%).<br><strong>Interpretation:</strong> 0.5 is random baseline; closer to 1 is better.<br><strong>Why %:</strong> It is naturally a bounded 0-1 score.',
+};
+
+function renderMetricLabelWithTooltip(label, tooltipKey) {
+    var tooltip = METRIC_TOOLTIPS[tooltipKey] || METRIC_TOOLTIPS.default;
+    return (
+        '<span class="metric-label-with-help">' +
+        '<span>' +
+        escapeHtml(label) +
+        '</span>' +
+        '<span class="metric-help-icon" tabindex="0" aria-label="Info about ' +
+        escapeHtml(label) +
+        '">i' +
+        '<span class="metric-help-tooltip">' +
+        tooltip +
+        '</span>' +
+        '</span>' +
+        '</span>'
+    );
+}
+
 function emDashSpan() {
     return '<span class="metric-value empty">\u2014</span>';
 }
@@ -284,13 +327,15 @@ function cellRocAuc(byAlgo, hiIdx, cols) {
     return html;
 }
 
-function cellMcc(byAlgo, hiIdx, cols) {
+function cellMcc(byAlgo, hiIdx, cols, field) {
+    field = field || 'mcc';
     var html = '';
     for (var j = 0; j < cols.length; j++) {
         var key = cols[j];
         var m = byAlgo[key];
         var cls = TRANSFORMER_KEYS.indexOf(key) >= 0 ? 'cell-tf' : 'cell-cl';
-        var disp = m ? formatMccDisplay(m.mcc) : null;
+        var raw = m && m[field] !== undefined && m[field] !== null ? m[field] : null;
+        var disp = raw != null ? formatMccDisplay(raw) : null;
         var hl = j === hiIdx && hiIdx >= 0;
         if (disp == null) {
             html += '<td class="' + cls + '">' + emDashSpan() + '</td>';
@@ -319,13 +364,6 @@ function rowAllDash(cols) {
 }
 
 function renderEvaluationTheads(cols) {
-    var tfCount = cols.filter(function (k) {
-        return TRANSFORMER_KEYS.indexOf(k) >= 0;
-    }).length;
-    var clCount = cols.filter(function (k) {
-        return CLASSIC_KEYS.indexOf(k) >= 0;
-    }).length;
-
     var splitHead = document.getElementById('split-ratio-thead');
     if (splitHead) {
         var hSplit =
@@ -342,41 +380,39 @@ function renderEvaluationTheads(cols) {
     var compHead = document.getElementById('comparative-thead');
     if (!compHead) return;
 
-    var row1 =
-        '<tr><th style="text-align:left; padding-left:24px;">Metric</th>' +
-        (tfCount
-            ? '<th class="th-tf" colspan="' +
-              tfCount +
-              '">Transformer-Based Models</th>'
-            : '') +
-        (clCount
-            ? '<th class="th-cl" colspan="' +
-              clCount +
-              '">Classic Models</th>'
-            : '') +
-        '</tr>';
-
-    var row2 =
-        '<tr><th style="text-align:left; padding-left:24px;"></th>' +
+    /* Dua baris: per algoritma colspan 2, subkolom Train | Test (dibandingkan berdampingan). */
+    var rowAlgo =
+        '<tr><th rowspan="2" class="th-metric-corner">Metric</th>' +
         cols
             .map(function (k) {
                 var thClass = TRANSFORMER_KEYS.indexOf(k) >= 0 ? 'th-tf' : 'th-cl';
                 return (
                     '<th class="' +
                     thClass +
-                    '">' +
+                    ' th-algo-pair" colspan="2">' +
                     escapeHtml(String(ALGO_LABELS[k] || k).toUpperCase()) +
                     '</th>'
                 );
             })
             .join('') +
         '</tr>';
+    var rowSub =
+        '<tr>' +
+        cols
+            .map(function (k) {
+                var thClass = TRANSFORMER_KEYS.indexOf(k) >= 0 ? 'th-tf' : 'th-cl';
+                return (
+                    '<th class="' +
+                    thClass +
+                    ' th-sub-comp" title="Training (processing)">Tr</th><th class="' +
+                    thClass +
+                    ' th-sub-comp th-sub-test" title="Testing (testing module)">Te</th>'
+                );
+            })
+            .join('') +
+        '</tr>';
 
-    compHead.innerHTML = row1 + row2;
-}
-
-function colspanForCategoryRow(cols) {
-    return 1 + cols.length;
+    compHead.innerHTML = rowAlgo + rowSub;
 }
 
 function renderSplitRatioTable(byAlgo, cols) {
@@ -396,54 +432,233 @@ function renderSplitRatioTable(byAlgo, cols) {
     tbody.innerHTML = tr;
 }
 
+/** Satu baris per algoritma: metrik dari `testing_result` (modul testing), tanpa menimpa field training. */
+function buildTestingByAlgo(byAlgo, cols) {
+    var out = {};
+    for (var i = 0; i < cols.length; i++) {
+        var k = cols[i];
+        var m = byAlgo[k];
+        var tr = m && m.testing_result;
+        if (!tr) continue;
+        out[k] = {
+            accuracy: tr.accuracy,
+            precision: tr.precision_macro,
+            recall: tr.recall_macro,
+            f1_score: tr.f1_macro,
+            std_deviation: tr.std_deviation,
+            weighted_avg: tr.weighted_avg,
+            roc_auc: tr.roc_auc,
+            mcc: tr.mcc,
+        };
+    }
+    return out;
+}
+
+/** Tampilan satu sel untuk kind: percent | float2 | float4 | mcc | roc | std */
+function valueDisplayForKind(m, field, kind) {
+    if (!m) return null;
+    if (kind === 'roc') {
+        return formatRocAucDisplay(m.roc_auc);
+    }
+    if (field == null) return null;
+    if (m[field] === undefined || m[field] === '') return null;
+    if (kind === 'percent') return formatPercentDisplay(m[field]);
+    var n = Number(m[field]);
+    if (!Number.isFinite(n)) return null;
+    if (kind === 'float2') return n.toFixed(2);
+    if (kind === 'float4') return n.toFixed(4);
+    if (kind === 'mcc') return formatMccDisplay(m[field]);
+    if (kind === 'std') return n.toFixed(2);
+    return null;
+}
+
+function rowHasPairedField(byAlgo, byTest, cols, fieldTrain, fieldTest) {
+    if (fieldTrain && rowHasFieldData(byAlgo, cols, fieldTrain)) return true;
+    if (fieldTest && rowHasFieldData(byTest, cols, fieldTest)) return true;
+    return false;
+}
+
+function bestIdxForKind(map, cols, field, kind, mode) {
+    if (!map || !field) return -1;
+    mode = mode || 'max';
+    if (kind === 'roc') return bestIndexRawField(map, cols, 'roc_auc', 'max');
+    if (kind === 'mcc') return bestIndexRawField(map, cols, field, 'max');
+    if (kind === 'std') return bestIndexRawField(map, cols, 'std_deviation', 'min');
+    if (kind === 'float4') return bestIndexRawField(map, cols, field, 'min');
+    if (kind === 'percent' || kind === 'float2') {
+        if (field === 'train_loss') return bestIndexRawField(map, cols, 'train_loss', 'min');
+        return bestIndexForRow(map, field, cols, mode);
+    }
+    return -1;
+}
+
 function renderComparativeTable(byAlgo, cols) {
     var tbody = document.getElementById('comparative-tbody');
     if (!tbody) return;
 
-    var cp = colspanForCategoryRow(cols);
+    var byTest = buildTestingByAlgo(byAlgo, cols);
     var html = '';
 
-    function addClassificationRow(label, field, kind, bestMode) {
-        if (!rowHasFieldData(byAlgo, cols, field)) return;
-        bestMode = bestMode || 'max';
-        var hi =
-            kind === 'roc'
-                ? bestIndexRawField(byAlgo, cols, 'roc_auc', 'max')
-                : kind === 'mcc'
-                  ? bestIndexRawField(byAlgo, cols, 'mcc', 'max')
-                  : kind === 'std'
-                    ? bestIndexRawField(byAlgo, cols, 'std_deviation', 'min')
-                    : bestIndexForRow(byAlgo, field, cols, 'max');
+    var defs = [
+        {
+            label: 'Accuracy',
+            tooltipKey: 'accuracy',
+            fieldTrain: 'accuracy',
+            fieldTest: 'accuracy',
+            kindTrain: 'percent',
+            kindTest: 'percent',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'Precision',
+            tooltipKey: 'precision',
+            fieldTrain: 'precision',
+            fieldTest: 'precision',
+            kindTrain: 'percent',
+            kindTest: 'percent',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'Recall',
+            tooltipKey: 'recall',
+            fieldTrain: 'recall',
+            fieldTest: 'recall',
+            kindTrain: 'percent',
+            kindTest: 'percent',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'F1-Score',
+            tooltipKey: 'f1_score',
+            fieldTrain: 'f1_score',
+            fieldTest: 'f1_score',
+            kindTrain: 'percent',
+            kindTest: 'percent',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'Macro avg (F1)',
+            tooltipKey: 'macro_avg',
+            fieldTrain: 'macro_avg',
+            fieldTest: null,
+            kindTrain: 'percent',
+            kindTest: null,
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'Weighted F1',
+            tooltipKey: 'weighted_avg',
+            fieldTrain: null,
+            fieldTest: 'weighted_avg',
+            kindTrain: null,
+            kindTest: 'percent',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'Std dev (F1/class)',
+            tooltipKey: 'std_deviation',
+            fieldTrain: null,
+            fieldTest: 'std_deviation',
+            kindTrain: null,
+            kindTest: 'std',
+            modeTrain: 'max',
+            modeTest: 'min',
+        },
+        {
+            label: 'Loss (avg.)',
+            tooltipKey: 'train_loss',
+            fieldTrain: 'train_loss',
+            fieldTest: null,
+            kindTrain: 'float4',
+            kindTest: null,
+            modeTrain: 'min',
+            modeTest: 'max',
+        },
+        {
+            label: 'MCC',
+            tooltipKey: 'mcc',
+            fieldTrain: 'train_mcc',
+            fieldTest: 'mcc',
+            kindTrain: 'mcc',
+            kindTest: 'mcc',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+        {
+            label: 'ROC-AUC',
+            tooltipKey: 'roc_auc',
+            fieldTrain: null,
+            fieldTest: 'roc_auc',
+            kindTrain: null,
+            kindTest: 'roc',
+            modeTrain: 'max',
+            modeTest: 'max',
+        },
+    ];
 
-        html += '<tr><td class="metric-name">' + escapeHtml(label) + '</td>';
-        if (kind === 'percent') {
-            html += cellPercent(byAlgo, field, hi, cols);
-        } else if (kind === 'float') {
-            html += cellFloat(byAlgo, field, 2, hi, cols);
-        } else if (kind === 'roc') {
-            html += cellRocAuc(byAlgo, hi, cols);
-        } else if (kind === 'mcc') {
-            html += cellMcc(byAlgo, hi, cols);
-        } else if (kind === 'std') {
-            html += cellFloat(byAlgo, 'std_deviation', 2, hi, cols);
+    for (var r = 0; r < defs.length; r++) {
+        var d = defs[r];
+        if (!rowHasPairedField(byAlgo, byTest, cols, d.fieldTrain, d.fieldTest)) continue;
+
+        var hiTr =
+            d.fieldTrain != null
+                ? bestIdxForKind(byAlgo, cols, d.fieldTrain, d.kindTrain, d.modeTrain)
+                : -1;
+        var hiTe =
+            d.fieldTest != null
+                ? bestIdxForKind(byTest, cols, d.fieldTest, d.kindTest, d.modeTest)
+                : -1;
+
+        html +=
+            '<tr><td class="metric-name">' +
+            renderMetricLabelWithTooltip(d.label, d.tooltipKey) +
+            '</td>';
+
+        for (var j = 0; j < cols.length; j++) {
+            var key = cols[j];
+            var baseCls = TRANSFORMER_KEYS.indexOf(key) >= 0 ? 'cell-tf' : 'cell-cl';
+
+            var mTr = d.fieldTrain ? byAlgo[key] : null;
+            var mTe = d.fieldTest ? byTest[key] : null;
+            var dispTr = valueDisplayForKind(mTr, d.fieldTrain, d.kindTrain);
+            var dispTe = valueDisplayForKind(mTe, d.fieldTest, d.kindTest);
+
+            var hlTr = d.fieldTrain && j === hiTr && hiTr >= 0;
+            var hlTe = d.fieldTest && j === hiTe && hiTe >= 0;
+
+            if (dispTr == null) {
+                html += '<td class="' + baseCls + ' cell-pair-train">' + emDashSpan() + '</td>';
+            } else {
+                html +=
+                    '<td class="' +
+                    baseCls +
+                    ' cell-pair-train"><span class="metric-value' +
+                    (hlTr ? ' hl' : '') +
+                    '">' +
+                    escapeHtml(dispTr) +
+                    '</span></td>';
+            }
+            if (dispTe == null) {
+                html += '<td class="' + baseCls + ' cell-pair-test">' + emDashSpan() + '</td>';
+            } else {
+                html +=
+                    '<td class="' +
+                    baseCls +
+                    ' cell-pair-test"><span class="metric-value' +
+                    (hlTe ? ' hl' : '') +
+                    '">' +
+                    escapeHtml(dispTe) +
+                    '</span></td>';
+            }
         }
         html += '</tr>';
     }
-
-    html +=
-        '<tr class="cat-row"><td colspan="' +
-        cp +
-        '">Classification Metrics</td></tr>';
-
-    addClassificationRow('Accuracy', 'accuracy', 'percent');
-    addClassificationRow('Precision', 'precision', 'percent');
-    addClassificationRow('Recall', 'recall', 'percent');
-    addClassificationRow('F1-Score', 'f1_score', 'percent');
-    addClassificationRow('Macro average', 'macro_avg', 'percent');
-    addClassificationRow('Weighted average (F1)', 'weighted_avg', 'percent');
-    addClassificationRow('Std deviation (F1 per class)', 'std_deviation', 'std');
-    addClassificationRow('MCC', 'mcc', 'mcc');
-    addClassificationRow('ROC-AUC', 'roc_auc', 'roc');
 
     tbody.innerHTML = html;
 }

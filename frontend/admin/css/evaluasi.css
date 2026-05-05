@@ -322,8 +322,72 @@ body::after {
    COMPARATIVE TABLE
 ========================= */
 
+.comp-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.comp-table .th-metric-corner {
+    text-align: left !important;
+    padding: 8px 10px 8px 16px !important;
+    font-weight: 600;
+    font-size: 11px;
+    vertical-align: middle;
+    width: 17%;
+    max-width: 200px;
+    box-sizing: border-box;
+}
+
+.comp-table .th-algo-pair {
+    text-align: center !important;
+    padding: 6px 2px !important;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.comp-table .th-sub-comp {
+    text-align: center !important;
+    padding: 4px 2px !important;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.comp-table .th-sub-test {
+    border-left: 1px dashed var(--border-light);
+}
+
+.comp-table .cell-pair-train {
+    border-right: 1px dashed var(--border-light);
+}
+
+.comp-table .metric-name {
+    padding: 6px 10px 6px 16px !important;
+    font-size: 11.5px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+.comp-table .cell-tf,
+.comp-table .cell-cl {
+    min-width: 0;
+    padding: 5px 3px !important;
+    font-size: 11px;
+    box-sizing: border-box;
+}
+
+.comp-table .metric-value {
+    font-size: 11px;
+}
+
 /* =========================
-   COMPARATIVE TABLE
+   COMPARATIVE TABLE (headers)
 ========================= */
 
 .comp-table .th-tf {
@@ -364,6 +428,60 @@ body::after {
     font-weight: 500;
     color: var(--text-primary);
     font-size: 12.5px;
+}
+
+.metric-label-with-help {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.metric-help-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: #d7ccbd;
+    color: #2c1f0e;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+}
+
+.metric-help-tooltip {
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: min(320px, 78vw);
+    background: #2b241c;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    z-index: 40;
+    pointer-events: none;
+}
+
+.metric-help-tooltip strong {
+    color: #ffdca9;
+}
+
+.metric-help-icon:hover .metric-help-tooltip,
+.metric-help-icon:focus-within .metric-help-tooltip {
+    opacity: 1;
+    visibility: visible;
 }
 
 .cell-tf {

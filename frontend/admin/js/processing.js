@@ -1054,6 +1054,12 @@
     list.innerHTML = data
       .map((m) => {
         const modelName = m.nama_model || `Model_${m.id}`;
+        const warmupForUi =
+          m.warmup_ratio != null && m.warmup_ratio !== ""
+            ? m.warmup_ratio
+            : m.warmup != null && m.warmup !== ""
+              ? m.warmup
+              : "";
         return `
           <li
             data-algo="${m.algoritma || ""}"
@@ -1066,7 +1072,7 @@
             data-optimizer="${m.optimizer || ""}"
             data-weight-decay="${m.weight_decay || ""}"
             data-scheduler="${m.scheduler || ""}"
-            data-warmup="${m.warmup || ""}"
+            data-warmup="${warmupForUi}"
             data-dropout="${m.dropout || ""}"
             data-early-stopping="${m.early_stopping || ""}"
             data-grad-accum="${m.gradient_accumulation || ""}"
@@ -1994,11 +2000,11 @@
     setModelSelectionStatus("Old model selection was cancelled.", "warning");
   };
 
-  document.addEventListener("click", function (e) {
+  document.addEventListener("click", async function (e) {
     if (e.target.id === "btn-mulai-cari") {
-      startTraining("cari-rasio");
+      await startTraining("cari-rasio");
     } else if (e.target.id === "btn-mulai-training") {
-      startTraining("training-final");
+      await startTraining("training-final");
     }
   });
 
@@ -2074,21 +2080,63 @@
     return card;
   }
 
-  function startTraining(mode) {
+  async function hydrateBestParamsForCurrentContext() {
+    // 1) Coba ambil dari localStorage context store (paling cepat).
+    try {
+      applyRatioSearchContextState({ rerenderParams: false });
+    } catch (e) {
+      // ignore
+    }
+    if (globalBestParams) return true;
+
+    // 2) Fallback: kalau pernah tersimpan di Supabase (mode cari-rasio), ambil best (f1 tertinggi).
+    if (!supabaseClient) return false;
+    if (!currentAlgo || !selectedDatasetId) return false;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from("models")
+        .select(
+          "split_ratio,learning_rate,epoch,batch_size,max_length,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,mode",
+        )
+        .eq("algoritma", currentAlgo)
+        .eq("dataset_id", selectedDatasetId)
+        .eq("mode", "cari-rasio")
+        .order("f1_score", { ascending: false })
+        .limit(1);
+
+      if (error) return false;
+      const best = (data || [])[0];
+      if (!best || !best.split_ratio) return false;
+
+      globalBestParams = {
+        algo: currentAlgo,
+        splitRatio: best.split_ratio,
+        lr: best.learning_rate,
+        epoch: best.epoch,
+        batchSize: best.batch_size,
+        maxLength: best.max_length,
+        optimizer: best.optimizer,
+        weightDecay: best.weight_decay,
+        scheduler: best.scheduler,
+        warmup: best.warmup_ratio,
+        dropout: best.dropout,
+        earlyStopping: best.early_stopping,
+        gradAccum: best.gradient_accumulation,
+        avgF1: Number(best.f1_score) || 0,
+        avgAccuracy: Number(best.accuracy) || 0,
+      };
+      persistRatioSearchContextState();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function startTraining(mode) {
     const modelCard = document.getElementById("model-card");
     const modelSelected =
       modelCard && modelCard.style.display === "flex";
-
-    if (
-      mode === "training-final" &&
-      !globalBestParams &&
-      !modelSelected
-    ) {
-      showToast(
-        "Please run Find the Best Ratio first, or select an old model (Select Old Model) to reuse its split and hyperparameters.",
-      );
-      return;
-    }
 
     const splitSelect = document.getElementById("split-ratio-select");
     const splitRatio = splitSelect?.value;
@@ -2101,6 +2149,18 @@
     if (!currentAlgo) {
       showToast("Please select an algorithm first.");
       return;
+    }
+
+    // Pastikan state best ratio yang pernah dicari (localStorage/Supabase) ter-load,
+    // supaya final training tidak salah ter-restrict.
+    if (mode === "training-final" && !globalBestParams && !modelSelected) {
+      await hydrateBestParamsForCurrentContext();
+      if (!globalBestParams && !modelSelected) {
+        showToast(
+          "Please run Find the Best Ratio first, or select an old model (Select Old Model) to reuse its split and hyperparameters.",
+        );
+        return;
+      }
     }
 
     // Find Best Ratio hanya butuh 4 parameter inti untuk perbandingan metrics.
@@ -2196,7 +2256,7 @@
     simulateTrainingInCard(card, mode, params);
   }
 
-  function resetProgressLog(card, initialMessage = "Menunggu proses...") {
+  function resetProgressLog(card, initialMessage = "Waiting for process...") {
     const logList = card.querySelector(".progress-log-list");
     if (!logList) return;
     logList.innerHTML = "";
@@ -2208,7 +2268,7 @@
     if (!logList) return;
     const item = document.createElement("li");
     item.className = `progress-log-item log-${level}`;
-    const now = new Date().toLocaleTimeString("id-ID", {
+    const now = new Date().toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -3179,19 +3239,38 @@
       precision = 0,
       recall = 0,
       f1 = 0;
+    let trainLoss = null;
+    let trainMcc = null;
 
     if (avgMetrics) {
       accuracy = Number(avgMetrics.accuracy) || 0;
       precision = Number(avgMetrics.precision) || 0;
       recall = Number(avgMetrics.recall) || 0;
       f1 = Number(avgMetrics.f1) || 0;
+      if (avgMetrics.loss != null && Number.isFinite(Number(avgMetrics.loss))) {
+        trainLoss = Number(avgMetrics.loss);
+      }
+      if (avgMetrics.mcc != null && Number.isFinite(Number(avgMetrics.mcc))) {
+        trainMcc = Number(avgMetrics.mcc);
+      }
     } else if (lastRow) {
       // Fallback jika average belum tersedia.
       accuracy = parseFloat(lastRow.cells[1]?.innerText) || 0;
       precision = parseFloat(lastRow.cells[2]?.innerText) || 0;
       recall = parseFloat(lastRow.cells[3]?.innerText) || 0;
       f1 = parseFloat(lastRow.cells[4]?.innerText) || 0;
+      const lossCell = parseFloat(lastRow.cells[5]?.innerText);
+      const mccCell = parseFloat(lastRow.cells[6]?.innerText);
+      if (Number.isFinite(lossCell)) trainLoss = lossCell;
+      if (Number.isFinite(mccCell)) trainMcc = mccCell;
     }
+
+    const warmupRatioParsed = (() => {
+      const w = params.warmup;
+      if (w === undefined || w === null || String(w).trim() === "") return null;
+      const n = parseFloat(String(w).replace(",", "."));
+      return Number.isFinite(n) ? n : null;
+    })();
 
     const modelData = {
       nama_model: modelName,
@@ -3207,6 +3286,7 @@
       optimizer: params.optimizer || null,
       weight_decay: params.weightDecay || null,
       scheduler: params.scheduler || null,
+      warmup_ratio: warmupRatioParsed,
       dropout: params.dropout || null,
       early_stopping: params.earlyStopping || null,
       gradient_accumulation: params.gradAccum || null,
@@ -3214,6 +3294,8 @@
       precision: precision,
       recall: recall,
       f1_score: f1,
+      train_loss: trainLoss,
+      train_mcc: trainMcc,
       created_at: new Date().toISOString(),
     };
 
@@ -3235,10 +3317,13 @@
             dataset_id: modelData.dataset_id,
             split_ratio: modelData.split_ratio,
             max_length: modelData.max_length,
+            warmup_ratio: modelData.warmup_ratio,
             accuracy: modelData.accuracy,
             precision: modelData.precision,
             recall: modelData.recall,
             f1_score: modelData.f1_score,
+            train_loss: modelData.train_loss,
+            train_mcc: modelData.train_mcc,
             created_at: modelData.created_at,
           };
 

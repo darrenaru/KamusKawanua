@@ -70,42 +70,83 @@ function escapeHtml(s) {
     return t.innerHTML;
 }
 
-/** Tooltip i: konsensus + tiap algoritma + banding entri kamus */
+function formatWordTypeLabel(raw) {
+    const v = String(raw || "")
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, " ");
+    const map = {
+        "kata kerja": "Verb / Kata kerja",
+        kerja: "Verb / Kata kerja",
+        verb: "Verb / Kata kerja",
+        "kata benda": "Noun / Kata benda",
+        benda: "Noun / Kata benda",
+        noun: "Noun / Kata benda",
+        "kata sifat": "Adjective / Kata sifat",
+        sifat: "Adjective / Kata sifat",
+        adjective: "Adjective / Kata sifat",
+    };
+    return map[v] || String(raw || "");
+}
+
+function canonicalWordType(raw) {
+    const v = String(raw || "")
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, " ");
+    if (v === "kata kerja" || v === "kerja" || v === "verb") return "verb";
+    if (v === "kata benda" || v === "benda" || v === "noun") return "noun";
+    if (v === "kata sifat" || v === "sifat" || v === "adjective") return "adjective";
+    return v;
+}
+
+/** Info tooltip: consensus + per-algorithm details + dictionary entry check */
 function buildConsensusTooltipHtml(data, item) {
     const mc = data.model_consensus;
+    const analyses = Array.isArray(data.model_analyses) ? data.model_analyses : [];
+    const analysisByAlgo = {};
+    analyses.forEach((a) => {
+        const k = String(a?.algorithm || "").toLowerCase().trim();
+        if (!k || analysisByAlgo[k]) return;
+        analysisByAlgo[k] = a;
+    });
     let html =
-        '<strong>Perbandingan algoritma</strong><br/><span class="tooltip-muted">Prediksi jenis untuk kata yang Anda cari.</span><br/><br/>';
+        '<strong>Algorithm comparison</strong><br/><span class="tooltip-muted">Part-of-speech predictions for your query.</span><br/><br/>';
 
     if (!mc || !mc.per_algorithm || mc.per_algorithm.length === 0) {
-        html += "Tidak ada data model.";
+        html += "No model data available.";
         return html;
     }
 
     if (mc.consensus_label && mc.total_with_prediction > 0) {
-        html += `<strong>Konsensus mayoritas:</strong> ${escapeHtml(mc.consensus_label)} (${escapeHtml(String(mc.majority_count))}/${escapeHtml(String(mc.total_with_prediction))} algoritma sepakat)<br/><br/>`;
+        html += `<strong>Majority consensus:</strong> ${escapeHtml(formatWordTypeLabel(mc.consensus_label))} (${escapeHtml(String(mc.majority_count))}/${escapeHtml(String(mc.total_with_prediction))} algorithms agree)<br/><br/>`;
     } else {
-        html += "<strong>Konsensus mayoritas:</strong> tidak terbentuk.<br/><br/>";
+        html += "<strong>Majority consensus:</strong> not formed.<br/><br/>";
     }
 
-    html += "<strong>Tiap algoritma:</strong><br/>";
+    html += "<strong>Per algorithm:</strong><br/>";
     for (const p of mc.per_algorithm) {
         const name = escapeHtml(p.display_name || p.algorithm || "");
+        const algoKey = String(p.algorithm || "").toLowerCase().trim();
+        const detail = analysisByAlgo[algoKey] || {};
+        const modelName = detail.model_name ? escapeHtml(String(detail.model_name)) : "-";
+        const modelMeta = ` | model: ${modelName}`;
         if (p.role === "unavailable") {
             const det = p.detail ? escapeHtml(String(p.detail).slice(0, 140)) : "";
-            html += `- ${name}: <em>tidak tersedia</em>${det ? " &ndash; " + det : ""}<br/>`;
+            html += `- ${name}: <em>unavailable</em>${modelMeta}${det ? " &ndash; " + det : ""}<br/>`;
         } else if (p.role === "no_prediction") {
-            html += `- ${name}: tidak ada prediksi<br/>`;
+            html += `- ${name}: no prediction${modelMeta}<br/>`;
         } else {
-            const lab = escapeHtml(p.label || "");
+            const lab = escapeHtml(formatWordTypeLabel(p.label || ""));
             const ok = p.matches_consensus;
             const tag = ok
-                ? '<strong class="tag-ok">sepakat</strong>'
-                : '<strong class="tag-no">tidak sepakat</strong>';
+                ? '<strong class="tag-ok">agrees</strong>'
+                : '<strong class="tag-no">disagrees</strong>';
             const conf =
                 p.confidence != null && Number.isFinite(Number(p.confidence))
                     ? ` (${(Number(p.confidence) * 100).toFixed(0)}%)`
                     : "";
-            html += `- ${name}: ${lab}${conf} &ndash; ${tag} dengan mayoritas<br/>`;
+            html += `- ${name}: ${lab}${conf} &ndash; ${tag} with majority${modelMeta}<br/>`;
         }
     }
 
@@ -117,12 +158,11 @@ function buildConsensusTooltipHtml(data, item) {
             : "";
     if (rawJenis) {
         html +=
-            "<br/><strong>Jenis di entri kamus ini:</strong> " + escapeHtml(rawJenis);
+            "<br/><strong>Type in this dictionary entry:</strong> " + escapeHtml(formatWordTypeLabel(rawJenis));
         if (mc.consensus_label) {
             const same =
-                rawJenis.toLowerCase() ===
-                String(mc.consensus_label).toLowerCase().trim();
-            html += `<br/><em>${same ? "Sesuai konsensus mayoritas." : "Berbeda dari konsensus mayoritas."}</em>`;
+                canonicalWordType(rawJenis) === canonicalWordType(mc.consensus_label);
+            html += `<br/><em>${same ? "Matches the majority consensus." : "Differs from the majority consensus."}</em>`;
         }
     }
 
@@ -138,15 +178,15 @@ function buildConsensusStripHtml(data) {
     if (!mc.consensus_label || !mc.total_with_prediction) {
         return `
         <div class="model-consensus-strip">
-          <p class="consensus-banner muted">Prediksi model: konsensus belum terbentuk (cek apakah checkpoint ada di folder trained_models).</p>
+          <p class="consensus-banner muted">Model prediction: consensus is not formed yet (check whether checkpoints exist in the trained_models folder).</p>
         </div>`;
     }
     return `
         <div class="model-consensus-strip">
           <p class="consensus-banner">
-            <strong>Jenis mayoritas (kata yang dicari):</strong>
-            ${escapeHtml(mc.consensus_label)}
-            <span class="consensus-meta">(${escapeHtml(String(mc.majority_count))}/${escapeHtml(String(mc.total_with_prediction))} algoritma sepakat)</span>
+            <strong>Majority type (searched word):</strong>
+            ${escapeHtml(formatWordTypeLabel(mc.consensus_label))}
+            <span class="consensus-meta">(${escapeHtml(String(mc.majority_count))}/${escapeHtml(String(mc.total_with_prediction))} algorithms agree)</span>
           </p>
         </div>`;
 }
@@ -163,7 +203,7 @@ function displayResults(data) {
     if (!data.results || data.results.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-results-msg";
-        empty.textContent = "Tidak ditemukan";
+        empty.textContent = "No results found";
         container.appendChild(empty);
         return;
     }
@@ -184,7 +224,7 @@ function displayResults(data) {
             <div class="result-card-heading">
               <h3 class="result-word-title">${item.manado}</h3>
               <span class="label-with-help label-with-help--inline">
-                <span class="param-help-icon" tabindex="0" aria-label="Rincian prediksi per algoritma">i
+                <span class="param-help-icon" tabindex="0" aria-label="Per-algorithm prediction details">i
                   <span class="param-help-tooltip param-help-tooltip--wide">${tooltipInner}</span>
                 </span>
               </span>

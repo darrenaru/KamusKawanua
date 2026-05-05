@@ -27,13 +27,20 @@ def get_available_testing_models() -> list[dict]:
     try:
         models_res = (
             supabase.table("models")
-            .select("id,nama_model,algoritma,dataset_id,max_length,created_at")
+            .select("id,nama_model,algoritma,mode,dataset_id,max_length,created_at")
             .order("created_at", desc=True)
             .execute()
         )
-        models = models_res.data or []
+        raw_models = models_res.data or []
     except Exception as e:
         raise ValueError(f"Failed to fetch model data: {e}")
+
+    def is_final_training_mode(value: Any) -> bool:
+        mode = str(value or "").strip().lower().replace("_", "-")
+        return mode in {"training-final", "final-training", "final"}
+
+    # Testing dropdown must only list final-training models.
+    models = [row for row in raw_models if is_final_training_mode(row.get("mode"))]
 
     dataset_ids = sorted(
         {
