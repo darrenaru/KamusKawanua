@@ -17,6 +17,11 @@ _TESTING_NEST_KEYS = (
 )
 
 
+def _is_final_training_mode(value: Any) -> bool:
+    mode = str(value or "").strip().lower().replace("_", "-")
+    return mode in {"training-final", "final-training", "final"}
+
+
 def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
     """Ambil baris testing_results terbaru per model_id (untuk metrik uji coba)."""
     if not model_ids:
@@ -105,6 +110,9 @@ def get_best_models_by_algorithm() -> list[dict]:
         except Exception:
             dataset_name_map = {}
 
+    # Evaluasi hanya menggunakan model final-training.
+    rows = [row for row in rows if _is_final_training_mode(row.get("mode"))]
+
     best_by_algorithm: dict[str, dict] = {}
     for row in rows:
         algorithm = str(row.get("algoritma") or "").strip()
@@ -188,3 +196,108 @@ def get_best_models_by_algorithm() -> list[dict]:
             row["testing_result"] = nested
 
     return items
+
+
+def get_models_metrics() -> list[dict]:
+    """Return all models with normalized algorithm key, dataset name, and latest testing_result."""
+    try:
+        res = (
+            supabase.table("models")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = [row for row in list(res.data or []) if _is_final_training_mode(row.get("mode"))]
+    except Exception as e:
+        raise ValueError(f"Failed to fetch model metrics data: {e}")
+
+    dataset_ids = sorted(
+        {
+            int(row.get("dataset_id"))
+            for row in rows
+            if row.get("dataset_id") is not None
+        }
+    )
+    dataset_name_map: dict[int, str] = {}
+    if dataset_ids:
+        try:
+            dataset_res = (
+                supabase.table("datasets")
+                .select("id,name,file_name")
+                .in_("id", dataset_ids)
+                .execute()
+            )
+            for row in dataset_res.data or []:
+                ds_id = row.get("id")
+                if ds_id is None:
+                    continue
+                dataset_name_map[int(ds_id)] = (
+                    row.get("name")
+                    or row.get("file_name")
+                    or f"Dataset {ds_id}"
+                )
+        except Exception:
+            dataset_name_map = {}
+
+    model_ids = [int(r["id"]) for r in rows if r.get("id") is not None]
+    testing_map = _fetch_latest_testing_by_model_ids(model_ids)
+
+    out: list[dict] = []
+    for row in rows:
+        model_id = row.get("id")
+        if model_id is None:
+            continue
+
+        algorithm = str(row.get("algoritma") or "").strip()
+        key = _canonical_algo_key(algorithm)
+        if not key:
+            continue
+
+        merged = dict(row)
+        merged["id"] = int(model_id)
+        merged["algoritma"] = algorithm
+        merged["canonical_algorithm"] = key
+
+        dataset_id = row.get("dataset_id")
+        dataset_id_int = int(dataset_id) if dataset_id is not None else None
+        merged["dataset_id"] = dataset_id_int
+        merged["dataset_name"] = (
+            dataset_name_map.get(dataset_id_int)
+            if dataset_id_int is not None
+            else None
+        )
+
+        for fld in (
+            "accuracy",
+            "precision",
+            "recall",
+            "f1_score",
+            "macro_avg",
+            "train_loss",
+            "train_mcc",
+        ):
+            if merged.get(fld) is not None:
+                try:
+                    merged[fld] = float(merged[fld])
+                except Exception:
+                    pass
+
+        tr = testing_map.get(int(model_id))
+        if tr:
+            nested: dict[str, Any] = {}
+            for k in _TESTING_NEST_KEYS:
+                if tr.get(k) is None:
+                    continue
+                try:
+                    if k == "max_length":
+                        nested[k] = int(tr[k])
+                    else:
+                        nested[k] = float(tr[k])
+                except Exception:
+                    continue
+            if nested:
+                merged["testing_result"] = nested
+
+        out.append(merged)
+
+    return out

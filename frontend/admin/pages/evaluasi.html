@@ -33,6 +33,14 @@
             <h1 class="title">MODEL PERFORMANCE EVALUATION</h1>
 
             <div class="eval-wrapper">
+                <div class="section-card">
+                    <div class="section-card-body">
+                        <div class="filter-row">
+                            <label>Select table algorithm:</label>
+                            <div id="table-algo-buttons" class="metric-button-row"></div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="page-header">
                     <div class="breadcrumb">
@@ -46,81 +54,115 @@
                     <p class="page-subtitle">Comprehensive model performance analysis based on split ratio data, comparative metrics, and visualization.</p>
                 </div>
 
-                <!-- ===== SECTION 1: Data Split Ratio ===== -->
-                <div class="section-card" id="data-split">
+                <!-- ===== SECTION 1: Training Metrics ===== -->
+                <div class="section-card" id="training-metrics-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
                             <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                         </div>
-                        <span class="section-card-title">Data Split Ratio</span>
-                        <span class="section-card-badge">Supabase</span>
+                        <span class="section-card-title">Training Metrics Per Model</span>
                     </div>
                     <div class="section-card-body">
                         <div style="overflow-x: auto;">
                             <table class="data-table">
-                                <thead id="split-ratio-thead">
+                                <thead id="training-metrics-thead">
                                 </thead>
-                                <tbody id="split-ratio-tbody">
+                                <tbody id="training-metrics-tbody">
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
 
-                              <!-- ===== SECTION 2: Comparative Analysis ===== -->
-                <div class="section-card" id="comparative">
+                <!-- ===== SECTION 2: Testing Metrics ===== -->
+                <div class="section-card" id="testing-metrics-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
                             <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                         </div>
-                        <span class="section-card-title">Comparative Analysis</span>
+                        <span class="section-card-title">Testing Metrics Per Model</span>
                     </div>
                     <div class="section-card-body">
                         <div style="overflow-x: auto;">
-                            <table class="data-table comp-table">
-                                <thead id="comparative-thead">
+                            <table class="data-table">
+                                <thead id="testing-metrics-thead">
                                 </thead>
-                                <tbody id="comparative-tbody">
+                                <tbody id="testing-metrics-tbody">
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-                <!-- ===== SECTION 3: Chart Transformer ===== -->
-                <div class="section-card" id="chart-transformer">
+
+                <!-- ===== SECTION 3: Avg Comparison ===== -->
+                <div class="section-card" id="fitting-summary-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
-                            <svg viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                            <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M8 17V7"/><path d="M12 17v-5"/><path d="M16 17V9"/></svg>
                         </div>
-                        <span class="section-card-title">Model Performance Chart</span>
-                        <span class="section-card-badge">Transformer-Based Models</span>
+                        <span class="section-card-title">Average Comparison: Training vs Testing</span>
                     </div>
                     <div class="section-card-body">
-                        <div class="chart-container">
-                            <div class="chart-wrapper"><canvas id="chartTransformer"></canvas></div>
-                            <div class="chart-legend" id="legendTransformer"></div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table summary-table">
+                                <thead id="fitting-summary-thead">
+                                </thead>
+                                <tbody id="fitting-summary-tbody">
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- ===== SECTION 4: Chart Classic ===== -->
-                <div class="section-card" id="chart-classic">
+                <!-- ===== SECTION 4: Algorithm Metrics Comparison ===== -->
+                <div class="section-card" id="algo-compare-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
-                            <svg viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                         </div>
-                        <span class="section-card-title">Model Performance Chart</span>
-                        <span class="section-card-badge">Classic Models</span>
+                        <span class="section-card-title">Algorithm Metrics Comparison (Testing Average)</span>
                     </div>
                     <div class="section-card-body">
-                        <div class="chart-container">
-                            <div class="chart-wrapper"><canvas id="chartClassic"></canvas></div>
-                            <div class="chart-legend" id="legendClassic"></div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table comp-table">
+                                <thead id="algo-compare-thead"></thead>
+                                <tbody id="algo-compare-tbody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- ===== SECTION 5: Evaluation conclusion ===== -->
+                <!-- ===== SECTION 5: Charts ===== -->
+                <div class="section-card" id="testing-chart-card">
+                    <div class="section-card-header">
+                        <div class="section-card-icon">
+                            <svg viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                        </div>
+                        <span class="section-card-title">Testing Average Comparison Charts</span>
+                    </div>
+                    <div class="section-card-body">
+                        <div class="filter-row">
+                            <label>Chart metric:</label>
+                            <div id="chart-metric-buttons" class="metric-button-row"></div>
+                        </div>
+                        <div class="chart-grid-two">
+                            <div class="chart-container">
+                                <div class="chart-subtitle">Transformer Models</div>
+                                <div class="chart-wrapper chart-wrapper-small"><canvas id="chartTransformer"></canvas></div>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-subtitle">Classic Models</div>
+                                <div class="chart-wrapper chart-wrapper-small"><canvas id="chartClassic"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-subtitle">Transformer vs Classic (Gabungan)</div>
+                            <div class="chart-wrapper"><canvas id="chartCombined"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== SECTION 4: Evaluation conclusion ===== -->
                 <div class="section-card eval-conclusion-card" id="eval-conclusion">
                     <div class="section-card-header">
                         <div class="section-card-icon">

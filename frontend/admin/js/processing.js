@@ -59,10 +59,25 @@
         recall: Number(metrics?.recall) || 0,
         f1: Number(metrics?.f1) || 0,
         loss: Number(metrics?.loss) || 0,
-        mcc: Number(metrics?.mcc) || 0,
       };
     });
     return sanitized;
+  }
+
+  function parseRatioParts(ratio) {
+    const parts = String(ratio || "").split(":");
+    const train = Number(parts[0]);
+    const test = Number(parts[1]);
+    return {
+      train: Number.isFinite(train) ? train : 9999,
+      test: Number.isFinite(test) ? test : 9999,
+    };
+  }
+
+  function ratioBestScore(metrics) {
+    const accuracy = Number(metrics?.accuracy) || 0;
+    const precision = Number(metrics?.precision) || 0;
+    return (accuracy + precision) / 2;
   }
 
   function loadRatioSearchContextStore() {
@@ -120,7 +135,7 @@
       <p><strong>Epoch:</strong> ${globalBestParams.epoch || "-"}</p>
       <p><strong>Batch Size:</strong> ${globalBestParams.batchSize || "-"}</p>
       <p><strong>Max Length:</strong> ${globalBestParams.maxLength || "-"}</p>
-      <p><strong>Best F1-Score:</strong> ${Number(globalBestParams.avgF1 || 0).toFixed(2)}%</p>
+      <p><strong>Best Score (Accuracy + Precision):</strong> ${Number(globalBestParams.avgScore || 0).toFixed(2)}%</p>
     `;
     bestParamsDisplay.style.display = currentMode === "cari-rasio" ? "block" : "none";
   }
@@ -133,23 +148,28 @@
     const entries = Object.entries(ratioComparisonData || {});
     if (entries.length === 0) {
       tbody.innerHTML =
-        '<tr class="empty-row"><td colspan="7" style="text-align:center; color:#999; padding: 30px;">No comparison data is available yet. Run training to view results.</td></tr>';
+        '<tr class="empty-row"><td colspan="6" style="text-align:center; color:#999; padding: 30px;">No comparison data is available yet. Run training to view results.</td></tr>';
       section.style.display = "none";
       return;
     }
 
-    let bestF1 = 0;
+    let bestScore = -1;
     let bestRatio = "";
     entries.forEach(([ratio, data]) => {
-      if ((Number(data?.f1) || 0) > bestF1) {
-        bestF1 = Number(data?.f1) || 0;
+      const score = ratioBestScore(data);
+      if (score > bestScore) {
+        bestScore = score;
         bestRatio = ratio;
       }
     });
 
-    const sortedEntries = entries.sort(
-      (a, b) => (Number(b[1]?.f1) || 0) - (Number(a[1]?.f1) || 0),
-    );
+    const sortedEntries = entries.sort((a, b) => {
+      const ra = parseRatioParts(a[0]);
+      const rb = parseRatioParts(b[0]);
+      if (ra.train !== rb.train) return ra.train - rb.train;
+      if (ra.test !== rb.test) return ra.test - rb.test;
+      return String(a[0]).localeCompare(String(b[0]));
+    });
 
     tbody.innerHTML = sortedEntries
       .map(([ratio, data]) => {
@@ -159,7 +179,6 @@
           recall: Number(data?.recall) || 0,
           f1: Number(data?.f1) || 0,
           loss: Number(data?.loss) || 0,
-          mcc: Number(data?.mcc) || 0,
         };
         const isBest = ratio === bestRatio;
         return `
@@ -173,7 +192,6 @@
           <td style="padding: 12px 15px; text-align: center;">${metrics.recall.toFixed(2)}%</td>
           <td style="padding: 12px 15px; text-align: center;">${metrics.f1.toFixed(2)}%</td>
           <td style="padding: 12px 15px; text-align: center;">${metrics.loss.toFixed(4)}</td>
-          <td style="padding: 12px 15px; text-align: center;">${metrics.mcc.toFixed(4)}</td>
         </tr>
       `;
       })
@@ -2089,7 +2107,7 @@
     }
     if (globalBestParams) return true;
 
-    // 2) Fallback: kalau pernah tersimpan di Supabase (mode cari-rasio), ambil best (f1 tertinggi).
+    // 2) Fallback: kalau pernah tersimpan di Supabase (mode cari-rasio), ambil best ((accuracy+precision)/2 tertinggi).
     if (!supabaseClient) return false;
     if (!currentAlgo || !selectedDatasetId) return false;
 
@@ -2097,16 +2115,21 @@
       const { data, error } = await supabaseClient
         .from("models")
         .select(
-          "split_ratio,learning_rate,epoch,batch_size,max_length,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,mode",
+          "split_ratio,learning_rate,epoch,batch_size,max_length,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode",
         )
         .eq("algoritma", currentAlgo)
         .eq("dataset_id", selectedDatasetId)
         .eq("mode", "cari-rasio")
-        .order("f1_score", { ascending: false })
-        .limit(1);
+        .order("created_at", { ascending: false });
 
       if (error) return false;
-      const best = (data || [])[0];
+      const best = (data || []).sort((a, b) => {
+        const scoreA =
+          ((Number(a?.accuracy) || 0) + (Number(a?.precision) || 0)) / 2;
+        const scoreB =
+          ((Number(b?.accuracy) || 0) + (Number(b?.precision) || 0)) / 2;
+        return scoreB - scoreA;
+      })[0];
       if (!best || !best.split_ratio) return false;
 
       globalBestParams = {
@@ -2123,7 +2146,8 @@
         dropout: best.dropout,
         earlyStopping: best.early_stopping,
         gradAccum: best.gradient_accumulation,
-        avgF1: Number(best.f1_score) || 0,
+        avgScore:
+          ((Number(best.accuracy) || 0) + (Number(best.precision) || 0)) / 2,
         avgAccuracy: Number(best.accuracy) || 0,
       };
       persistRatioSearchContextState();
@@ -2575,8 +2599,6 @@
           const recall = (m.recall_macro * 100) || 0;
           const f1 = (m.f1_macro * 100) || 0;
           const loss = m.val_loss ?? m.train_loss ?? 0;
-          const mcc = Number(m.mcc ?? 0);
-
           row.innerHTML = `
             <td>${m.epoch}</td>
             <td>${accuracy.toFixed(2)}%</td>
@@ -2584,7 +2606,6 @@
             <td>${recall.toFixed(2)}%</td>
             <td>${f1.toFixed(2)}%</td>
             <td>${parseFloat(loss).toFixed(4)}</td>
-            <td>${mcc.toFixed(4)}</td>
           `;
           tableBody.appendChild(row);
           epochResults.push({
@@ -2594,13 +2615,12 @@
             recall,
             f1,
             loss: parseFloat(loss),
-            mcc,
             confusion_matrix: m.confusion_matrix || null,
             confusion_labels: m.confusion_labels || null,
           });
           appendProgressLog(
             card,
-            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | F1 ${f1.toFixed(2)}% | MCC ${mcc.toFixed(4)} | Loss ${parseFloat(loss).toFixed(4)}`,
+            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | Prec ${precision.toFixed(2)}% | F1 ${f1.toFixed(2)}% | Loss ${parseFloat(loss).toFixed(4)}`,
             "info",
           );
           renderedEpochs++;
@@ -2753,8 +2773,6 @@
     const recall = Math.min(99, baseRec + Math.random() * 2);
     const f1 = Math.min(99, baseF1 + Math.random() * 2);
     const loss = Math.max(0.1, 1.5 - epoch * 0.25 + Math.random() * 0.2);
-    const mcc = 0.5 + Math.random() * 0.3;
-
     return {
       epoch,
       accuracy,
@@ -2762,7 +2780,6 @@
       recall,
       f1,
       loss,
-      mcc,
     };
   }
 
@@ -2783,8 +2800,6 @@
       0.1,
       1.5 - epoch * 0.25 + Math.random() * 0.2,
     ).toFixed(4);
-    const mcc = (Math.random() * 0.3 + 0.5).toFixed(4);
-
     const row = document.createElement("tr");
     row.innerHTML = `
     <td>${epoch}</td>
@@ -2793,7 +2808,6 @@
     <td>${recall}%</td>
     <td>${f1}%</td>
     <td>${loss}</td>
-    <td>${mcc}</td>
   `;
     tableBody.appendChild(row);
 
@@ -2805,7 +2819,6 @@
       recall: parseFloat(recall),
       f1: parseFloat(f1),
       loss: parseFloat(loss),
-      mcc: parseFloat(mcc),
     };
   }
 
@@ -2824,10 +2837,9 @@
         acc.recall += r.recall;
         acc.f1 += r.f1;
         acc.loss += r.loss;
-        acc.mcc += r.mcc;
         return acc;
       },
-      { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0, mcc: 0 },
+      { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 },
     );
 
     // Hitung rata-rata
@@ -2837,7 +2849,6 @@
       recall: sum.recall / count,
       f1: sum.f1 / count,
       loss: sum.loss / count,
-      mcc: sum.mcc / count,
     };
 
     // Tampilkan baris average
@@ -2849,7 +2860,6 @@
     card.querySelector(".avg-recall").innerText = avg.recall.toFixed(2) + "%";
     card.querySelector(".avg-f1").innerText = avg.f1.toFixed(2) + "%";
     card.querySelector(".avg-loss").innerText = avg.loss.toFixed(4);
-    card.querySelector(".avg-mcc").innerText = avg.mcc.toFixed(4);
 
     return avg;
   }
@@ -2886,10 +2896,10 @@
     // Simpan ke comparison data (untuk tabel perbandingan rasio)
     if (avgData && params.splitRatio) {
       const existingRatioMetrics = ratioComparisonData[params.splitRatio];
-      const existingF1 = Number(existingRatioMetrics?.f1) || 0;
-      const incomingF1 = Number(avgData?.f1) || 0;
-      // Untuk rasio yang sama, simpan hanya hasil tertinggi (berdasarkan F1).
-      if (!existingRatioMetrics || incomingF1 >= existingF1) {
+      const existingScore = ratioBestScore(existingRatioMetrics);
+      const incomingScore = ratioBestScore(avgData);
+      // Untuk rasio yang sama, simpan hanya hasil tertinggi berdasarkan (accuracy+precision)/2.
+      if (!existingRatioMetrics || incomingScore >= existingScore) {
         ratioComparisonData[params.splitRatio] = avgData;
       }
       renderRatioComparisonTable();
@@ -2968,7 +2978,6 @@
           recall: r.recall,
           f1: r.f1,
           loss: r.loss,
-          mcc: r.mcc,
           confusion_matrix: r.confusion_matrix || null,
           confusion_labels: r.confusion_labels || null,
         })),
@@ -3001,17 +3010,16 @@
         ".best-params-content",
       );
       const rows = card.querySelectorAll(".results-table tbody tr");
-      let bestF1 = 0;
+      let bestScore = 0;
       let bestRow = null;
 
       rows.forEach((row) => {
-        const f1Cell = row.cells[4];
-        if (f1Cell) {
-          const f1Val = parseFloat(f1Cell.innerText);
-          if (f1Val > bestF1) {
-            bestF1 = f1Val;
-            bestRow = row;
-          }
+        const accVal = parseFloat(row.cells[1]?.innerText) || 0;
+        const precVal = parseFloat(row.cells[2]?.innerText) || 0;
+        const score = (accVal + precVal) / 2;
+        if (score > bestScore) {
+          bestScore = score;
+          bestRow = row;
         }
       });
 
@@ -3026,7 +3034,7 @@
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
         <p><strong>Max Length:</strong> ${params.maxLength}</p>
-        <p><strong>Best F1-Score:</strong> ${bestF1.toFixed(2)}%</p>
+        <p><strong>Best Score (Accuracy + Precision):</strong> ${bestScore.toFixed(2)}%</p>
       `;
       }
 
@@ -3041,14 +3049,15 @@
       // Simpan parameter terbaik untuk card ini
       card.dataset.bestParams = JSON.stringify(params);
 
-      // Update global best params jika F1 lebih tinggi
+      // Update global best params jika skor (accuracy+precision)/2 lebih tinggi
+      const incomingScore = ratioBestScore(avgData);
       if (
         !globalBestParams ||
-        (avgData && avgData.f1 > (globalBestParams.avgF1 || 0))
+        (avgData && incomingScore > (globalBestParams.avgScore || 0))
       ) {
         globalBestParams = {
           ...params,
-          avgF1: avgData.f1,
+          avgScore: incomingScore,
           avgAccuracy: avgData.accuracy,
         };
 
@@ -3250,9 +3259,6 @@
       if (avgMetrics.loss != null && Number.isFinite(Number(avgMetrics.loss))) {
         trainLoss = Number(avgMetrics.loss);
       }
-      if (avgMetrics.mcc != null && Number.isFinite(Number(avgMetrics.mcc))) {
-        trainMcc = Number(avgMetrics.mcc);
-      }
     } else if (lastRow) {
       // Fallback jika average belum tersedia.
       accuracy = parseFloat(lastRow.cells[1]?.innerText) || 0;
@@ -3260,9 +3266,7 @@
       recall = parseFloat(lastRow.cells[3]?.innerText) || 0;
       f1 = parseFloat(lastRow.cells[4]?.innerText) || 0;
       const lossCell = parseFloat(lastRow.cells[5]?.innerText);
-      const mccCell = parseFloat(lastRow.cells[6]?.innerText);
       if (Number.isFinite(lossCell)) trainLoss = lossCell;
-      if (Number.isFinite(mccCell)) trainMcc = mccCell;
     }
 
     const warmupRatioParsed = (() => {
@@ -3611,7 +3615,6 @@
           <td>${r.recall.toFixed(2)}%</td>
           <td>${r.f1.toFixed(2)}%</td>
           <td>${r.loss.toFixed(4)}</td>
-          <td>${r.mcc.toFixed(4)}</td>
         </tr>
       `;
         })
@@ -3626,10 +3629,9 @@
           acc.recall += r.recall;
           acc.f1 += r.f1;
           acc.loss += r.loss;
-          acc.mcc += r.mcc;
           return acc;
         },
-        { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0, mcc: 0 },
+        { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 },
       );
 
       avgFoot.innerHTML = `
@@ -3640,7 +3642,6 @@
         <td>${(sum.recall / count).toFixed(2)}%</td>
         <td>${(sum.f1 / count).toFixed(2)}%</td>
         <td>${(sum.loss / count).toFixed(4)}</td>
-        <td>${(sum.mcc / count).toFixed(4)}</td>
       </tr>
     `;
 
@@ -3696,7 +3697,7 @@
       }
     } else {
       tbody.innerHTML =
-        '<tr><td colspan="7" style="text-align:center; color:#999;">Result data not available</td></tr>';
+        '<tr><td colspan="6" style="text-align:center; color:#999;">Result data not available</td></tr>';
       avgFoot.innerHTML = "";
 
       const confusionSection = document.getElementById(

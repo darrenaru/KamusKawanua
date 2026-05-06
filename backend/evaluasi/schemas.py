@@ -9,3 +9,11 @@ class EvaluationBestModelsResponse(BaseModel):
     status: str
     total: int
     items: list[dict[str, Any]]
+
+
+class EvaluationModelsMetricsResponse(BaseModel):
+    """Items are full `models` rows plus canonical algorithm, dataset name, and latest testing_result."""
+
+    status: str
+    total: int
+    items: list[dict[str, Any]]
