@@ -3403,6 +3403,89 @@
 
   // Render tabel riwayat
   // Render tabel riwayat
+  function buildLayeredParameterHtmlForDetail(p = {}) {
+    const algo = String(p.algo || "").toLowerCase();
+    const v = (x) => (x === undefined || x === null || x === "" ? "-" : String(x));
+    const item = (label, value) => `<span><strong>${label}:</strong> ${v(value)}</span>`;
+
+    const inputLayer = `
+      <div class="layer-block">
+        <h5 class="layer-title">1. Input Layer</h5>
+        <div class="layer-grid">
+          ${item("Batch Size", p.batchSize)}
+          ${item("Max Length", p.maxLength)}
+          ${item("Input Representation", ["indobert", "mbert", "xlm-r"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
+        </div>
+      </div>
+    `;
+
+    const hiddenItems = [
+      item("Learning Rate", p.lr),
+      item("Epoch", p.epoch),
+      item("Optimizer", p.optimizer),
+      item("Weight Decay", p.weightDecay),
+      item("Scheduler", p.scheduler),
+      item("Dropout", p.dropout),
+    ];
+
+    if (["indobert", "mbert", "xlm-r"].includes(algo)) {
+      hiddenItems.push(item("Warmup", p.warmup));
+      hiddenItems.push(item("Gradient Accumulation", p.gradAccum));
+    } else if (algo === "word2vec") {
+      hiddenItems.push(item("Vector Size", p.vectorSize));
+      hiddenItems.push(item("Window Size", p.windowSize));
+      hiddenItems.push(item("Min Count", p.minCount));
+      hiddenItems.push(item("Model Type", p.modelType));
+      hiddenItems.push(item("Negative", p.negative));
+    } else if (algo === "glove") {
+      hiddenItems.push(item("Vector Size", p.vectorSize));
+      hiddenItems.push(item("Window Size", p.windowSize));
+      hiddenItems.push(item("Min Count", p.minCount));
+      hiddenItems.push(item("X Max", p.xMax));
+      hiddenItems.push(item("Alpha", p.alpha));
+    }
+
+    const hiddenLayer = `
+      <div class="layer-block">
+        <h5 class="layer-title">2. Hidden Layer</h5>
+        <div class="layer-grid">
+          ${hiddenItems.join("")}
+        </div>
+      </div>
+    `;
+
+    const outputLayer = `
+      <div class="layer-block">
+        <h5 class="layer-title">3. Output Layer</h5>
+        <div class="layer-grid">
+          ${item("Output Activation", "Softmax")}
+          ${item("Loss Function", "Cross Entropy")}
+          ${item("Early Stopping", p.earlyStopping === "0" ? "Disabled" : p.earlyStopping)}
+        </div>
+      </div>
+    `;
+
+    return inputLayer + hiddenLayer + outputLayer;
+  }
+
+  function toEnglishConfusionLabel(raw) {
+    const v = String(raw ?? "").trim();
+    const key = v.toLowerCase();
+    const map = {
+      ajakan: "Invitation",
+      larangan: "Prohibition",
+      perintah: "Command",
+      pertanyaan: "Question",
+      sapaan: "Greeting",
+      informasi: "Information",
+      deklaratif: "Declarative",
+      imperatif: "Imperative",
+      interogatif: "Interrogative",
+      pernyataan: "Statement",
+    };
+    return map[key] || v;
+  }
+
   function renderHistoryTable() {
     const tbody = document.getElementById("history-body");
     if (!tbody) return;
@@ -3510,73 +3593,7 @@
     const paramsDiv = document.getElementById("detail-params");
     if (paramsDiv) {
       if (data.parameter) {
-        const p = data.parameter;
-
-        // Format learning rate dengan baik
-        const lrDisplay = p.lr || "-";
-        const epochDisplay = p.epoch || "-";
-        const batchDisplay = p.batchSize || "-";
-        const maxLenDisplay = p.maxLength || "-";
-        const optimizerDisplay = p.optimizer || "-";
-        const weightDecayDisplay = p.weightDecay || "-";
-        const schedulerDisplay = p.scheduler || "-";
-        const warmupDisplay = p.warmup || "-";
-        const dropoutDisplay = p.dropout || "-";
-        const earlyStopDisplay =
-          p.earlyStopping === "0" ? "Disabled" : p.earlyStopping || "-";
-        const gradAccumDisplay = p.gradAccum || "-";
-
-        // Parameter tambahan untuk Word2Vec & GloVe
-        const vectorSizeDisplay = p.vectorSize || "-";
-        const windowSizeDisplay = p.windowSize || "-";
-        const minCountDisplay = p.minCount || "-";
-        const modelTypeDisplay = p.modelType || "-";
-        const negativeDisplay = p.negative || "-";
-        const xMaxDisplay = p.xMax || "-";
-        const alphaDisplay = p.alpha || "-";
-
-        // 🔧 Tentukan algoritma untuk menampilkan parameter yang relevan
-        const algo = p.algo || "";
-
-        let additionalParamsHtml = "";
-        if (algo === "word2vec") {
-          additionalParamsHtml = `
-          <span><strong>Vector Size:</strong> ${vectorSizeDisplay}</span>
-          <span><strong>Window Size:</strong> ${windowSizeDisplay}</span>
-          <span><strong>Min Count:</strong> ${minCountDisplay}</span>
-          <span><strong>Model Type:</strong> ${modelTypeDisplay}</span>
-          <span><strong>Negative:</strong> ${negativeDisplay}</span>
-        `;
-        } else if (algo === "glove") {
-          additionalParamsHtml = `
-          <span><strong>Vector Size:</strong> ${vectorSizeDisplay}</span>
-          <span><strong>Window Size:</strong> ${windowSizeDisplay}</span>
-          <span><strong>Min Count:</strong> ${minCountDisplay}</span>
-          <span><strong>X Max:</strong> ${xMaxDisplay}</span>
-          <span><strong>Alpha:</strong> ${alphaDisplay}</span>
-        `;
-        } else {
-          // Untuk mBERT, XLM-R, IndoBERT
-          additionalParamsHtml = `
-          <span><strong>Warmup:</strong> ${warmupDisplay}</span>
-          <span><strong>Grad Accum:</strong> ${gradAccumDisplay}</span>
-        `;
-        }
-
-        paramsDiv.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-          <span><strong>LR:</strong> ${lrDisplay}</span>
-          <span><strong>Epoch:</strong> ${epochDisplay}</span>
-          <span><strong>Batch Size:</strong> ${batchDisplay}</span>
-          <span><strong>Max Length:</strong> ${maxLenDisplay}</span>
-          <span><strong>Optimizer:</strong> ${optimizerDisplay}</span>
-          <span><strong>Weight Decay:</strong> ${weightDecayDisplay}</span>
-          <span><strong>Scheduler:</strong> ${schedulerDisplay}</span>
-          <span><strong>Dropout:</strong> ${dropoutDisplay}</span>
-          <span><strong>Early Stopping:</strong> ${earlyStopDisplay}</span>
-          ${additionalParamsHtml}
-        </div>
-      `;
+        paramsDiv.innerHTML = buildLayeredParameterHtmlForDetail(data.parameter);
       } else {
         paramsDiv.innerHTML =
           '<p style="color:#999;">Parameter not available</p>';
@@ -3668,15 +3685,16 @@
           confusionEmpty.style.display = "none";
           confusionMeta.innerText = `Best epoch: ${bestEpoch} | Accuracy: ${Number(bestAcc).toFixed(2)}%`;
 
+          const labelsEn = labels.map((l) => toEnglishConfusionLabel(l));
           const header =
-            `<tr><th></th>` +
-            labels.map((l) => `<th>${l}</th>`).join("") +
+            `<tr><th>Actual \\ Predicted</th>` +
+            labelsEn.map((l) => `<th>${l}</th>`).join("") +
             `</tr>`;
 
           const body = cm
             .slice(0, size)
             .map((row, i) => {
-              const cells = labels
+              const cells = labelsEn
                 .slice(0, size)
                 .map((_, j) => {
                   const v = row?.[j] ?? 0;
@@ -3684,7 +3702,7 @@
                   return `<td class="${cls}">${v}</td>`;
                 })
                 .join("");
-              return `<tr><th>${labels[i]}</th>${cells}</tr>`;
+              return `<tr><th>${labelsEn[i]}</th>${cells}</tr>`;
             })
             .join("");
 

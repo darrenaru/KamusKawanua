@@ -9,8 +9,15 @@ var ALGO_LABELS = {
 };
 var TRANSFORMER_KEYS = ['xlm-r', 'mbert', 'indobert'];
 var CLASSIC_KEYS = ['word2vec', 'glove'];
+var CHART_COLORS = {
+    transformerDark: 'rgba(28, 20, 10, 0.9)',
+    transformerDarkSoft: 'rgba(28, 20, 10, 0.7)',
+    classicLight: 'rgba(220, 186, 131, 0.9)',
+    classicLightSoft: 'rgba(220, 186, 131, 0.7)',
+};
 var CHART_METRIC_DEFS = [
     { key: 'accuracy', label: 'Accuracy', testField: 'accuracy', asPercent: true },
+    { key: 'accuracy_vs_f1', label: 'Accuracy vs F1', asPercent: true },
     { key: 'precision', label: 'Precision', testField: 'precision_macro', asPercent: true },
     { key: 'recall', label: 'Recall', testField: 'recall_macro', asPercent: true },
     { key: 'f1', label: 'F1', testField: 'f1_macro', asPercent: true },
@@ -207,43 +214,237 @@ function renderTrainingTable(algoKey) {
         return;
     }
 
+    var bestTraining = getBestTrainingModel(rows);
+    renderBestInfo(algoKey, bestTraining, getBestTestingModel(rows));
+
     var bodyRows = rows
         .map(function (m) {
+            var trClass = bestTraining && m === bestTraining ? ' class="row-best-training"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
                 var raw = d.trainField ? m[d.trainField] : null;
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
-                '<tr>' +
-                '<td>' + escapeHtml(m.nama_model || '-') + '</td>' +
+                '<tr' + trClass + '>' +
+                '<td><button type="button" class="model-link-btn" data-model-id="' + escapeHtml(String(m.id || '')) + '">' + escapeHtml(m.nama_model || '-') + '</button></td>' +
                 metricCells +
                 '</tr>'
             );
         })
         .join('');
+    tbody.innerHTML = bodyRows;
+}
 
-    var avgCells = TABLE_METRIC_DEFS.map(function (d) {
-        if (!d.trainField) return '<td>—</td>';
-        var vals = rows
-            .map(function (m) {
-                if (d.type === 'percent') return normalizePercent(m[d.trainField]);
-                var n = Number(m[d.trainField]);
-                return Number.isFinite(n) ? n : null;
-            })
-            .filter(function (v) {
-                return v != null;
-            });
-        var avg = mean(vals);
-        return '<td>' + (avg == null ? '—' : formatByType(avg, d.type)) + '</td>';
+function buildLayeredParameterHtml(p) {
+    if (!p) return '<p style="color:#999;">Parameter not available</p>';
+    var algo = String(p.algo || p.canonical_algorithm || p.algoritma || '').toLowerCase();
+    var gridStart = '<div class="layer-grid">';
+    var gridEnd = '</div>';
+    var sectionWrapStart = '<div class="layer-block"><h5 class="layer-title">';
+    var sectionMid = '</h5>';
+    var sectionWrapEnd = '</div>';
+
+    function value(v) { return v == null || v === '' ? '-' : String(v); }
+    function item(label, v) { return '<span><strong>' + label + ':</strong> ' + escapeHtml(value(v)) + '</span>'; }
+
+    var inputLayer = sectionWrapStart + '1. Input Layer' + sectionMid + gridStart +
+        item('Batch Size', p.batchSize || p.batch_size) +
+        item('Max Length', p.maxLength || p.max_length) +
+        item('Input Representation', TRANSFORMER_KEYS.indexOf(algo) >= 0 ? 'WordPiece Tokens + [CLS]/[SEP]' : 'Word Embedding') +
+        gridEnd + sectionWrapEnd;
+
+    var hiddenLayerItems = [
+        item('Learning Rate', p.lr || p.learning_rate),
+        item('Epoch', p.epoch),
+        item('Optimizer', p.optimizer),
+        item('Weight Decay', p.weightDecay || p.weight_decay),
+        item('Scheduler', p.scheduler),
+        item('Dropout', p.dropout),
+    ];
+
+    if (TRANSFORMER_KEYS.indexOf(algo) >= 0) {
+        hiddenLayerItems.push(item('Warmup', p.warmup || p.warmup_ratio));
+        hiddenLayerItems.push(item('Gradient Accumulation', p.gradAccum || p.gradient_accumulation));
+    } else if (algo === 'word2vec') {
+        hiddenLayerItems.push(item('Vector Size', p.vectorSize || p.vector_size));
+        hiddenLayerItems.push(item('Window Size', p.windowSize || p.window_size));
+        hiddenLayerItems.push(item('Min Count', p.minCount || p.min_count));
+        hiddenLayerItems.push(item('Model Type', p.modelType || p.model_type));
+        hiddenLayerItems.push(item('Negative', p.negative));
+    } else if (algo === 'glove') {
+        hiddenLayerItems.push(item('Vector Size', p.vectorSize || p.vector_size));
+        hiddenLayerItems.push(item('Window Size', p.windowSize || p.window_size));
+        hiddenLayerItems.push(item('Min Count', p.minCount || p.min_count));
+        hiddenLayerItems.push(item('X Max', p.xMax || p.x_max));
+        hiddenLayerItems.push(item('Alpha', p.alpha));
+    }
+
+    var hiddenLayer = sectionWrapStart + '2. Hidden Layer' + sectionMid + gridStart + hiddenLayerItems.join('') + gridEnd + sectionWrapEnd;
+    var outputLayer = sectionWrapStart + '3. Output Layer' + sectionMid + gridStart +
+        item('Output Activation', 'Softmax') +
+        item('Loss Function', 'Cross Entropy') +
+        item('Early Stopping', (p.earlyStopping || p.early_stopping) === '0' ? 'Disabled' : (p.earlyStopping || p.early_stopping)) +
+        gridEnd + sectionWrapEnd;
+
+    return inputLayer + hiddenLayer + outputLayer;
+}
+
+function openEvaluationModelDetail(model) {
+    var modal = document.getElementById('eval-model-detail-modal');
+    if (!modal || !model) return;
+    var testing = model.testing_result || {};
+    var modelNameEl = document.getElementById('eval-detail-model-name');
+    var algoEl = document.getElementById('eval-detail-algo');
+    var ratioEl = document.getElementById('eval-detail-ratio');
+    var datasetEl = document.getElementById('eval-detail-dataset');
+    var dateEl = document.getElementById('eval-detail-date');
+    var paramsEl = document.getElementById('eval-detail-params');
+    var resultsBody = document.getElementById('eval-history-results-body');
+    var avgFoot = document.getElementById('eval-history-average-row');
+    var confusionSection = document.getElementById('eval-history-confusion-section');
+    var confusionMeta = document.getElementById('eval-history-confusion-meta');
+    var confusionTable = document.getElementById('eval-history-confusion-table');
+    var confusionEmpty = document.getElementById('eval-history-confusion-empty');
+
+    if (modelNameEl) modelNameEl.textContent = model.nama_model || '-';
+    if (algoEl) algoEl.textContent = ALGO_LABELS[model.canonical_algorithm] || model.algoritma || '-';
+    if (ratioEl) ratioEl.textContent = model.split_ratio || '-';
+    if (datasetEl) datasetEl.textContent = model.dataset_name || '-';
+    if (dateEl) dateEl.textContent = model.created_at ? new Date(model.created_at).toLocaleString('id-ID') : '-';
+    if (paramsEl) paramsEl.innerHTML = buildLayeredParameterHtml(model);
+    renderEvaluationEpochMetrics(model, resultsBody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty);
+    modal.style.display = 'flex';
+}
+
+function loadTrainingHistoryItems() {
+    try {
+        var raw = localStorage.getItem('training_history');
+        var parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function findHistoryByModel(model) {
+    var history = loadTrainingHistoryItems();
+    if (!history.length) return null;
+    var modelName = String(model.nama_model || '').trim().toLowerCase();
+    var algo = String(model.canonical_algorithm || model.algoritma || '').trim().toLowerCase();
+    var filtered = history.filter(function (h) {
+        var hn = String(h.model_name || h.nama_model || '').trim().toLowerCase();
+        var ha = String((h.parameter && h.parameter.algo) || '').trim().toLowerCase();
+        return hn === modelName && (!algo || !ha || ha === algo);
+    });
+    if (!filtered.length) return null;
+    filtered.sort(function (a, b) {
+        return new Date(b.tanggal || 0).getTime() - new Date(a.tanggal || 0).getTime();
+    });
+    return filtered[0];
+}
+
+function toEnglishConfusionLabel(raw) {
+    var v = String(raw == null ? '' : raw).trim();
+    var key = v.toLowerCase();
+    var map = {
+        ajakan: 'Invitation',
+        larangan: 'Prohibition',
+        perintah: 'Command',
+        pertanyaan: 'Question',
+        sapaan: 'Greeting',
+        informasi: 'Information',
+        deklaratif: 'Declarative',
+        imperatif: 'Imperative',
+        interogatif: 'Interrogative',
+        pernyataan: 'Statement',
+    };
+    return map[key] || v;
+}
+
+function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
+    if (!tbody || !avgFoot) return;
+    var hist = findHistoryByModel(model);
+    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    if (!results.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Result data not available</td></tr>';
+        avgFoot.innerHTML = '';
+        if (confusionSection) confusionSection.style.display = 'none';
+        return;
+    }
+
+    var bestAcc = -Infinity;
+    var bestEpoch = -1;
+    for (var i = 0; i < results.length; i++) {
+        var acc = Number(results[i].accuracy);
+        if (Number.isFinite(acc) && acc > bestAcc) {
+            bestAcc = acc;
+            bestEpoch = results[i].epoch;
+        }
+    }
+
+    tbody.innerHTML = results.map(function (r) {
+        var isBest = r.epoch === bestEpoch;
+        return (
+            '<tr class="' + (isBest ? 'best-row' : '') + '">' +
+            '<td>' + escapeHtml(String(r.epoch == null ? '-' : r.epoch)) + '</td>' +
+            '<td>' + formatFloatOrDash(r.accuracy, 2) + '%</td>' +
+            '<td>' + formatFloatOrDash(r.precision, 2) + '%</td>' +
+            '<td>' + formatFloatOrDash(r.recall, 2) + '%</td>' +
+            '<td>' + formatFloatOrDash(r.f1, 2) + '%</td>' +
+            '<td>' + formatFloatOrDash(r.loss, 4) + '</td>' +
+            '</tr>'
+        );
     }).join('');
 
-    var avgRow =
-        '<tr class="row-average">' +
-        '<td>Average</td>' +
-        avgCells +
+    var count = results.length;
+    var sum = results.reduce(function (acc, r) {
+        acc.accuracy += Number(r.accuracy) || 0;
+        acc.precision += Number(r.precision) || 0;
+        acc.recall += Number(r.recall) || 0;
+        acc.f1 += Number(r.f1) || 0;
+        acc.loss += Number(r.loss) || 0;
+        return acc;
+    }, { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 });
+    avgFoot.innerHTML =
+        '<tr>' +
+        '<td><strong>Average</strong></td>' +
+        '<td>' + (sum.accuracy / count).toFixed(2) + '%</td>' +
+        '<td>' + (sum.precision / count).toFixed(2) + '%</td>' +
+        '<td>' + (sum.recall / count).toFixed(2) + '%</td>' +
+        '<td>' + (sum.f1 / count).toFixed(2) + '%</td>' +
+        '<td>' + (sum.loss / count).toFixed(4) + '</td>' +
         '</tr>';
 
-    tbody.innerHTML = bodyRows + avgRow;
+    if (!(confusionSection && confusionMeta && confusionTable && confusionEmpty)) return;
+    var bestResult = results.find(function (r) { return r.epoch === bestEpoch; });
+    var cm = bestResult && bestResult.confusion_matrix;
+    var labels = bestResult && bestResult.confusion_labels;
+    if (cm && labels && Array.isArray(cm) && Array.isArray(labels) && cm.length === labels.length) {
+        var size = labels.length;
+        var labelsEn = labels.map(function (l) { return toEnglishConfusionLabel(l); });
+        confusionSection.style.display = 'block';
+        confusionEmpty.style.display = 'none';
+        confusionMeta.innerText = 'Best epoch: ' + bestEpoch + ' | Accuracy: ' + Number(bestAcc).toFixed(2) + '%';
+        var header = '<tr><th>Actual \\ Predicted</th>' + labelsEn.map(function (l) { return '<th>' + escapeHtml(String(l)) + '</th>'; }).join('') + '</tr>';
+        var body = cm.slice(0, size).map(function (row, i) {
+            var cells = labelsEn.slice(0, size).map(function (_, j) {
+                var v = row && row[j] != null ? row[j] : 0;
+                var cls = i === j ? 'diag' : '';
+                return '<td class="' + cls + '">' + escapeHtml(String(v)) + '</td>';
+            }).join('');
+            return '<tr><th>' + escapeHtml(String(labelsEn[i])) + '</th>' + cells + '</tr>';
+        }).join('');
+        confusionTable.innerHTML = header + body;
+    } else {
+        confusionSection.style.display = 'none';
+        confusionEmpty.style.display = 'block';
+        confusionTable.innerHTML = '';
+    }
+}
+
+function closeEvaluationModelDetail() {
+    var modal = document.getElementById('eval-model-detail-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 function renderTestingTable(algoKey) {
@@ -266,45 +467,28 @@ function renderTestingTable(algoKey) {
         return;
     }
 
+    var bestTraining = getBestTrainingModel(rows);
+    var bestTesting = getBestTestingModel(rows);
     var bodyRows = rows
         .map(function (m) {
             var t = m.testing_result || {};
+            var classes = [];
+            if (bestTraining && m === bestTraining) classes.push('row-best-training-ref');
+            if (bestTesting && m === bestTesting) classes.push('row-best-testing');
+            var trClass = classes.length ? ' class="' + classes.join(' ') + '"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
                 var raw = d.testField ? t[d.testField] : null;
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
-                '<tr>' +
+                '<tr' + trClass + '>' +
                 '<td>' + escapeHtml(m.nama_model || '-') + '</td>' +
                 metricCells +
                 '</tr>'
             );
         })
         .join('');
-
-    var avgCells = TABLE_METRIC_DEFS.map(function (d) {
-        if (!d.testField) return '<td>—</td>';
-        var vals = rows
-            .map(function (m) {
-                var t = m.testing_result || {};
-                if (d.type === 'percent') return normalizePercent(t[d.testField]);
-                var n = Number(t[d.testField]);
-                return Number.isFinite(n) ? n : null;
-            })
-            .filter(function (v) {
-                return v != null;
-            });
-        var avg = mean(vals);
-        return '<td>' + (avg == null ? '—' : formatByType(avg, d.type)) + '</td>';
-    }).join('');
-
-    var avgRow =
-        '<tr class="row-average">' +
-        '<td>Average</td>' +
-        avgCells +
-        '</tr>';
-
-    tbody.innerHTML = bodyRows + avgRow;
+    tbody.innerHTML = bodyRows;
 }
 
 function averageMetric(rows, trainField, testField) {
@@ -323,13 +507,13 @@ function averageMetric(rows, trainField, testField) {
     };
 }
 
-function fittingStatus(trainAvg, testAvg) {
-    if (trainAvg == null || testAvg == null) return '—';
-    var diff = Math.abs(trainAvg - testAvg);
-    var pct = (Math.round(diff * 10) / 10).toFixed(1) + '%';
-    if (trainAvg > testAvg) return '<span class="fit over">Overfitting ' + pct + '</span>';
-    if (testAvg > trainAvg) return '<span class="fit under">Underfitting ' + pct + '</span>';
-    return '<span class="fit good">Seimbang 0.0%</span>';
+function fittingStatus(trainValue, testValue, type) {
+    if (trainValue == null || testValue == null) return '—';
+    var diff = Math.abs(trainValue - testValue);
+    var txt = type === 'percent' ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
+    if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + '</span>';
+    if (testValue > trainValue) return '<span class="fit under">Underfitting ' + txt + '</span>';
+    return '<span class="fit good">Seimbang</span>';
 }
 
 function renderSummaryTable(algoKey) {
@@ -338,81 +522,29 @@ function renderSummaryTable(algoKey) {
     var tbody = document.getElementById('fitting-summary-tbody');
     if (!thead || !tbody) return;
 
-    thead.innerHTML = '<tr><th>Model</th><th>Training</th><th>Testing</th><th>Perbedaan</th></tr>';
+    thead.innerHTML = '<tr><th>Metrics</th><th>Training</th><th>Testing</th><th>Perbedaan</th></tr>';
     if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No data available for fitting summary.</td></tr>';
         return;
     }
 
+    var bestTraining = getBestTrainingModel(rows);
     var rowsSummary = TABLE_METRIC_DEFS.map(function (d) {
-        var avg = { train: null, test: null };
-        if (d.trainField) {
-            avg.train = mean(
-                rows
-                    .map(function (r) {
-                        if (d.type === 'percent') return normalizePercent(r[d.trainField]);
-                        var n = Number(r[d.trainField]);
-                        return Number.isFinite(n) ? n : null;
-                    })
-                    .filter(function (v) {
-                        return v != null;
-                    }),
-            );
-        }
-        if (d.testField) {
-            avg.test = mean(
-                rows
-                    .map(function (r) {
-                        var t = r.testing_result || {};
-                        if (d.type === 'percent') return normalizePercent(t[d.testField]);
-                        var n = Number(t[d.testField]);
-                        return Number.isFinite(n) ? n : null;
-                    })
-                    .filter(function (v) {
-                        return v != null;
-                    }),
-            );
-        }
+        var t = bestTraining ? bestTraining.testing_result || {} : {};
+        var trainValue = d.trainField ? normalizeMetricValue(bestTraining ? bestTraining[d.trainField] : null, d.type) : null;
+        var testValue = d.testField ? normalizeMetricValue(t[d.testField], d.type) : null;
         return {
             label: d.label,
-            train: avg.train,
-            test: avg.test,
+            train: trainValue,
+            test: testValue,
             type: d.type,
-            diff: d.trainField && d.testField ? fittingStatus(avg.train, avg.test) : '—',
+            diff: d.trainField && d.testField ? fittingStatus(trainValue, testValue, d.type) : '—',
         };
-    });
-
-    var percentRows = rowsSummary.filter(function (r) {
-        return r.type === 'percent';
-    });
-    var macroTrain = mean(
-        percentRows
-            .map(function (r) {
-                return r.train;
-            })
-            .filter(function (v) {
-                return v != null;
-            }),
-    );
-    var macroTest = mean(
-        percentRows
-            .map(function (r) {
-                return r.test;
-            })
-            .filter(function (v) {
-                return v != null;
-            }),
-    );
-    rowsSummary.push({
-        label: 'Overall Average (Comparable Metrics)',
-        train: macroTrain,
-        test: macroTest,
-        diff: fittingStatus(macroTrain, macroTest),
     });
 
     tbody.innerHTML = rowsSummary
         .map(function (r, idx) {
-            var klass = idx === rowsSummary.length - 1 ? ' class="row-average"' : '';
+            var klass = '';
             return (
                 '<tr' + klass + '>' +
                 '<td>' + escapeHtml(r.label) + '</td>' +
@@ -442,6 +574,91 @@ function avgTestingByAlgo(algoKey, testField, asPercent) {
     return mean(vals);
 }
 
+function normalizeMetricValue(raw, type) {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (type === 'percent') return normalizePercent(raw);
+    var n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+}
+
+function getBestTrainingModel(rows) {
+    var best = null;
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var acc = normalizePercent(row.accuracy);
+        var f1 = normalizePercent(row.f1_score);
+        if (acc == null) continue;
+        var f1Score = f1 == null ? -Infinity : f1;
+        if (!best || acc > best.acc || (acc === best.acc && f1Score > best.f1)) {
+            best = { row: row, acc: acc, f1: f1Score };
+        }
+    }
+    return best ? best.row : null;
+}
+
+function getBestTestingModel(rows) {
+    var best = null;
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var t = row.testing_result || {};
+        var acc = normalizePercent(t.accuracy);
+        var f1 = normalizePercent(t.f1_macro);
+        if (acc == null) continue;
+        var f1Score = f1 == null ? -Infinity : f1;
+        if (!best || acc > best.acc || (acc === best.acc && f1Score > best.f1)) {
+            best = { row: row, acc: acc, f1: f1Score };
+        }
+    }
+    return best ? best.row : null;
+}
+
+function renderBestInfo(algoKey, bestTraining, bestTesting) {
+    var trainEl = document.getElementById('training-best-info');
+    var testEl = document.getElementById('testing-best-info');
+    var algoLabel = escapeHtml(ALGO_LABELS[algoKey] || algoKey || '-');
+    if (trainEl) {
+        trainEl.innerHTML = bestTraining
+            ? 'Best training metrics (' +
+              algoLabel +
+              '): <strong>' +
+              escapeHtml(bestTraining.nama_model || '-') +
+              '</strong> (Accuracy ' +
+              formatPercent(bestTraining.accuracy) +
+              ', F1 ' +
+              formatPercent(bestTraining.f1_score) +
+              ').'
+            : 'Best training metrics (' + algoLabel + '): data tidak tersedia.';
+    }
+    if (testEl) {
+        var testBestText = bestTesting
+            ? '<strong>' +
+              escapeHtml(bestTesting.nama_model || '-') +
+              '</strong> (Accuracy ' +
+              formatPercent((bestTesting.testing_result || {}).accuracy) +
+              ', F1 ' +
+              formatPercent((bestTesting.testing_result || {}).f1_macro) +
+              ')'
+            : 'data tidak tersedia';
+        var trainRefText = bestTraining
+            ? '<strong>' +
+              escapeHtml(bestTraining.nama_model || '-') +
+              '</strong> (Accuracy ' +
+              formatPercent((bestTraining.testing_result || {}).accuracy) +
+              ', F1 ' +
+              formatPercent((bestTraining.testing_result || {}).f1_macro) +
+              ')'
+            : 'data tidak tersedia';
+        testEl.innerHTML =
+            'Testing metrics acuan best training (' +
+            algoLabel +
+            '): ' +
+            trainRefText +
+            '. Best testing metrics: ' +
+            testBestText +
+            '.';
+    }
+}
+
 function renderAlgoComparisonTable() {
     var thead = document.getElementById('algo-compare-thead');
     var tbody = document.getElementById('algo-compare-tbody');
@@ -461,7 +678,7 @@ function renderAlgoComparisonTable() {
     }
 
     thead.innerHTML =
-        '<tr><th>Model</th><th colspan="' +
+        '<tr><th>Metrics</th><th colspan="' +
         tf.length +
         '">Transformer</th><th colspan="' +
         cl.length +
@@ -491,9 +708,11 @@ function renderAlgoComparisonTable() {
                 cols
                     .map(function (k) {
                         if (!r.field) return '<td>—</td>';
-                        var asPercent = r.type === 'percent';
-                        var avg = avgTestingByAlgo(k, r.field, asPercent);
-                        return '<td>' + (avg == null ? '—' : formatByType(avg, r.type)) + '</td>';
+                        if (!r.field) return '<td>—</td>';
+                        var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
+                        var t = bestTraining ? bestTraining.testing_result || {} : {};
+                        var value = normalizeMetricValue(t[r.field], r.type);
+                        return '<td>' + (value == null ? '—' : formatByType(value, r.type)) + '</td>';
                     })
                     .join('') +
                 '</tr>'
@@ -502,31 +721,44 @@ function renderAlgoComparisonTable() {
         .join('');
 }
 
-function makeChart(canvasId, labels, values, color, asPercent) {
+function makeChart(canvasId, labels, datasets, asPercent) {
     var el = document.getElementById(canvasId);
     if (!el || typeof Chart === 'undefined') return;
     if (!labels.length) labels = ['No Data'];
-    if (!values.length) values = [0];
+    if (!Array.isArray(datasets) || !datasets.length) {
+        datasets = [
+            {
+                label: 'No Data',
+                data: [0],
+                backgroundColor: 'rgba(140,140,140,0.5)',
+                borderRadius: 5,
+                barPercentage: 0.62,
+                categoryPercentage: 0.7,
+            },
+        ];
+    }
     var valueLabelPlugin = {
         id: 'valueLabelPlugin_' + canvasId,
         afterDatasetsDraw: function (chart) {
             var ctx = chart.ctx;
-            var meta = chart.getDatasetMeta(0);
-            var ds = chart.data.datasets[0];
-            if (!meta || !meta.data || !ds) return;
             ctx.save();
-            ctx.font = '600 10px Inter, sans-serif';
+            ctx.font = '600 12px Inter, sans-serif';
             ctx.fillStyle = '#2c1f0e';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
-            for (var i = 0; i < meta.data.length; i++) {
-                var raw = Array.isArray(ds.data) ? Number(ds.data[i]) : NaN;
-                if (!Number.isFinite(raw) || raw <= 0) continue;
-                var p = meta.data[i].tooltipPosition();
-                var txt = asPercent
-                    ? (Math.round(raw * 10) / 10).toFixed(1) + '%'
-                    : raw.toFixed(4);
-                ctx.fillText(txt, p.x, p.y - 4);
+            for (var d = 0; d < chart.data.datasets.length; d++) {
+                var meta = chart.getDatasetMeta(d);
+                var ds = chart.data.datasets[d];
+                if (!meta || !meta.data || !ds) continue;
+                for (var i = 0; i < meta.data.length; i++) {
+                    var raw = Array.isArray(ds.data) ? Number(ds.data[i]) : NaN;
+                    if (!Number.isFinite(raw) || raw <= 0) continue;
+                    var p = meta.data[i].tooltipPosition();
+                    var txt = asPercent
+                        ? (Math.round(raw * 10) / 10).toFixed(1) + '%'
+                        : raw.toFixed(4);
+                    ctx.fillText(txt, p.x, p.y - 4);
+                }
             }
             ctx.restore();
         },
@@ -536,25 +768,30 @@ function makeChart(canvasId, labels, values, color, asPercent) {
         plugins: [valueLabelPlugin],
         data: {
             labels: labels,
-            datasets: [
-                {
-                    data: values,
-                    backgroundColor: color,
-                    borderRadius: 5,
-                    barPercentage: 0.55,
-                    categoryPercentage: 0.6,
-                },
-            ],
+            datasets: datasets,
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: {
+                    display: datasets.length > 1,
+                    labels: {
+                        font: { size: 13, weight: '600' },
+                    },
+                },
+            },
             scales: {
+                x: {
+                    ticks: {
+                        font: { size: 13, weight: '600' },
+                    },
+                },
                 y: {
                     beginAtZero: true,
                     suggestedMax: asPercent ? 100 : undefined,
                     ticks: {
+                        font: { size: 12, weight: '600' },
                         callback: function (v) {
                             return asPercent ? v + '%' : v;
                         },
@@ -583,41 +820,122 @@ function renderCharts(metricKey) {
     });
     var all = tf.concat(cl);
 
-    makeChart(
-        'chartTransformer',
-        tf.map(function (k) {
-            return ALGO_LABELS[k] || k;
+    var tfLabels = tf.map(function (k) {
+        return ALGO_LABELS[k] || k;
+    });
+    var clLabels = cl.map(function (k) {
+        return ALGO_LABELS[k] || k;
+    });
+    var allLabels = all.map(function (k) {
+        return ALGO_LABELS[k] || k;
+    });
+    var isDualMetric = def.key === 'accuracy_vs_f1';
+
+    if (isDualMetric) {
+        makeChart(
+            'chartTransformer',
+            tfLabels,
+            [
+                {
+                    label: 'Accuracy',
+                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    backgroundColor: CHART_COLORS.transformerDark,
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+                {
+                    label: 'F1',
+                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    backgroundColor: CHART_COLORS.transformerDarkSoft,
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+            ],
+            true,
+        );
+        makeChart(
+            'chartClassic',
+            clLabels,
+            [
+                {
+                    label: 'Accuracy',
+                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    backgroundColor: CHART_COLORS.classicLight,
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+                {
+                    label: 'F1',
+                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    backgroundColor: CHART_COLORS.classicLightSoft,
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+            ],
+            true,
+        );
+        makeChart(
+            'chartCombined',
+            allLabels,
+            [
+                {
+                    label: 'Accuracy',
+                    data: all.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    backgroundColor: all.map(function (k) {
+                        return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
+                    }),
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+                {
+                    label: 'F1',
+                    data: all.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    backgroundColor: all.map(function (k) {
+                        return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDarkSoft : CHART_COLORS.classicLightSoft;
+                    }),
+                    borderRadius: 5,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.7,
+                },
+            ],
+            true,
+        );
+        return;
+    }
+
+    makeChart('chartTransformer', tfLabels, [{
+        label: def.label,
+        data: tf.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        backgroundColor: CHART_COLORS.transformerDark,
+        borderRadius: 5,
+        barPercentage: 0.62,
+        categoryPercentage: 0.7,
+    }], asPercent);
+
+    makeChart('chartClassic', clLabels, [{
+        label: def.label,
+        data: cl.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        backgroundColor: CHART_COLORS.classicLight,
+        borderRadius: 5,
+        barPercentage: 0.62,
+        categoryPercentage: 0.7,
+    }], asPercent);
+
+    makeChart('chartCombined', allLabels, [{
+        label: def.label,
+        data: all.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        backgroundColor: all.map(function (k) {
+            return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
         }),
-        tf.map(function (k) {
-            return avgTestingByAlgo(k, def.testField, asPercent) || 0;
-        }),
-        'rgba(44,31,14,0.85)',
-        asPercent,
-    );
-    makeChart(
-        'chartClassic',
-        cl.map(function (k) {
-            return ALGO_LABELS[k] || k;
-        }),
-        cl.map(function (k) {
-            return avgTestingByAlgo(k, def.testField, asPercent) || 0;
-        }),
-        'rgba(120,85,60,0.82)',
-        asPercent,
-    );
-    makeChart(
-        'chartCombined',
-        all.map(function (k) {
-            return ALGO_LABELS[k] || k;
-        }),
-        all.map(function (k) {
-            return avgTestingByAlgo(k, def.testField, asPercent) || 0;
-        }),
-        all.map(function (k) {
-            return TRANSFORMER_KEYS.indexOf(k) >= 0 ? 'rgba(44,31,14,0.85)' : 'rgba(120,85,60,0.82)';
-        }),
-        asPercent,
-    );
+        borderRadius: 5,
+        barPercentage: 0.62,
+        categoryPercentage: 0.7,
+    }], asPercent);
 }
 
 function renderChartMetricButtons() {
@@ -649,22 +967,7 @@ function renderTableAlgoButtons() {
 }
 
 function pickBestModel(items) {
-    var best = null;
-    for (var i = 0; i < items.length; i++) {
-        var row = items[i];
-        var acc = normalizePercent(row.accuracy);
-        var f1 = normalizePercent(row.f1_score);
-        if (acc == null) continue;
-        if (!best) {
-            best = { row: row, acc: acc, f1: f1 == null ? -Infinity : f1 };
-            continue;
-        }
-        var currF1 = f1 == null ? -Infinity : f1;
-        if (acc > best.acc || (acc === best.acc && currF1 > best.f1)) {
-            best = { row: row, acc: acc, f1: currF1 };
-        }
-    }
-    return best ? best.row : null;
+    return getBestTrainingModel(items || []);
 }
 
 function bestAlgorithmInFamily(keys, testField) {
@@ -709,6 +1012,7 @@ function bestAlgorithmOverallInFamily(keys) {
 function renderEvaluationConclusion(items) {
     var el = document.getElementById('eval-conclusion-content');
     if (!el) return;
+    try {
 
     var bestModel = pickBestModel(items || []);
     var bestTf = bestAlgorithmOverallInFamily(TRANSFORMER_KEYS);
@@ -776,22 +1080,21 @@ function renderEvaluationConclusion(items) {
 
     el.innerHTML =
         '<div class="conclusion-stack">' +
-        '<section class="conclusion-block" aria-labelledby="conclusion-transformer-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-transformer-h">Transformer Conclusion</h3>' +
-        transformerConclusion +
-        '</section>' +
-        '<section class="conclusion-block" aria-labelledby="conclusion-classic-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-classic-h">Classic Conclusion</h3>' +
-        classicConclusion +
-        '</section>' +
-        '<section class="conclusion-block" aria-labelledby="conclusion-combined-h">' +
-        '<h3 class="conclusion-block-title" id="conclusion-combined-h">Combined Conclusion</h3>' +
-        '<p class="conclusion-prose"><strong>Transformer vs Classic Comparison:</strong> ' +
-        compareText +
-        '</p>' +
-        bestModelBlock +
-        '</section>' +
+        '<ol class="conclusion-points conclusion-points-numbered">' +
+        '<li>' + transformerConclusion + '</li>' +
+        '<li>' + classicConclusion + '</li>' +
+        '<li><p class="conclusion-prose"><strong>Transformer vs Classic Comparison:</strong> ' + compareText + '</p></li>' +
+        (bestModel ? '<li>' + bestModelBlock + '</li>' : '') +
+        '</ol>' +
         '</div>';
+    } catch (err) {
+        el.innerHTML =
+            '<div class="conclusion-stack conclusion-stack--empty">' +
+            '<p class="conclusion-muted">Kesimpulan belum dapat ditampilkan: ' +
+            escapeHtml(err && err.message ? err.message : 'unknown error') +
+            '</p>' +
+            '</div>';
+    }
 }
 
 function bindEvents() {
@@ -808,6 +1111,28 @@ function bindEvents() {
             renderTrainingTable(state.selectedTableAlgo);
             renderTestingTable(state.selectedTableAlgo);
             renderSummaryTable(state.selectedTableAlgo);
+        });
+    }
+    var trainingTbody = document.getElementById('training-metrics-tbody');
+    if (trainingTbody) {
+        trainingTbody.addEventListener('click', function (e) {
+            var t = e.target;
+            if (!t || !t.classList || !t.classList.contains('model-link-btn')) return;
+            var modelId = Number(t.getAttribute('data-model-id'));
+            if (!Number.isFinite(modelId)) return;
+            var models = state.byAlgo[state.selectedTableAlgo] || [];
+            var model = models.find(function (m) { return Number(m.id) === modelId; });
+            if (model) openEvaluationModelDetail(model);
+        });
+    }
+    var closeBtn = document.getElementById('eval-model-detail-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeEvaluationModelDetail);
+    var closeX = document.getElementById('eval-model-detail-close-x');
+    if (closeX) closeX.addEventListener('click', closeEvaluationModelDetail);
+    var modal = document.getElementById('eval-model-detail-modal');
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeEvaluationModelDetail();
         });
     }
     var btnWrap = document.getElementById('chart-metric-buttons');
@@ -867,11 +1192,21 @@ document.addEventListener('DOMContentLoaded', async function () {
         renderTableAlgoButtons();
         renderChartMetricButtons();
 
-        renderTrainingTable(state.selectedTableAlgo);
-        renderTestingTable(state.selectedTableAlgo);
-        renderSummaryTable(state.selectedTableAlgo);
-        renderAlgoComparisonTable();
-        renderCharts(state.selectedChartMetric);
+        try {
+            renderTrainingTable(state.selectedTableAlgo);
+            renderTestingTable(state.selectedTableAlgo);
+            renderSummaryTable(state.selectedTableAlgo);
+            renderAlgoComparisonTable();
+        } catch (tableErr) {
+            showError('Failed to render table section: ' + (tableErr && tableErr.message ? tableErr.message : 'unknown error'));
+        }
+
+        try {
+            renderCharts(state.selectedChartMetric);
+        } catch (chartErr) {
+            showChartHint('Chart gagal dirender: ' + (chartErr && chartErr.message ? chartErr.message : 'unknown error'));
+        }
+
         renderEvaluationConclusion(items);
         bindEvents();
     } catch (err) {

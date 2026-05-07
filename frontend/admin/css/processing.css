@@ -1551,6 +1551,69 @@ body::before {
   width: 90%;
 }
 
+#history-detail-modal .history-detail-info {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+#history-detail-modal .history-detail-info strong {
+  font-size: 15px;
+}
+
+#history-detail-modal .history-detail-info span,
+#history-detail-modal .history-detail-info p {
+  font-size: 15px;
+}
+
+#history-detail-modal .history-detail-info details summary {
+  font-size: 15px;
+}
+
+#history-detail-modal #detail-params {
+  font-size: 15px !important;
+  line-height: 1.6;
+  padding: 14px !important;
+}
+
+#history-detail-modal #detail-params h5 {
+  font-size: 16px !important;
+}
+
+#history-detail-modal #detail-params span {
+  font-size: 15px;
+}
+
+#history-detail-modal #detail-params strong {
+  font-size: 15px;
+}
+
+#history-detail-modal #detail-params .layer-block {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #e5ddd1;
+  border-left: 4px solid rgba(200, 169, 110, 0.95);
+  border-radius: 10px;
+  background: rgba(200, 169, 110, 0.07);
+}
+
+#history-detail-modal #detail-params .layer-title {
+  margin: 0 0 8px 0;
+  color: #2c1f0e;
+  font-size: 16px !important;
+}
+
+#history-detail-modal #detail-params .layer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+@media (max-width: 900px) {
+  #history-detail-modal #detail-params .layer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .history-detail-info details summary {
   user-select: none;
 }

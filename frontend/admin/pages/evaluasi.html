@@ -63,6 +63,7 @@
                         <span class="section-card-title">Training Metrics Per Model</span>
                     </div>
                     <div class="section-card-body">
+                        <div id="training-best-info" class="best-info-text"></div>
                         <div style="overflow-x: auto;">
                             <table class="data-table">
                                 <thead id="training-metrics-thead">
@@ -83,6 +84,7 @@
                         <span class="section-card-title">Testing Metrics Per Model</span>
                     </div>
                     <div class="section-card-body">
+                        <div id="testing-best-info" class="best-info-text"></div>
                         <div style="overflow-x: auto;">
                             <table class="data-table">
                                 <thead id="testing-metrics-thead">
@@ -94,13 +96,13 @@
                     </div>
                 </div>
 
-                <!-- ===== SECTION 3: Avg Comparison ===== -->
+                <!-- ===== SECTION 3: Best Metrics Comparison ===== -->
                 <div class="section-card" id="fitting-summary-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
                             <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M8 17V7"/><path d="M12 17v-5"/><path d="M16 17V9"/></svg>
                         </div>
-                        <span class="section-card-title">Average Comparison: Training vs Testing</span>
+                        <span class="section-card-title">Best Metrics Comparison: Training vs Testing</span>
                     </div>
                     <div class="section-card-body">
                         <div style="overflow-x: auto;">
@@ -120,7 +122,7 @@
                         <div class="section-card-icon">
                             <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                         </div>
-                        <span class="section-card-title">Algorithm Metrics Comparison (Testing Average)</span>
+                        <span class="section-card-title">Algorithm Metrics Comparison (Testing from Best Training Model)</span>
                     </div>
                     <div class="section-card-body">
                         <div style="overflow-x: auto;">
@@ -176,6 +178,64 @@
                     </div>
                 </div>
 
+            </div>
+
+            <div id="eval-model-detail-modal" class="modal-overlay" style="display: none">
+                <div class="modal-content modal-large" style="max-width: 980px">
+                    <div class="modal-header">
+                        <h3>Model Detail</h3>
+                        <button type="button" id="eval-model-detail-close-x" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="history-detail-info" style="margin-bottom: 16px; padding: 15px; background: #f8f6f2; border-radius: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                <div><strong>Model Name:</strong> <span id="eval-detail-model-name">-</span></div>
+                                <div><strong>Algorithm:</strong> <span id="eval-detail-algo">-</span></div>
+                                <div><strong>Split Ratio:</strong> <span id="eval-detail-ratio">-</span></div>
+                                <div><strong>Dataset:</strong> <span id="eval-detail-dataset">-</span></div>
+                                <div><strong>Date:</strong> <span id="eval-detail-date">-</span></div>
+                            </div>
+                        </div>
+                        <details open style="margin-bottom: 14px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: var(--accent);">View Parameters</summary>
+                            <div id="eval-detail-params" style="margin-top: 10px; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid var(--border-light);"></div>
+                        </details>
+                        <h4 style="margin: 0 0 10px 0;">Training Results</h4>
+                        <div style="overflow-x: auto;">
+                            <table class="results-table" id="eval-history-results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Epoch</th>
+                                        <th>Accuracy</th>
+                                        <th>Precision</th>
+                                        <th>Recall</th>
+                                        <th>F1-Score</th>
+                                        <th>Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="eval-history-results-body">
+                                    <tr>
+                                        <td colspan="6" style="text-align:center">-</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot id="eval-history-average-row" style="background:#f0ede8; font-weight:600; border-top:2px solid var(--accent);"></tfoot>
+                            </table>
+                        </div>
+                        <div id="eval-history-confusion-section" style="margin-top: 18px; display: none; width: 100%">
+                            <h4 style="margin: 0 0 12px 0">Confusion Matrix (Best Accuracy Epoch)</h4>
+                            <div id="eval-history-confusion-meta" style="color: #666; font-size: 12px; margin-bottom: 10px"></div>
+                            <div style="overflow-x: auto">
+                                <table id="eval-history-confusion-table" class="confusion-matrix-table"></table>
+                            </div>
+                            <p id="eval-history-confusion-empty" style="display: none; color: #999; text-align: center; padding: 12px 0; margin: 0">
+                                Confusion matrix is not available for this epoch.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="margin-top: 16px">
+                        <button type="button" id="eval-model-detail-close" class="btn-close-outline">Close</button>
+                    </div>
+                </div>
             </div>
 
             <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
