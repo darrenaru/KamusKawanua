@@ -36,6 +36,8 @@ def train_indobert(req: IndoBertTrainRequest):
             dropout=req.dropout,
             grad_accum=req.grad_accum,
             early_stopping_patience=req.early_stopping_patience,
+            seed=req.seed,
+            fast_mode=req.fast_mode,
         )
         return result
     except Exception as e:
@@ -62,6 +64,8 @@ def train_indobert_async(req: IndoBertTrainRequest):
                 dropout=req.dropout,
                 grad_accum=req.grad_accum,
                 early_stopping_patience=req.early_stopping_patience,
+                seed=req.seed,
+                fast_mode=req.fast_mode,
                 on_epoch_end=lambda m: append_metric(job.job_id, m),
             )
             update_job(job.job_id, status="done", result=result, message="done")
@@ -116,6 +120,8 @@ def train_mbert(req: IndoBertTrainRequest):
             dropout=req.dropout,
             grad_accum=req.grad_accum,
             early_stopping_patience=req.early_stopping_patience,
+            seed=req.seed,
+            fast_mode=req.fast_mode,
         )
         return result
     except Exception as e:
@@ -142,6 +148,8 @@ def train_mbert_async(req: IndoBertTrainRequest):
                 dropout=req.dropout,
                 grad_accum=req.grad_accum,
                 early_stopping_patience=req.early_stopping_patience,
+                seed=req.seed,
+                fast_mode=req.fast_mode,
                 on_epoch_end=lambda m: append_metric(job.job_id, m),
             )
             update_job(job.job_id, status="done", result=result, message="done")

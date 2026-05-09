@@ -17,6 +17,65 @@ _TESTING_NEST_KEYS = (
 )
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def _build_testing_result_payload(row: dict | None) -> dict[str, Any]:
+    if not row:
+        return {}
+    payload: dict[str, Any] = {}
+    for key in _TESTING_NEST_KEYS:
+        if key == "max_length":
+            payload[key] = _to_int(row.get(key), 0)
+        else:
+            payload[key] = _to_float(row.get(key), 0.0)
+    return payload
+
+
+def _fill_training_metrics_with_fallback(
+    merged: dict[str, Any], testing_result: dict[str, Any] | None
+) -> None:
+    testing_result = testing_result or {}
+    merged["accuracy"] = _to_float(
+        merged.get("accuracy"),
+        testing_result.get("accuracy", 0.0),
+    )
+    merged["precision"] = _to_float(
+        merged.get("precision"),
+        testing_result.get("precision_macro", 0.0),
+    )
+    merged["recall"] = _to_float(
+        merged.get("recall"),
+        testing_result.get("recall_macro", 0.0),
+    )
+    merged["f1_score"] = _to_float(
+        merged.get("f1_score"),
+        testing_result.get("f1_macro", 0.0),
+    )
+    if merged.get("macro_avg") is None:
+        merged["macro_avg"] = (
+            merged["precision"] + merged["recall"] + merged["f1_score"]
+        ) / 3.0
+    else:
+        merged["macro_avg"] = _to_float(merged.get("macro_avg"), 0.0)
+    merged["train_loss"] = _to_float(merged.get("train_loss"), 0.0)
+    merged["train_mcc"] = _to_float(
+        merged.get("train_mcc"),
+        testing_result.get("mcc", 0.0),
+    )
+
+
 def _is_final_training_mode(value: Any) -> bool:
     mode = str(value or "").strip().lower().replace("_", "-")
     return mode in {"training-final", "final-training", "final"}
@@ -146,19 +205,7 @@ def get_best_models_by_algorithm() -> list[dict]:
                 if dataset_id_int is not None
                 else None
             )
-            for fld in (
-                "precision",
-                "recall",
-                "f1_score",
-                "train_loss",
-                "train_mcc",
-                "warmup_ratio",
-            ):
-                if merged.get(fld) is not None:
-                    try:
-                        merged[fld] = float(merged[fld])
-                    except Exception:
-                        pass
+            merged["warmup_ratio"] = _to_float(merged.get("warmup_ratio"), 0.0)
             best_by_algorithm[key] = merged
 
     items = sorted(
@@ -179,19 +226,8 @@ def get_best_models_by_algorithm() -> list[dict]:
         if mid is None:
             continue
         tr = testing_map.get(int(mid))
-        if not tr:
-            continue
-        nested: dict[str, Any] = {}
-        for k in _TESTING_NEST_KEYS:
-            if tr.get(k) is None:
-                continue
-            try:
-                if k == "max_length":
-                    nested[k] = int(tr[k])
-                else:
-                    nested[k] = float(tr[k])
-            except Exception:
-                continue
+        nested = _build_testing_result_payload(tr)
+        _fill_training_metrics_with_fallback(row, nested)
         if nested:
             row["testing_result"] = nested
 
@@ -267,36 +303,11 @@ def get_models_metrics() -> list[dict]:
             else None
         )
 
-        for fld in (
-            "accuracy",
-            "precision",
-            "recall",
-            "f1_score",
-            "macro_avg",
-            "train_loss",
-            "train_mcc",
-        ):
-            if merged.get(fld) is not None:
-                try:
-                    merged[fld] = float(merged[fld])
-                except Exception:
-                    pass
-
         tr = testing_map.get(int(model_id))
-        if tr:
-            nested: dict[str, Any] = {}
-            for k in _TESTING_NEST_KEYS:
-                if tr.get(k) is None:
-                    continue
-                try:
-                    if k == "max_length":
-                        nested[k] = int(tr[k])
-                    else:
-                        nested[k] = float(tr[k])
-                except Exception:
-                    continue
-            if nested:
-                merged["testing_result"] = nested
+        nested = _build_testing_result_payload(tr)
+        _fill_training_metrics_with_fallback(merged, nested)
+        if nested:
+            merged["testing_result"] = nested
 
         out.append(merged)
 

@@ -246,10 +246,12 @@ function buildLayeredParameterHtml(p) {
 
     function value(v) { return v == null || v === '' ? '-' : String(v); }
     function item(label, v) { return '<span><strong>' + label + ':</strong> ' + escapeHtml(value(v)) + '</span>'; }
+    var inputLabel = algo === 'mbert' ? 'Seed' : 'Max Length';
+    var inputValue = algo === 'mbert' ? (p.seed) : (p.maxLength || p.max_length);
 
     var inputLayer = sectionWrapStart + '1. Input Layer' + sectionMid + gridStart +
         item('Batch Size', p.batchSize || p.batch_size) +
-        item('Max Length', p.maxLength || p.max_length) +
+        item(inputLabel, inputValue) +
         item('Input Representation', TRANSFORMER_KEYS.indexOf(algo) >= 0 ? 'WordPiece Tokens + [CLS]/[SEP]' : 'Word Embedding') +
         gridEnd + sectionWrapEnd;
 
@@ -310,7 +312,7 @@ function openEvaluationModelDetail(model) {
     if (algoEl) algoEl.textContent = ALGO_LABELS[model.canonical_algorithm] || model.algoritma || '-';
     if (ratioEl) ratioEl.textContent = model.split_ratio || '-';
     if (datasetEl) datasetEl.textContent = model.dataset_name || '-';
-    if (dateEl) dateEl.textContent = model.created_at ? new Date(model.created_at).toLocaleString('id-ID') : '-';
+    if (dateEl) dateEl.textContent = model.created_at ? new Date(model.created_at).toLocaleString('en-US') : '-';
     if (paramsEl) paramsEl.innerHTML = buildLayeredParameterHtml(model);
     renderEvaluationEpochMetrics(model, resultsBody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty);
     modal.style.display = 'flex';
@@ -343,22 +345,9 @@ function findHistoryByModel(model) {
     return filtered[0];
 }
 
-function toEnglishConfusionLabel(raw) {
-    var v = String(raw == null ? '' : raw).trim();
-    var key = v.toLowerCase();
-    var map = {
-        ajakan: 'Invitation',
-        larangan: 'Prohibition',
-        perintah: 'Command',
-        pertanyaan: 'Question',
-        sapaan: 'Greeting',
-        informasi: 'Information',
-        deklaratif: 'Declarative',
-        imperatif: 'Imperative',
-        interogatif: 'Interrogative',
-        pernyataan: 'Statement',
-    };
-    return map[key] || v;
+/** Confusion matrix row/column labels: keep dataset / model class strings as stored. */
+function confusionMatrixLabelAsStored(raw) {
+    return String(raw == null ? '' : raw).trim();
 }
 
 function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
@@ -421,7 +410,7 @@ function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, c
     var labels = bestResult && bestResult.confusion_labels;
     if (cm && labels && Array.isArray(cm) && Array.isArray(labels) && cm.length === labels.length) {
         var size = labels.length;
-        var labelsEn = labels.map(function (l) { return toEnglishConfusionLabel(l); });
+        var labelsEn = labels.map(function (l) { return confusionMatrixLabelAsStored(l); });
         confusionSection.style.display = 'block';
         confusionEmpty.style.display = 'none';
         confusionMeta.innerText = 'Best epoch: ' + bestEpoch + ' | Accuracy: ' + Number(bestAcc).toFixed(2) + '%';
@@ -513,7 +502,7 @@ function fittingStatus(trainValue, testValue, type) {
     var txt = type === 'percent' ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
     if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + '</span>';
     if (testValue > trainValue) return '<span class="fit under">Underfitting ' + txt + '</span>';
-    return '<span class="fit good">Seimbang</span>';
+    return '<span class="fit good">Balanced</span>';
 }
 
 function renderSummaryTable(algoKey) {
@@ -522,7 +511,7 @@ function renderSummaryTable(algoKey) {
     var tbody = document.getElementById('fitting-summary-tbody');
     if (!thead || !tbody) return;
 
-    thead.innerHTML = '<tr><th>Metrics</th><th>Training</th><th>Testing</th><th>Perbedaan</th></tr>';
+    thead.innerHTML = '<tr><th>Metrics</th><th>Training</th><th>Testing</th><th>Difference</th></tr>';
     if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No data available for fitting summary.</td></tr>';
         return;
@@ -542,7 +531,18 @@ function renderSummaryTable(algoKey) {
         };
     });
 
-    tbody.innerHTML = rowsSummary
+    var modelReferenceRow = '';
+    if (bestTraining) {
+        var modelName = bestTraining.nama_model || '-';
+        modelReferenceRow =
+            '<tr class="row-model-reference">' +
+            '<td><strong>Model Used</strong></td>' +
+            '<td colspan="2"><strong>' + escapeHtml(modelName) + '</strong></td>' +
+            '<td><span class="fit good">Best training reference</span></td>' +
+            '</tr>';
+    }
+
+    tbody.innerHTML = modelReferenceRow + rowsSummary
         .map(function (r, idx) {
             var klass = '';
             return (
@@ -627,7 +627,7 @@ function renderBestInfo(algoKey, bestTraining, bestTesting) {
               ', F1 ' +
               formatPercent(bestTraining.f1_score) +
               ').'
-            : 'Best training metrics (' + algoLabel + '): data tidak tersedia.';
+            : 'Best training metrics (' + algoLabel + '): no data available.';
     }
     if (testEl) {
         var testBestText = bestTesting
@@ -638,7 +638,7 @@ function renderBestInfo(algoKey, bestTraining, bestTesting) {
               ', F1 ' +
               formatPercent((bestTesting.testing_result || {}).f1_macro) +
               ')'
-            : 'data tidak tersedia';
+            : 'no data available';
         var trainRefText = bestTraining
             ? '<strong>' +
               escapeHtml(bestTraining.nama_model || '-') +
@@ -647,9 +647,9 @@ function renderBestInfo(algoKey, bestTraining, bestTesting) {
               ', F1 ' +
               formatPercent((bestTraining.testing_result || {}).f1_macro) +
               ')'
-            : 'data tidak tersedia';
+            : 'no data available';
         testEl.innerHTML =
-            'Testing metrics acuan best training (' +
+            'Testing metrics for the best training reference model (' +
             algoLabel +
             '): ' +
             trainRefText +
@@ -687,6 +687,15 @@ function renderAlgoComparisonTable() {
         cols
             .map(function (k) {
                 return '<th>' + escapeHtml(ALGO_LABELS[k] || k) + '</th>';
+            })
+            .join('') +
+        '</tr>' +
+        '<tr><th>Model Used</th>' +
+        cols
+            .map(function (k) {
+                var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
+                var modelName = bestTraining ? bestTraining.nama_model || '-' : '-';
+                return '<th class="model-ref-cell">' + escapeHtml(modelName) + '</th>';
             })
             .join('') +
         '</tr>';
@@ -1090,7 +1099,7 @@ function renderEvaluationConclusion(items) {
     } catch (err) {
         el.innerHTML =
             '<div class="conclusion-stack conclusion-stack--empty">' +
-            '<p class="conclusion-muted">Kesimpulan belum dapat ditampilkan: ' +
+            '<p class="conclusion-muted">Conclusion could not be displayed: ' +
             escapeHtml(err && err.message ? err.message : 'unknown error') +
             '</p>' +
             '</div>';
@@ -1204,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         try {
             renderCharts(state.selectedChartMetric);
         } catch (chartErr) {
-            showChartHint('Chart gagal dirender: ' + (chartErr && chartErr.message ? chartErr.message : 'unknown error'));
+            showChartHint('Chart failed to render: ' + (chartErr && chartErr.message ? chartErr.message : 'unknown error'));
         }
 
         renderEvaluationConclusion(items);

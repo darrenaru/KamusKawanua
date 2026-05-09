@@ -13,12 +13,14 @@ class IndoBertTrainRequest(BaseModel):
     epoch: int = Field(3, ge=1, le=100)
     batch_size: int = Field(16, ge=1, le=256)
     max_length: int = Field(64, ge=8, le=512)
+    seed: int = Field(42, ge=1, le=2147483647)
 
     weight_decay: float = Field(0.01, ge=0)
     warmup_ratio: float = Field(0.1, ge=0, le=1)
     dropout: float = Field(0.1, ge=0, le=0.9)
     grad_accum: int = Field(1, ge=1, le=64)
     early_stopping_patience: int = Field(0, ge=0, le=20)
+    fast_mode: bool = False
 
 
 class IndoBertEpochMetrics(BaseModel):

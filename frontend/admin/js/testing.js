@@ -97,6 +97,7 @@ var kataValid = false;
 var selectedDatasetId = null;
 var selectedDatasetName = null;
 var selectedModelId = null;
+var selectedModelName = '';
 var selectedModelMaxLength = 64;
 var selectedLatestTesting = null;
 var testingModels = [];
@@ -130,7 +131,7 @@ function getAlgorithmDisplayName(key) {
 
 async function predictWordWithSelectedModel(word) {
     var algorithm = document.getElementById('selAlgorithm').value;
-    var modelName = document.getElementById('selModel').value;
+    var modelName = selectedModelName;
 
     if (!modelName) {
         throw new Error('Model is not available yet. Save the model first from the Processing page.');
@@ -245,6 +246,40 @@ function syncTestingStateForSelection() {
     updateStartButtonState();
 }
 
+async function refreshSelectedModelLatestTestingFromBackend() {
+    if (!selectedModelId) return;
+    try {
+        var res = await fetch(API_BASE + '/testing/models');
+        var data = await res.json();
+        if (!res.ok || !data || !Array.isArray(data.items)) return;
+
+        testingModels = data.items;
+        var found = null;
+        for (var i = 0; i < testingModels.length; i++) {
+            var item = testingModels[i];
+            if (Number(item.id) === Number(selectedModelId)) {
+                found = item;
+                break;
+            }
+        }
+        if (!found) return;
+
+        selectedLatestTesting = found.latest_testing || null;
+        selectedDatasetId =
+            (selectedLatestTesting && selectedLatestTesting.dataset_id) ||
+            found.dataset_id ||
+            null;
+        selectedDatasetName =
+            (selectedLatestTesting && selectedLatestTesting.dataset_name) ||
+            found.dataset_name ||
+            null;
+        selectedModelMaxLength = found.max_length || 64;
+        selectedModelName = found.nama_model || '';
+    } catch (e) {
+        // Keep current state if refresh fails.
+    }
+}
+
 function setTestingUiBusy(busy) {
     var btn = document.getElementById('btnStart');
     if (btn) {
@@ -281,11 +316,12 @@ function initAlgorithmModelSelect() {
     if (!algorithmSelect || !modelSelect) return;
 
     function refreshSelectedModelMeta() {
-        var selectedModelName = modelSelect.value;
+        var selectedModelKey = modelSelect.value;
         var found = null;
+        var selectedId = Number(selectedModelKey);
         for (var i = 0; i < testingModels.length; i++) {
             var item = testingModels[i];
-            if (item.nama_model === selectedModelName) {
+            if (Number(item.id) === selectedId) {
                 found = item;
                 break;
             }
@@ -303,6 +339,7 @@ function initAlgorithmModelSelect() {
                 found.dataset_name ||
                 null;
             selectedModelMaxLength = found.max_length || 64;
+            selectedModelName = found.nama_model || '';
             // Do not auto-fill dataset card UI for old models.
             // Keep dataset reference internally and show it through info messages only.
         } else {
@@ -311,6 +348,7 @@ function initAlgorithmModelSelect() {
             selectedDatasetName = null;
             selectedModelMaxLength = 64;
             selectedLatestTesting = null;
+            selectedModelName = '';
         }
         syncTestingStateForSelection();
     }
@@ -361,7 +399,7 @@ function initAlgorithmModelSelect() {
                     };
                 }
                 grouped[key].models.push({
-                    value: model.nama_model,
+                    value: String(model.id || ''),
                     label: model.nama_model
                 });
             }
@@ -594,7 +632,7 @@ function testKata() {
     var words = val.split(/\s+/);
     var direction = document.getElementById('selDirection').value;
     var algorithm = document.getElementById('selAlgorithm').value;
-    var model = document.getElementById('selModel').value;
+    var model = selectedModelName;
     var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
     var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
     var kamus = direction === 'm2i' ? kamusM2I : kamusI2M; // fallback jika backend gagal
@@ -843,6 +881,9 @@ async function startTesting() {
         return;
     }
 
+    await refreshSelectedModelLatestTestingFromBackend();
+    syncTestingStateForSelection();
+
     if (selectedLatestTesting) {
         var proceed = window.confirm(
             'This model already has a saved testing result. If you run testing again, the previous result will be replaced by the new one. Continue?'
@@ -861,7 +902,7 @@ async function startTesting() {
     setStatus('pending');
     document.getElementById('runBadge').textContent = '#' + runCount;
 
-    var model = document.getElementById('selModel').value;
+    var model = selectedModelName;
     if (!model) {
         showTestingError('Model is not available yet. Save the model first from the Processing page.');
         setTestingUiBusy(false);
@@ -938,6 +979,7 @@ function finishTesting(result, direction) {
     var weighted = Number(result.weighted_avg || 0) * 100;
     var macro = f1;
 
+    // MCC is on scale [-1, 1]; never Math.round — 0.74 would become 1.
     var r = {
         acc: Math.round(acc),
         prec: Math.round(precision),
@@ -947,7 +989,7 @@ function finishTesting(result, direction) {
         std: Math.round(std),
         weighted: Math.round(weighted),
         roc: Math.round(roc),
-        mcc: Math.round(mcc)
+        mcc: mcc
     };
 
     metricIds.forEach(function(id, i) {
@@ -975,7 +1017,11 @@ function finishTesting(result, direction) {
         mcc: Number(result.mcc || 0),
         created_at: new Date().toISOString()
     };
-    showTestingInfo('Testing result saved successfully. If you run testing again, the previous result will be replaced by the new one.');
+    var testedRows = Number(result.total_data || 0);
+    var testedRowsText = Number.isFinite(testedRows) && testedRows > 0
+        ? ' Total tested data: ' + testedRows + ' rows.'
+        : '';
+    showTestingInfo('Testing result saved successfully.' + testedRowsText + ' If you run testing again, the previous result will be replaced by the new one.');
     setTestingUiBusy(false);
     isRunning = false;
 }

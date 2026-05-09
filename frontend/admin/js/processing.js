@@ -27,6 +27,7 @@
   let globalBestParams = null;
   let ratioComparisonData = {}; // Untuk menyimpan data perbandingan rasio
   let epochResultsData = []; // Untuk menyimpan hasil per epoch
+  const MBERT_MULTI_SEEDS = [42, 123, 2024, 7];
 
   function normalizeAlgoKey(value) {
     return String(value || "").trim().toLowerCase();
@@ -76,8 +77,36 @@
 
   function ratioBestScore(metrics) {
     const accuracy = Number(metrics?.accuracy) || 0;
-    const precision = Number(metrics?.precision) || 0;
-    return (accuracy + precision) / 2;
+    const f1 = Number(metrics?.f1) || 0;
+    return (accuracy + f1) / 2;
+  }
+
+  function isMbertParams(params = {}) {
+    return normalizeAlgoKey(params?.algo || currentAlgo) === "mbert";
+  }
+
+  function mbertSeedValue(params = {}) {
+    return params.seed || "-";
+  }
+
+  function parseSeedSelection(rawValue) {
+    const raw = String(rawValue || "").trim().toLowerCase();
+    if (!raw) return { mode: "single", seeds: [42] };
+    if (["all", "all-seed", "all-seeds", "*"].includes(raw)) {
+      return { mode: "all", seeds: [...MBERT_MULTI_SEEDS] };
+    }
+    const parts = String(rawValue)
+      .split(",")
+      .map((x) => parseInt(String(x).trim(), 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (parts.length > 1) {
+      return { mode: "all", seeds: Array.from(new Set(parts)) };
+    }
+    const single = parseInt(String(rawValue).trim(), 10);
+    if (Number.isFinite(single) && single > 0) {
+      return { mode: "single", seeds: [single] };
+    }
+    return { mode: "single", seeds: [42] };
   }
 
   function loadRatioSearchContextStore() {
@@ -129,13 +158,14 @@
       return;
     }
 
+    const usesMbert = isMbertParams(globalBestParams);
     globalBestContent.innerHTML = `
       <p><strong>Split Ratio:</strong> ${globalBestParams.splitRatio || "-"}</p>
       <p><strong>Learning Rate:</strong> ${globalBestParams.lr || "-"}</p>
       <p><strong>Epoch:</strong> ${globalBestParams.epoch || "-"}</p>
       <p><strong>Batch Size:</strong> ${globalBestParams.batchSize || "-"}</p>
-      <p><strong>Max Length:</strong> ${globalBestParams.maxLength || "-"}</p>
-      <p><strong>Best Score (Accuracy + Precision):</strong> ${Number(globalBestParams.avgScore || 0).toFixed(2)}%</p>
+      <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(globalBestParams) : (globalBestParams.maxLength || "-")}</p>
+      <p><strong>Best Score (Accuracy + F1):</strong> ${Number(globalBestParams.avgScore || 0).toFixed(2)}%</p>
     `;
     bestParamsDisplay.style.display = currentMode === "cari-rasio" ? "block" : "none";
   }
@@ -1194,6 +1224,7 @@
       { id: "epoch", key: "epoch" },
       { id: "batch-size", key: "batchSize" },
       { id: "max-length", key: "maxLength" },
+      { id: "seed", key: "seed" },
       { id: "optimizer", key: "optimizer" },
       { id: "weight-decay", key: "weightDecay" },
       { id: "scheduler", key: "scheduler" },
@@ -1251,6 +1282,7 @@
       { attr: "epoch", id: "epoch" },
       { attr: "batch", id: "batch-size" },
       { attr: "maxlen", id: "max-length" },
+      { attr: "seed", id: "seed" },
       { attr: "optimizer", id: "optimizer" },
       { attr: "weightDecay", id: "weight-decay" },
       { attr: "scheduler", id: "scheduler" },
@@ -1297,6 +1329,7 @@
 
   function generateFindBestRatioCoreParams(algo) {
     const a = normalizeAlgoKey(algo);
+    const isMbert = a === "mbert";
     const lrOptions =
       a === "xlm-r"
         ? `
@@ -1323,6 +1356,33 @@
           <option value="5e-5">5e-5</option>
         `;
 
+    const maxLengthField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Max Length", "max_length")}
+        <input type="text" id="max-length" list="max-length-options-core" placeholder="Select or type manually" value="">
+        <datalist id="max-length-options-core">
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32">32</option>
+          <option value="64">64 (Recommended)</option>
+          <option value="128">128</option>
+        </datalist>
+      </div>
+    `;
+    const seedField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options-core" placeholder="Select or type manually" value="">
+        <datalist id="seed-options-core">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
+          <option value="all">all (42,123,2024,7)</option>
+        </datalist>
+      </div>
+    `;
+
     return `
       <div class="param-row">
         <div class="param-group">
@@ -1348,18 +1408,9 @@
             <option value="64">64</option>
           </datalist>
         </div>
-        <div class="param-group">
-          ${renderLabelWithTooltip("Max Length", "max_length")}
-          <input type="text" id="max-length" list="max-length-options-core" placeholder="Select or type manually" value="">
-          <datalist id="max-length-options-core">
-            <option value="8">8</option>
-            <option value="16">16</option>
-            <option value="32">32</option>
-            <option value="64">64 (Recommended)</option>
-            <option value="128">128</option>
-          </datalist>
-        </div>
+        ${maxLengthField}
       </div>
+      ${isMbert ? `<div class="param-row">${seedField}</div>` : ""}
     `;
   }
 
@@ -1388,6 +1439,8 @@
       "<strong>Function:</strong> Number of samples processed per step.<br><strong>Impact:</strong> Larger batches are more stable, smaller batches use less memory.<br><strong>Risk:</strong> Too large may cause OOM, too small may be noisy or unstable.",
     max_length:
       "<strong>Function:</strong> Maximum token length per text.<br><strong>Impact:</strong> Higher values capture longer context.<br><strong>Risk:</strong> Too low cuts information, too high is slower and memory-heavy.",
+    seed:
+      "<strong>Function:</strong> Controls random initialization and data split shuffle.<br><strong>Impact:</strong> Keeps experiments reproducible and helps search stable results.<br><strong>Risk:</strong> Using only one seed can produce misleadingly optimistic or pessimistic scores.",
     optimizer:
       "<strong>Function:</strong> Model weight update method.<br><strong>Impact:</strong> Affects stability and convergence speed.<br><strong>Risk:</strong> An unsuitable optimizer can prevent metric improvement.",
     weight_decay:
@@ -1421,6 +1474,33 @@
   // ==================== BERT FAMILY (IndoBERT / mBERT) PARAMETERS (DROPDOWN) ====================
   function generateBertTransformerParams(bertDisplayName) {
     const bert = bertDisplayName || "IndoBERT";
+    const isMbert = normalizeAlgoKey(currentAlgo) === "mbert";
+    const maxLengthField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Max Length", "max_length")}
+        <input type="text" id="max-length" list="max-length-options" placeholder="Select or type manually" value="">
+        <datalist id="max-length-options">
+          <option value="8">8</option>
+          <option value="16">16</option>
+          <option value="32">32</option>
+          <option value="64">64 (Recommended)</option>
+          <option value="128">128</option>
+        </datalist>
+      </div>
+    `;
+    const seedField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options" placeholder="Select or type manually" value="">
+        <datalist id="seed-options">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
+          <option value="all">all (42,123,2024,7)</option>
+        </datalist>
+      </div>
+    `;
     return `
     <div class="layer-card">
       <div class="layer-header">
@@ -1437,17 +1517,9 @@
             <option value="32">32</option>
           </datalist>
         </div>
-        <div class="param-group">
-          ${renderLabelWithTooltip("Max Length", "max_length")}
-          <input type="text" id="max-length" list="max-length-options" placeholder="Select or type manually" value="">
-          <datalist id="max-length-options">
-            <option value="8">8</option>
-            <option value="16">16</option>
-            <option value="32">32</option>
-            <option value="64">64 (Recommended)</option>
-          </datalist>
-        </div>
+        ${isMbert ? seedField : maxLengthField}
       </div>
+      ${isMbert ? `<div class="param-row">${maxLengthField}</div>` : ""}
       <div class="param-row">
         <div class="param-group">
           <label>Input Representation</label>
@@ -2069,14 +2141,17 @@
       const epochDisplay = params.epoch || "-";
       const batchDisplay = params.batchSize || "-";
       const maxLenDisplay = params.maxLength || "-";
+      const seedDisplay = params.seed || "-";
       const optimizerDisplay = params.optimizer || "-";
+      const inputParamLabel = isMbertParams(params) ? "Seed" : "MaxLen";
+      const inputParamValue = isMbertParams(params) ? seedDisplay : maxLenDisplay;
 
       paramsInfo.innerHTML = `
       <strong>Split:</strong> ${splitRatio} | 
       <strong>LR:</strong> ${lrDisplay} | 
       <strong>Epoch:</strong> ${epochDisplay} | 
       <strong>Batch:</strong> ${batchDisplay} | 
-      <strong>MaxLen:</strong> ${maxLenDisplay} | 
+      <strong>${inputParamLabel}:</strong> ${inputParamValue} | 
       <strong>Optimizer:</strong> ${optimizerDisplay}
     `;
     }
@@ -2107,7 +2182,7 @@
     }
     if (globalBestParams) return true;
 
-    // 2) Fallback: kalau pernah tersimpan di Supabase (mode cari-rasio), ambil best ((accuracy+precision)/2 tertinggi).
+    // 2) Fallback: kalau pernah tersimpan di Supabase (mode cari-rasio), ambil best ((accuracy+f1)/2 tertinggi).
     if (!supabaseClient) return false;
     if (!currentAlgo || !selectedDatasetId) return false;
 
@@ -2115,7 +2190,7 @@
       const { data, error } = await supabaseClient
         .from("models")
         .select(
-          "split_ratio,learning_rate,epoch,batch_size,max_length,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode",
+          "split_ratio,learning_rate,epoch,batch_size,max_length,seed,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode",
         )
         .eq("algoritma", currentAlgo)
         .eq("dataset_id", selectedDatasetId)
@@ -2125,9 +2200,9 @@
       if (error) return false;
       const best = (data || []).sort((a, b) => {
         const scoreA =
-          ((Number(a?.accuracy) || 0) + (Number(a?.precision) || 0)) / 2;
+          ((Number(a?.accuracy) || 0) + (Number(a?.f1_score) || 0)) / 2;
         const scoreB =
-          ((Number(b?.accuracy) || 0) + (Number(b?.precision) || 0)) / 2;
+          ((Number(b?.accuracy) || 0) + (Number(b?.f1_score) || 0)) / 2;
         return scoreB - scoreA;
       })[0];
       if (!best || !best.split_ratio) return false;
@@ -2139,6 +2214,7 @@
         epoch: best.epoch,
         batchSize: best.batch_size,
         maxLength: best.max_length,
+        seed: best.seed || "",
         optimizer: best.optimizer,
         weightDecay: best.weight_decay,
         scheduler: best.scheduler,
@@ -2147,7 +2223,7 @@
         earlyStopping: best.early_stopping,
         gradAccum: best.gradient_accumulation,
         avgScore:
-          ((Number(best.accuracy) || 0) + (Number(best.precision) || 0)) / 2,
+          ((Number(best.accuracy) || 0) + (Number(best.f1_score) || 0)) / 2,
         avgAccuracy: Number(best.accuracy) || 0,
       };
       persistRatioSearchContextState();
@@ -2187,8 +2263,11 @@
       }
     }
 
-    // Find Best Ratio hanya butuh 4 parameter inti untuk perbandingan metrics.
-    const requiredFields = ["lr", "epoch", "batch-size", "max-length"];
+    // Find Best Ratio menggunakan parameter inti; untuk mBERT sertakan max-length + seed.
+    const requiredFields =
+      currentAlgo === "mbert"
+        ? ["lr", "epoch", "batch-size", "max-length", "seed"]
+        : ["lr", "epoch", "batch-size", "max-length"];
     for (let field of requiredFields) {
       const element = document.getElementById(field);
       if (element && !element.value) {
@@ -2238,9 +2317,17 @@
       epoch: parseInt(document.getElementById("epoch")?.value) || 3,
       batchSize: document.getElementById("batch-size")?.value || "",
       maxLength: document.getElementById("max-length")?.value || "",
+      seed: document.getElementById("seed")?.value || "42",
       algo: currentAlgo,
       mode: mode,
     };
+
+    if (currentAlgo === "mbert") {
+      const parsedSeed = parseSeedSelection(params.seed);
+      params.seedMode = parsedSeed.mode;
+      params.seedList = parsedSeed.seeds;
+      params.seed = String(parsedSeed.seeds[0] || 42);
+    }
 
     // Parameter lanjutan dipakai untuk:
     // 1) training-final semua algoritma
@@ -2264,19 +2351,39 @@
       });
     }
 
-    // 🔧 Buat training card untuk SEMUA mode
-    const card = createTrainingCard(mode, params);
     const container = document.getElementById("training-cards-container");
-
-    // 🔧 PENTING: Tampilkan container saat mode training-final
     if (mode === "training-final") {
       container.style.display = "flex";
     }
 
+    const runSequentialSeeds =
+      currentAlgo === "mbert" &&
+      Array.isArray(params.seedList) &&
+      params.seedList.length > 1;
+
+    if (runSequentialSeeds) {
+      showToast(
+        `Running ${params.seedList.length} seeds sequentially: ${params.seedList.join(", ")}`,
+        "info",
+      );
+      for (const seedValue of params.seedList) {
+        const seededParams = {
+          ...params,
+          seed: String(seedValue),
+          seedMode: "single",
+        };
+        const card = createTrainingCard(mode, seededParams);
+        container.appendChild(card);
+        card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        await simulateTrainingInCard(card, mode, seededParams);
+      }
+      return;
+    }
+
+    // 🔧 Buat training card untuk run tunggal
+    const card = createTrainingCard(mode, params);
     container.appendChild(card);
-
     card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
     simulateTrainingInCard(card, mode, params);
   }
 
@@ -2417,10 +2524,10 @@
     };
   }
 
-  function simulateTrainingInCard(card, mode, params) {
+  async function simulateTrainingInCard(card, mode, params) {
     // Real training via backend for BERT-family models.
     if (["indobert", "mbert"].includes((params.algo || currentAlgo))) {
-      runBackendBertTraining(card, mode, params);
+      await runBackendBertTraining(card, mode, params);
       return;
     }
 
@@ -2443,8 +2550,9 @@
     setLoadingVisual(card, true, "Training simulation is running...");
     setProcessingStep(card, "train");
 
-    const interval = setInterval(() => {
-      progress += Math.floor(Math.random() * 5) + 3;
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        progress += Math.floor(Math.random() * 5) + 3;
 
       const epochProgress = Math.floor((progress / 100) * totalEpochs);
 
@@ -2459,27 +2567,31 @@
         );
       }
 
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setLoadingVisual(card, false);
-        appendProgressLog(card, "All epochs completed, summarizing results...", "success");
-        setProcessingStep(card, "metrics");
-        finishTrainingInCard(card, mode, params, epochResults); // KIRIM epochResults
-      }
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          setLoadingVisual(card, false);
+          appendProgressLog(card, "All epochs completed, summarizing results...", "success");
+          setProcessingStep(card, "metrics");
+          finishTrainingInCard(card, mode, params, epochResults); // KIRIM epochResults
+          resolve();
+        }
 
-      progressBar.style.width = progress + "%";
-      progressText.innerText = `${progress}% — Training simulation is running...`;
-    }, 400);
+        progressBar.style.width = progress + "%";
+        progressText.innerText = `${progress}% — Training simulation is running...`;
+      }, 400);
+    });
   }
 
   async function runBackendBertTraining(card, mode, params) {
+    return new Promise(async (resolve, reject) => {
     const progressBar = card.querySelector(".progress-bar");
     const progressText = card.querySelector(".progress-text");
     const tableBody = card.querySelector(".results-table tbody");
 
     if (!selectedDatasetId) {
       showToast("Please select a preprocessed dataset first.", "error");
+      reject(new Error("Dataset is not selected"));
       return;
     }
 
@@ -2529,6 +2641,12 @@
         epoch: parseInt(params.epoch || 3, 10),
         batch_size: parseInt(params.batchSize || 16, 10),
         max_length: parseInt(params.maxLength || 64, 10),
+        seed: (() => {
+          const parsed = parseInt(params.seed || 42, 10);
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : 42;
+        })(),
+        // Find Best Ratio dan Final Training harus sejalan; jangan ubah pipeline hanya karena mode.
+        fast_mode: false,
         weight_decay: parseFloat(params.weightDecay || "0.01"),
         warmup_ratio: parseFloat(params.warmup || "0.1"),
         dropout: parseFloat(params.dropout || "0.1"),
@@ -2649,6 +2767,7 @@
             `${algoLabel} training completed (${st.result?.device || "device"})`,
             "success",
           );
+          resolve();
           return;
         }
 
@@ -2659,6 +2778,7 @@
           stopProcessingElapsed(card);
           appendProgressLog(card, `Training failed: ${st.error || "-"}`, "error");
           showToast(st.error || "Training failed", "error");
+          reject(new Error(st.error || "Training failed"));
           return;
         }
 
@@ -2675,7 +2795,9 @@
       stopProcessingElapsed(card);
       appendProgressLog(card, `Error: ${err.message || "training failed"}`, "error");
       showToast(err.message || "Training failed", "error");
+      reject(err);
     }
+    });
   }
 
   // Fungsi simulasi training untuk mode Training Final (tanpa card)
@@ -2724,6 +2846,7 @@
             epoch: params.epoch,
             batchSize: params.batchSize,
             maxLength: params.maxLength,
+            seed: params.seed,
             optimizer: params.optimizer,
             weightDecay: params.weightDecay,
             scheduler: params.scheduler,
@@ -2898,7 +3021,7 @@
       const existingRatioMetrics = ratioComparisonData[params.splitRatio];
       const existingScore = ratioBestScore(existingRatioMetrics);
       const incomingScore = ratioBestScore(avgData);
-      // Untuk rasio yang sama, simpan hanya hasil tertinggi berdasarkan (accuracy+precision)/2.
+      // Untuk rasio yang sama, simpan hanya hasil tertinggi berdasarkan (accuracy+f1)/2.
       if (!existingRatioMetrics || incomingScore >= existingScore) {
         ratioComparisonData[params.splitRatio] = avgData;
       }
@@ -2956,6 +3079,7 @@
           epoch: params.epoch,
           batchSize: params.batchSize,
           maxLength: params.maxLength,
+          seed: params.seed,
           optimizer: params.optimizer,
           weightDecay: params.weightDecay,
           scheduler: params.scheduler,
@@ -3015,8 +3139,8 @@
 
       rows.forEach((row) => {
         const accVal = parseFloat(row.cells[1]?.innerText) || 0;
-        const precVal = parseFloat(row.cells[2]?.innerText) || 0;
-        const score = (accVal + precVal) / 2;
+        const f1Val = parseFloat(row.cells[4]?.innerText) || 0;
+        const score = (accVal + f1Val) / 2;
         if (score > bestScore) {
           bestScore = score;
           bestRow = row;
@@ -3028,13 +3152,14 @@
       }
 
       if (bestParamsContent) {
+        const usesMbert = isMbertParams(params);
         bestParamsContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>Max Length:</strong> ${params.maxLength}</p>
-        <p><strong>Best Score (Accuracy + Precision):</strong> ${bestScore.toFixed(2)}%</p>
+        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
+        <p><strong>Best Score (Accuracy + F1):</strong> ${bestScore.toFixed(2)}%</p>
       `;
       }
 
@@ -3049,7 +3174,7 @@
       // Simpan parameter terbaik untuk card ini
       card.dataset.bestParams = JSON.stringify(params);
 
-      // Update global best params jika skor (accuracy+precision)/2 lebih tinggi
+      // Update global best params jika skor (accuracy+f1)/2 lebih tinggi
       const incomingScore = ratioBestScore(avgData);
       if (
         !globalBestParams ||
@@ -3173,12 +3298,13 @@
         "#best-params-display .best-params-content",
       );
       if (globalBestContent) {
+        const usesMbert = isMbertParams(params);
         globalBestContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>Max Length:</strong> ${params.maxLength}</p>
+        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
         <p><strong>Optimizer:</strong> ${params.optimizer || "-"}</p>
       `;
       }
@@ -3237,6 +3363,22 @@
 
     const tableBody = card.querySelector(".results-table tbody");
     const lastRow = tableBody.querySelector("tr:last-child");
+    const bestEpochAccuracy = (() => {
+      if (!tableBody) return null;
+      const rows = Array.from(tableBody.querySelectorAll("tr"));
+      let best = null;
+      rows.forEach((row) => {
+        const epochLabel = String(row.cells?.[0]?.innerText || "")
+          .trim()
+          .toLowerCase();
+        // Abaikan row ringkasan/average.
+        if (!epochLabel || epochLabel === "average") return;
+        const accVal = parseFloat(row.cells?.[1]?.innerText);
+        if (!Number.isFinite(accVal)) return;
+        if (best === null || accVal > best) best = accVal;
+      });
+      return best;
+    })();
     const avgMetrics = (() => {
       try {
         return JSON.parse(card.dataset.avgMetrics || "null");
@@ -3276,6 +3418,15 @@
       return Number.isFinite(n) ? n : null;
     })();
 
+    const algoKey = String(params.algo || currentAlgo || "").toLowerCase();
+    const maxLengthToSave =
+      algoKey === "mbert"
+        ? 16
+        : (() => {
+            const ml = parseInt(params.maxLength || 64, 10);
+            return Number.isFinite(ml) ? ml : 64;
+          })();
+
     const modelData = {
       nama_model: modelName,
       algoritma: params.algo || currentAlgo,
@@ -3283,10 +3434,23 @@
       dataset_id: selectedDatasetId,
       split_ratio: params.splitRatio,
       k_fold: params.kFold || null,
-      learning_rate: params.lr,
-      epoch: params.epoch,
-      batch_size: params.batchSize,
-      max_length: params.maxLength,
+      learning_rate: (() => {
+        const v = parseFloat(params.lr);
+        return Number.isFinite(v) ? v : null;
+      })(),
+      epoch: (() => {
+        const v = parseInt(params.epoch || 0, 10);
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
+      batch_size: (() => {
+        const v = parseInt(params.batchSize || 0, 10);
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
+      max_length: maxLengthToSave,
+      seed: (() => {
+        const v = parseInt(params.seed || "", 10);
+        return Number.isFinite(v) && v > 0 ? v : null;
+      })(),
       optimizer: params.optimizer || null,
       weight_decay: params.weightDecay || null,
       scheduler: params.scheduler || null,
@@ -3294,7 +3458,9 @@
       dropout: params.dropout || null,
       early_stopping: params.earlyStopping || null,
       gradient_accumulation: params.gradAccum || null,
-      accuracy: accuracy,
+      // Simpan accuracy terbaik per-epoch ke Supabase (bukan average),
+      // sementara tampilan tabel web tetap memakai average row.
+      accuracy: Number.isFinite(bestEpochAccuracy) ? bestEpochAccuracy : accuracy,
       precision: precision,
       recall: recall,
       f1_score: f1,
@@ -3314,13 +3480,32 @@
             if (!opts.silent) showToast("Model was saved to the database.");
             return;
           }
+          // Walaupun silent/auto, tetap tampilkan error supaya tidak "hilang".
+          try {
+            console.error("Supabase insert(models) failed:", error);
+          } catch (e) {}
+          showToast(
+            `Failed to save to models: ${error?.message || "unknown error"}`,
+            "error",
+          );
 
           const minimalModelData = {
             nama_model: modelData.nama_model,
             algoritma: modelData.algoritma,
+            mode: modelData.mode,
             dataset_id: modelData.dataset_id,
             split_ratio: modelData.split_ratio,
+            learning_rate: modelData.learning_rate,
+            epoch: modelData.epoch,
+            batch_size: modelData.batch_size,
             max_length: modelData.max_length,
+            seed: modelData.seed,
+            optimizer: modelData.optimizer,
+            weight_decay: modelData.weight_decay,
+            scheduler: modelData.scheduler,
+            dropout: modelData.dropout,
+            early_stopping: modelData.early_stopping,
+            gradient_accumulation: modelData.gradient_accumulation,
             warmup_ratio: modelData.warmup_ratio,
             accuracy: modelData.accuracy,
             precision: modelData.precision,
@@ -3413,7 +3598,7 @@
         <h5 class="layer-title">1. Input Layer</h5>
         <div class="layer-grid">
           ${item("Batch Size", p.batchSize)}
-          ${item("Max Length", p.maxLength)}
+          ${item(algo === "mbert" ? "Seed" : "Max Length", algo === "mbert" ? p.seed : p.maxLength)}
           ${item("Input Representation", ["indobert", "mbert", "xlm-r"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
         </div>
       </div>

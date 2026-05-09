@@ -11,6 +11,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
     roc_auc_score,
 )
+from sklearn.preprocessing import label_binarize
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from backend.processing.service import (
@@ -21,6 +22,65 @@ from backend.processing.service import (
     predict_mbert_softmax,
 )
 from backend.supabase_client import supabase
+
+
+def _normalize_class_key(s: str) -> str:
+    return " ".join(str(s or "").strip().split()).casefold()
+
+
+def _canonical_dataset_label(
+    raw: str, label2id: dict[str, Any]
+) -> str | None:
+    """Align dataset `jenis` strings with model label2id (spacing + case)."""
+    s = str(raw or "").strip()
+    if not s:
+        return None
+    key = _normalize_class_key(s)
+    for lab in label2id.keys():
+        lab_s = str(lab).strip()
+        if lab_s == s or _normalize_class_key(lab_s) == key:
+            return lab_s
+    return None
+
+
+def _multiclass_roc_auc_weighted(
+    y_true: list[str],
+    y_proba: np.ndarray,
+    class_order: list[str],
+) -> float:
+    """ROC-AUC OVR weighted; robust when sklearn string-label path fails."""
+    if y_proba.size == 0 or len(class_order) < 2:
+        return 0.0
+    classes = list(class_order)
+    cls_index = {c: i for i, c in enumerate(classes)}
+    y_list = list(y_true)
+    mask = np.array([y in cls_index for y in y_list], dtype=bool)
+    if not mask.any() or int(mask.sum()) < 2:
+        return 0.0
+    y_f = [y_list[i] for i in range(len(y_list)) if mask[i]]
+    p_f = y_proba[mask]
+    present = sorted({c for c in y_f if c in cls_index})
+    if len(present) < 2:
+        return 0.0
+    col_ix = [cls_index[c] for c in present]
+    p_sub = p_f[:, col_ix]
+    present_to_sub = {c: i for i, c in enumerate(present)}
+    try:
+        if len(present) == 2:
+            # label_binarize hanya mengembalikan 1 kolom untuk kasus biner; pakai skor kelas positif.
+            y01 = np.array([present_to_sub[c] for c in y_f], dtype=int)
+            return float(roc_auc_score(y01, p_sub[:, 1]))
+        y_bin = label_binarize(y_f, classes=present)
+        return float(
+            roc_auc_score(
+                y_bin,
+                p_sub,
+                average="weighted",
+                multi_class="ovr",
+            )
+        )
+    except Exception:
+        return 0.0
 
 
 def get_available_testing_models() -> list[dict]:
@@ -215,7 +275,13 @@ def test_indobert_model(
         text = _build_text(row)
         if not text:
             continue
-        valid_rows.append(row)
+        valid_rows.append(
+            {
+                "row": row,
+                "text": text,
+                "actual": label,
+            }
+        )
 
     if not valid_rows:
         raise ValueError("No valid rows found (columns 'jenis' and text input must be filled).")
@@ -242,9 +308,25 @@ def test_indobert_model(
         torch.backends.cudnn.benchmark = True
 
     id2label_cfg = model.config.id2label or {}
+    label2id_cfg: dict[str, Any] = dict(model.config.label2id or {})
+    if label2id_cfg:
+        aligned: list[dict] = []
+        for it in valid_rows:
+            c = _canonical_dataset_label(it["actual"], label2id_cfg)
+            if c is None:
+                continue
+            aligned.append({**it, "actual": c})
+        valid_rows = aligned
+        if not valid_rows:
+            raise ValueError(
+                "No rows left after aligning dataset labels with the model's label2id. "
+                "Check that column `jenis` matches the class names used during training."
+            )
 
     # Siapkan data teks + label sekali saja supaya tidak rebuild berulang.
-    batch_size = 16
+    # Gunakan batch lebih besar saat GPU aktif agar inference lebih cepat.
+    batch_size = 64 if device.type == "cuda" else 16
+    use_amp = device.type == "cuda"
     actual_labels: list[str] = []
     predicted_labels: list[str] = []
     sample_results: list[dict] = []
@@ -268,35 +350,26 @@ def test_indobert_model(
         ]
         label_to_idx = {lab: i for i, lab in enumerate(labels_in_order)}
 
-    items: list[dict] = []
-    for row in valid_rows:
-        text = _build_text(row)
-        actual = str(row.get("jenis") or "").strip()
-        if not actual or not text:
-            continue
-        items.append(
-            {
-                "row": row,
-                "text": text,
-                "actual": actual,
-            }
-        )
+    items = valid_rows
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for start in range(0, len(items), batch_size):
             chunk = items[start : start + batch_size]
             texts = [it["text"] for it in chunk]
 
+            # Dynamic padding per-batch jauh lebih cepat pada input pendek,
+            # tetap dibatasi oleh max_length untuk konsistensi truncation.
             enc = tokenizer(
                 texts,
                 truncation=True,
-                padding="max_length",
+                padding=True,
                 max_length=max_length,
                 return_tensors="pt",
             )
             enc = {k: v.to(device) for k, v in enc.items()}
 
-            logits = model(**enc).logits  # [bs, num_labels]
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                logits = model(**enc).logits  # [bs, num_labels]
             probs = torch.softmax(logits, dim=-1)  # [bs, num_labels]
             pred_idx_tensor = torch.argmax(probs, dim=-1)  # [bs]
             probs_cpu = probs.detach().cpu().numpy()
@@ -310,6 +383,11 @@ def test_indobert_model(
                 predicted = id2label_cfg.get(pred_idx)
                 if predicted is None:
                     predicted = id2label_cfg.get(str(pred_idx), str(pred_idx))
+                predicted = str(predicted).strip()
+                if label2id_cfg:
+                    predicted = (
+                        _canonical_dataset_label(predicted, label2id_cfg) or predicted
+                    )
 
                 actual_labels.append(actual)
                 predicted_labels.append(predicted)
@@ -359,30 +437,20 @@ def test_indobert_model(
     )
     std_deviation = float(np.std(f1_per_class)) if f1_per_class is not None else 0.0
 
-    # ROC-AUC (multi-class, menggunakan probabilitas model).
+    # ROC-AUC (multi-class OVR weighted; binarize agar stabil dengan string label).
     roc_auc = 0.0
-    try:
-        if all_probs:
-            probas_matrix = np.vstack(all_probs)
-            # Pastikan urutan label sesuai kolom probas_matrix.
-            num_labels_from_probs = probas_matrix.shape[1]
-            effective_labels_in_order = labels_in_order
-            if (not effective_labels_in_order) or (len(effective_labels_in_order) != num_labels_from_probs):
-                effective_labels_in_order = [
-                    id2label_int_to_str.get(i, str(i)) for i in range(num_labels_from_probs)
-                ]
-
-            roc_auc = float(
-                roc_auc_score(
-                    actual_labels,
-                    probas_matrix,
-                    multi_class="ovr",
-                    average="weighted",
-                    labels=effective_labels_in_order,
-                )
+    if all_probs and labels_in_order:
+        probas_matrix = np.vstack(all_probs)
+        n_prob_cols = probas_matrix.shape[1]
+        eff_labels = labels_in_order
+        if len(eff_labels) != n_prob_cols:
+            eff_labels = [
+                id2label_int_to_str.get(i, str(i)) for i in range(n_prob_cols)
+            ]
+        if len(eff_labels) >= 2:
+            roc_auc = _multiclass_roc_auc_weighted(
+                actual_labels, probas_matrix, eff_labels
             )
-    except Exception:
-        roc_auc = 0.0
     # Matthews correlation coefficient untuk evaluasi klasifikasi multi-kelas.
     try:
         mcc = float(matthews_corrcoef(actual_labels, predicted_labels))
