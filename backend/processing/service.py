@@ -31,6 +31,7 @@ MBERT_MODEL_ID = "bert-base-multilingual-cased"
 # Internal defaults khusus mBERT
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
+_INDOBERT_FAST_MAX_LENGTH = 64
 
 
 def _set_global_seed(seed: int) -> None:
@@ -211,6 +212,7 @@ def train_indobert_softmax(
     grad_accum: int,
     early_stopping_patience: int,
     seed: int = 42,
+    fast_mode: bool = False,
     on_epoch_end=None,
     base_model_id: str = INDOBERT_MODEL_ID,
 ) -> dict:
@@ -290,22 +292,51 @@ def train_indobert_softmax(
         attention_probs_dropout_prob=dropout,
     )
 
+    if fast_mode:
+        # Fast mode IndoBERT: freeze mayoritas backbone, fine-tune layer atas + head.
+        base = getattr(model, "bert", None)
+        if base is not None:
+            for p in base.parameters():
+                p.requires_grad = False
+            try:
+                encoder = getattr(base, "encoder", None)
+                layers = getattr(encoder, "layer", None) if encoder is not None else None
+                if layers is not None:
+                    for layer in list(layers)[-4:]:
+                        for p in layer.parameters():
+                            p.requires_grad = True
+            except Exception:
+                pass
+            try:
+                pooler = getattr(base, "pooler", None)
+                if pooler is not None:
+                    for p in pooler.parameters():
+                        p.requires_grad = True
+            except Exception:
+                pass
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     use_amp = device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
+    requested_max_length = int(max_length) if isinstance(max_length, int) else _MBERT_FIXED_MAX_LENGTH
+    requested_max_length = max(8, min(512, requested_max_length))
+    effective_max_length = (
+        min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length) if fast_mode else requested_max_length
+    )
+
     train_ds = TextClsDataset(
         [texts[i] for i in train_idx.tolist()],
         [y_all[i] for i in train_idx.tolist()],
         tokenizer,
-        max_length,
+        effective_max_length,
     )
     val_ds = TextClsDataset(
         [texts[i] for i in val_idx.tolist()],
         [y_all[i] for i in val_idx.tolist()],
         tokenizer,
-        max_length,
+        effective_max_length,
     )
 
     train_loader = DataLoader(

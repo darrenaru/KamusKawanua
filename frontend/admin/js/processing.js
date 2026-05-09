@@ -196,8 +196,10 @@
     const sortedEntries = entries.sort((a, b) => {
       const ra = parseRatioParts(a[0]);
       const rb = parseRatioParts(b[0]);
-      if (ra.train !== rb.train) return ra.train - rb.train;
-      if (ra.test !== rb.test) return ra.test - rb.test;
+      // Urut berdasarkan ratio secara numerik (Train% besar → kecil),
+      // sehingga 90:10 tampil di atas 80:20, dst.
+      if (ra.train !== rb.train) return rb.train - ra.train;
+      if (ra.test !== rb.test) return rb.test - ra.test;
       return String(a[0]).localeCompare(String(b[0]));
     });
 
