@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kamus Kawanua</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/logo-only-white.svg">
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,7 +18,7 @@
 
 <div class="container">
 
-    <div class="brand-logo-wrap">
+    <div class="brand-logo-wrap" data-aos="fade-up" data-aos-delay="40">
         <img
             src="assets/images/logo.svg"
             alt="Kamus Kawanua"
@@ -28,11 +29,11 @@
         />
     </div>
 
-    <div class="language-title">
+    <div class="language-title" data-aos="fade-up" data-aos-delay="110">
         Manado &bull; Indonesia
     </div>
 
-    <div class="language-row">
+    <div class="language-row" data-aos="fade-up" data-aos-delay="160">
 
             <div class="lang-box">
                 <input type="text" id="inputLang" readonly>
@@ -50,7 +51,7 @@
 
 </div>
 
-    <div class="search-box">
+    <div class="search-box" data-aos="fade-up" data-aos-delay="220">
         <input type="text" id="query" placeholder="Masukkan kata..." />
         <button onclick="search()" class="search-btn" id="searchBtn">
             <img src="assets/images/search.png" alt="search">
@@ -66,6 +67,9 @@
 
 </div>
 
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="animations.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

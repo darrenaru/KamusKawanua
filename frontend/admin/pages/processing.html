@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Processing - Kamus Kawanua</title>
     <link rel="icon" type="image/svg+xml" href="../../assets/images/logo-only-white.svg">
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="../css/processing.css" />
   </head>
   <body>
@@ -27,8 +28,8 @@
 
       <!-- MAIN -->
       <main class="main">
-        <div class="main-header">
-          <h1 class="title-with-icon">
+        <div class="main-header" data-aos="fade-up" data-aos-delay="40">
+          <h1 class="title-with-icon" data-aos="fade-up" data-aos-delay="80">
             <span class="title-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg>
             </span>
@@ -733,6 +734,9 @@
 
     <!-- SUPABASE -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="../../animations.js"></script>
     <script src="../js/processing.js"></script>
   </body>
 </html>
