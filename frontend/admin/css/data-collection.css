@@ -166,10 +166,12 @@ body::after {
    MAIN (TIDAK DIUBAH)
 ========================= */
 
+/* Scroll di tingkat halaman agar AOS mendeteksi elemen saat menggulir */
 .main {
   flex: 1;
-  height: 100vh;
-  overflow-y: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: visible;
   padding: 40px 60px 60px;
   display: flex;
   flex-direction: column;

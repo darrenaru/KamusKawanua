@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin Home</title>
+  <link rel="icon" type="image/svg+xml" href="../../assets/images/logo-only-white.svg">
+  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
   <link rel="stylesheet" href="../css/dashboard.css">
 </head>
 <body>
@@ -29,15 +31,15 @@
   <!-- MAIN -->
   <main class="main">
 
-    <h1 class="title title-with-icon">
+    <h1 class="title title-with-icon" data-aos="fade-up" data-aos-delay="40">
       <span class="title-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></svg>
       </span>
       Select Algorithm
     </h1>
-    <p class="page-subtitle">Choose one algorithm to continue to dataset preparation and model workflow.</p>
+    <p class="page-subtitle" data-aos="fade-up" data-aos-delay="90">Choose one algorithm to continue to dataset preparation and model workflow.</p>
 
-    <div class="algorithms">
+    <div class="algorithms" data-aos="fade-up" data-aos-delay="140">
 
       <button class="algo-btn" data-algo="mbert">MBERT</button>
       <button class="algo-btn" data-algo="indobert">INDOBERT</button>
@@ -50,7 +52,7 @@
 
     <div id="selectedInfo" class="selected-info">No algorithm selected yet.</div>
 
-    <button id="nextBtn" class="next-btn" disabled>
+    <button id="nextBtn" class="next-btn" disabled data-aos="fade-up" data-aos-delay="190">
       Continue to Data Collection
     </button>
 
@@ -58,6 +60,9 @@
 
 </div>
 
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="../../animations.js"></script>
 <script src="../js/dashboard.js"></script>
 </body>
 </html>

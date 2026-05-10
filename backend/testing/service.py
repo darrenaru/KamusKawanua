@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
 import numpy as np
 import torch
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
     matthews_corrcoef,
@@ -17,6 +19,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from backend.processing.service import (
     _build_text,
     _fetch_preprocessed_rows,
+    _parse_ratio,
     _safe_name,
     predict_indobert_softmax,
     predict_mbert_softmax,
@@ -87,7 +90,7 @@ def get_available_testing_models() -> list[dict]:
     try:
         models_res = (
             supabase.table("models")
-            .select("id,nama_model,algoritma,mode,dataset_id,max_length,created_at")
+            .select("id,nama_model,algoritma,mode,dataset_id,split_ratio,accuracy,max_length,created_at")
             .order("created_at", desc=True)
             .execute()
         )
@@ -212,6 +215,10 @@ def get_available_testing_models() -> list[dict]:
                 "algoritma": str(row.get("algoritma") or "Unknown").strip() or "Unknown",
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
+                "split_ratio": str(row.get("split_ratio") or "").strip() or None,
+                "training_accuracy": (
+                    float(row.get("accuracy")) if row.get("accuracy") is not None else None
+                ),
                 "max_length": row.get("max_length"),
                 "created_at": row.get("created_at"),
                 "latest_testing": latest_testing_by_model_dataset.get((int(model_id), int(dataset_id)))
@@ -254,6 +261,128 @@ def _insert_testing_result(payload: dict[str, Any]) -> int | None:
         raise ValueError(f"Failed to save to testing_results: {e}")
 
 
+def _get_model_split_ratio(
+    *,
+    model_id: int | None,
+    model_name: str,
+) -> str:
+    """Resolve split_ratio from selected model; fallback to default training ratio."""
+    default_ratio = "80:20"
+    try:
+        query = (
+            supabase.table("models")
+            .select("split_ratio")
+            .order("created_at", desc=True)
+        )
+        if model_id is not None:
+            query = query.eq("id", model_id).range(0, 0)
+        else:
+            query = query.eq("nama_model", model_name).range(0, 0)
+        res = query.execute()
+        row = (res.data or [None])[0]
+        ratio = str((row or {}).get("split_ratio") or "").strip()
+        if not ratio:
+            return default_ratio
+        # Validasi format rasio agar aman dipakai splitting.
+        _parse_ratio(ratio)
+        return ratio
+    except Exception:
+        return default_ratio
+
+
+def _get_model_seed(
+    *,
+    model_id: int | None,
+    model_name: str,
+) -> int:
+    default_seed = 42
+    try:
+        query = (
+            supabase.table("models")
+            .select("seed")
+            .order("created_at", desc=True)
+        )
+        if model_id is not None:
+            query = query.eq("id", model_id).range(0, 0)
+        else:
+            query = query.eq("nama_model", model_name).range(0, 0)
+        res = query.execute()
+        row = (res.data or [None])[0]
+        seed_raw = (row or {}).get("seed")
+        if seed_raw is None:
+            return default_seed
+        seed_val = int(seed_raw)
+        return seed_val if seed_val >= 0 else default_seed
+    except Exception:
+        return default_seed
+
+
+def _load_model_holdout_row_ids(
+    *,
+    model_name: str,
+    dataset_id: int,
+) -> set[str]:
+    """Load exact validation/test rows saved during training."""
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+        model_dir = os.path.join(model_root, _safe_name(model_name))
+        holdout_path = os.path.join(model_dir, "model_holdout.json")
+        if not os.path.isfile(holdout_path):
+            return set()
+        with open(holdout_path, "r", encoding="utf-8") as f:
+            payload = json.load(f) or {}
+        payload_dataset_id = payload.get("dataset_id")
+        if payload_dataset_id is not None and int(payload_dataset_id) != int(dataset_id):
+            return set()
+        ids = payload.get("val_row_ids") or []
+        return {str(x).strip() for x in ids if str(x).strip()}
+    except Exception:
+        return set()
+
+
+def _select_testing_rows_by_model_ratio(
+    valid_rows: list[dict],
+    split_ratio: str,
+    *,
+    random_state: int = 42,
+) -> list[dict]:
+    """Pick only test partition rows so testing follows selected model ratio."""
+    if not valid_rows:
+        return valid_rows
+
+    _, test_frac = _parse_ratio(split_ratio)
+    if test_frac <= 0:
+        return []
+    if test_frac >= 1 or len(valid_rows) == 1:
+        return valid_rows
+
+    idx_all = np.arange(len(valid_rows))
+    labels = [str(item.get("actual") or "").strip() for item in valid_rows]
+    can_stratify = len(set(labels)) > 1
+
+    try:
+        _, test_idx = train_test_split(
+            idx_all,
+            test_size=test_frac,
+            random_state=random_state,
+            shuffle=True,
+            stratify=labels if can_stratify else None,
+        )
+    except ValueError:
+        # Fallback non-stratified jika distribusi kelas tidak memungkinkan stratify split.
+        _, test_idx = train_test_split(
+            idx_all,
+            test_size=test_frac,
+            random_state=random_state,
+            shuffle=True,
+            stratify=None,
+        )
+
+    test_idx = np.array(test_idx)
+    return [valid_rows[int(i)] for i in test_idx.tolist()]
+
+
 def test_indobert_model(
     *,
     dataset_id: int,
@@ -288,6 +417,30 @@ def test_indobert_model(
 
     if limit:
         valid_rows = valid_rows[:limit]
+
+    holdout_row_ids = _load_model_holdout_row_ids(
+        model_name=model_name,
+        dataset_id=dataset_id,
+    )
+    if not holdout_row_ids:
+        raise ValueError(
+            "Model holdout test set was not found. "
+            "Retrain this model so testing uses the exact holdout split from training."
+        )
+
+    holdout_rows: list[dict] = []
+    for item in valid_rows:
+        row = item.get("row") or {}
+        row_key = str(row.get("id_kata") or row.get("id") or "").strip()
+        if row_key and row_key in holdout_row_ids:
+            holdout_rows.append(item)
+    valid_rows = holdout_rows
+
+    if not valid_rows:
+        raise ValueError(
+            "No rows matched the model holdout test set. "
+            "Make sure dataset is unchanged and retrain model if needed."
+        )
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))

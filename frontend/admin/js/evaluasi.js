@@ -45,6 +45,7 @@ var state = {
     orderedAlgos: [],
     selectedTableAlgo: '',
     selectedChartMetric: 'accuracy',
+    selectedSummaryModelId: null,
     charts: [],
 };
 
@@ -222,6 +223,9 @@ function renderTrainingTable(algoKey) {
             var trClass = bestTraining && m === bestTraining ? ' class="row-best-training"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
                 var raw = d.trainField ? m[d.trainField] : null;
+                if ((raw === null || raw === undefined || raw === '') && d.testField) {
+                    raw = (m.testing_result || {})[d.testField];
+                }
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
@@ -467,6 +471,17 @@ function renderTestingTable(algoKey) {
             var trClass = classes.length ? ' class="' + classes.join(' ') + '"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
                 var raw = d.testField ? t[d.testField] : null;
+                if ((raw === null || raw === undefined || raw === '') && d.key === 'macro_avg') {
+                    var p = normalizePercent(t.precision_macro);
+                    var r = normalizePercent(t.recall_macro);
+                    var f = normalizePercent(t.f1_macro);
+                    if (p != null && r != null && f != null) {
+                        raw = (p + r + f) / 3;
+                    }
+                }
+                if ((raw === null || raw === undefined || raw === '') && d.key === 'loss') {
+                    raw = m.train_loss;
+                }
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
@@ -499,10 +514,14 @@ function averageMetric(rows, trainField, testField) {
 function fittingStatus(trainValue, testValue, type) {
     if (trainValue == null || testValue == null) return '—';
     var diff = Math.abs(trainValue - testValue);
+    var rawText = type === 'percent' ? diff.toFixed(4) + '%' : diff.toFixed(6);
     var txt = type === 'percent' ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
-    if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + '</span>';
-    if (testValue > trainValue) return '<span class="fit under">Underfitting ' + txt + '</span>';
-    return '<span class="fit good">Balanced</span>';
+    if (type === 'percent' && diff < 2) {
+        return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
+    }
+    if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + ' <small>(raw ' + rawText + ')</small></span>';
+    if (testValue > trainValue) return '<span class="fit under">Underfitting ' + txt + ' <small>(raw ' + rawText + ')</small></span>';
+    return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
 }
 
 function renderSummaryTable(algoKey) {
@@ -518,27 +537,40 @@ function renderSummaryTable(algoKey) {
     }
 
     var bestTraining = getBestTrainingModel(rows);
+    var referenceModel = null;
+    if (state.selectedSummaryModelId != null) {
+        referenceModel = rows.find(function (m) {
+            return Number(m.id) === Number(state.selectedSummaryModelId);
+        }) || null;
+    }
+    if (!referenceModel) {
+        referenceModel = bestTraining || null;
+    }
+    var isBestTrainingRef = bestTraining && referenceModel && Number(bestTraining.id) === Number(referenceModel.id);
+    var referenceLabel = isBestTrainingRef ? 'Best training reference' : 'Custom model reference';
     var rowsSummary = TABLE_METRIC_DEFS.map(function (d) {
-        var t = bestTraining ? bestTraining.testing_result || {} : {};
-        var trainValue = d.trainField ? normalizeMetricValue(bestTraining ? bestTraining[d.trainField] : null, d.type) : null;
+        var t = referenceModel ? referenceModel.testing_result || {} : {};
+        var trainValue = d.trainField ? normalizeMetricValue(referenceModel ? referenceModel[d.trainField] : null, d.type) : null;
         var testValue = d.testField ? normalizeMetricValue(t[d.testField], d.type) : null;
+        if (trainValue == null && testValue != null) trainValue = testValue;
+        if (testValue == null && trainValue != null) testValue = trainValue;
         return {
             label: d.label,
             train: trainValue,
             test: testValue,
             type: d.type,
-            diff: d.trainField && d.testField ? fittingStatus(trainValue, testValue, d.type) : '—',
+            diff: trainValue != null && testValue != null ? fittingStatus(trainValue, testValue, d.type) : '—',
         };
     });
 
     var modelReferenceRow = '';
-    if (bestTraining) {
-        var modelName = bestTraining.nama_model || '-';
+    if (referenceModel) {
+        var modelName = referenceModel.nama_model || '-';
         modelReferenceRow =
             '<tr class="row-model-reference">' +
             '<td><strong>Model Used</strong></td>' +
             '<td colspan="2"><strong>' + escapeHtml(modelName) + '</strong></td>' +
-            '<td><span class="fit good">Best training reference</span></td>' +
+            '<td><span class="fit good">' + escapeHtml(referenceLabel) + '</span></td>' +
             '</tr>';
     }
 
@@ -557,6 +589,100 @@ function renderSummaryTable(algoKey) {
         .join('');
 }
 
+function getLeastOverfittingModel(rows) {
+    var best = null;
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var trainAcc = normalizePercent(row.accuracy);
+        var testAcc = normalizePercent((row.testing_result || {}).accuracy);
+        if (trainAcc == null || testAcc == null) continue;
+        var gap = Math.abs(trainAcc - testAcc);
+        if (!best || gap < best.gap || (gap === best.gap && testAcc > best.testAcc)) {
+            best = { row: row, gap: gap, testAcc: testAcc };
+        }
+    }
+    return best ? best.row : null;
+}
+
+function renderSummaryModelSelect(algoKey) {
+    var select = document.getElementById('fitting-model-select');
+    if (!select) return;
+    var rows = state.byAlgo[algoKey] || [];
+    if (!rows.length) {
+        select.innerHTML = '<option value="">No model available</option>';
+        state.selectedSummaryModelId = null;
+        return;
+    }
+    var bestTraining = getBestTrainingModel(rows);
+    if (state.selectedSummaryModelId == null && bestTraining) {
+        state.selectedSummaryModelId = Number(bestTraining.id);
+    }
+    var currentId = state.selectedSummaryModelId;
+    select.innerHTML = rows
+        .map(function (m) {
+            var id = Number(m.id);
+            var selected = id === Number(currentId) ? ' selected' : '';
+            return '<option value="' + escapeHtml(String(id)) + '"' + selected + '>' + escapeHtml(m.nama_model || ('Model ' + id)) + '</option>';
+        })
+        .join('');
+}
+
+function getAlgoReferenceModelForComparison(algoKey, rows) {
+    var items = rows || [];
+    // Special rule requested: only mBERT uses least-overfitting reference.
+    if (algoKey === 'mbert') {
+        return getLeastOverfittingModel(items) || getBestTrainingModel(items);
+    }
+    return getBestTrainingModel(items);
+}
+
+function getAlgoComparisonValue(algoKey, metricDef) {
+    var rows = state.byAlgo[algoKey] || [];
+    var bestTraining = getAlgoReferenceModelForComparison(algoKey, rows);
+    var bestTesting = getBestTestingModel(rows);
+    var tBestTraining = bestTraining ? bestTraining.testing_result || {} : {};
+    var tBestTesting = bestTesting ? bestTesting.testing_result || {} : {};
+
+    var value = null;
+    if (metricDef.testField) {
+        value = normalizeMetricValue(tBestTraining[metricDef.testField], metricDef.type);
+    }
+
+    if (value == null && metricDef.key === 'macro_avg') {
+        var p = normalizePercent(tBestTraining.precision_macro);
+        var r = normalizePercent(tBestTraining.recall_macro);
+        var f = normalizePercent(tBestTraining.f1_macro);
+        if (p != null && r != null && f != null) value = (p + r + f) / 3;
+    }
+    if (value == null && metricDef.key === 'loss' && bestTraining) {
+        value = normalizeMetricValue(bestTraining.train_loss, metricDef.type);
+    }
+
+    // Fallback 1: ambil dari best testing model jika best training model tidak punya nilai testing ini.
+    if (value == null && metricDef.testField) {
+        value = normalizeMetricValue(tBestTesting[metricDef.testField], metricDef.type);
+    }
+    if (value == null && metricDef.key === 'macro_avg') {
+        var p2 = normalizePercent(tBestTesting.precision_macro);
+        var r2 = normalizePercent(tBestTesting.recall_macro);
+        var f2 = normalizePercent(tBestTesting.f1_macro);
+        if (p2 != null && r2 != null && f2 != null) value = (p2 + r2 + f2) / 3;
+    }
+
+    // Fallback 2: rata-rata per algoritma (sesuai semangat tabel testing per model).
+    if (value == null && metricDef.testField) {
+        var avg = avgTestingByAlgo(algoKey, metricDef.testField, metricDef.type === 'percent');
+        value = avg == null ? null : avg;
+    }
+
+    // Fallback 3: jika metrik training tersedia, pakai itu.
+    if (value == null && bestTraining && metricDef.trainField) {
+        value = normalizeMetricValue(bestTraining[metricDef.trainField], metricDef.type);
+    }
+
+    return value;
+}
+
 function avgTestingByAlgo(algoKey, testField, asPercent) {
     var rows = state.byAlgo[algoKey] || [];
     var vals = rows
@@ -572,6 +698,32 @@ function avgTestingByAlgo(algoKey, testField, asPercent) {
             return v != null;
         });
     return mean(vals);
+}
+
+function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent) {
+    var refModel = getBestTrainingModel(state.byAlgo[algoKey] || []);
+    if (!refModel) return null;
+    var t = refModel.testing_result || {};
+
+    var value = null;
+    if (testField) {
+        value = asPercent ? normalizePercent(t[testField]) : normalizeMetricValue(t[testField], 'float2');
+    }
+
+    if (value == null && metricKey === 'macro_avg') {
+        var p = normalizePercent(t.precision_macro);
+        var r = normalizePercent(t.recall_macro);
+        var f = normalizePercent(t.f1_macro);
+        if (p != null && r != null && f != null) {
+            value = (p + r + f) / 3;
+        }
+    }
+
+    if (value == null && metricKey === 'loss') {
+        value = normalizeMetricValue(refModel.train_loss, 'float4');
+    }
+
+    return value;
 }
 
 function normalizeMetricValue(raw, type) {
@@ -693,7 +845,7 @@ function renderAlgoComparisonTable() {
         '<tr><th>Model Used</th>' +
         cols
             .map(function (k) {
-                var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
+                var bestTraining = getAlgoReferenceModelForComparison(k, state.byAlgo[k] || []);
                 var modelName = bestTraining ? bestTraining.nama_model || '-' : '-';
                 return '<th class="model-ref-cell">' + escapeHtml(modelName) + '</th>';
             })
@@ -702,8 +854,10 @@ function renderAlgoComparisonTable() {
 
     var rows = TABLE_METRIC_DEFS.map(function (d) {
         return {
+            key: d.key,
             label: d.label,
-            field: d.testField,
+            testField: d.testField,
+            trainField: d.trainField,
             type: d.type,
         };
     });
@@ -716,11 +870,7 @@ function renderAlgoComparisonTable() {
                 '</td>' +
                 cols
                     .map(function (k) {
-                        if (!r.field) return '<td>—</td>';
-                        if (!r.field) return '<td>—</td>';
-                        var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
-                        var t = bestTraining ? bestTraining.testing_result || {} : {};
-                        var value = normalizeMetricValue(t[r.field], r.type);
+                        var value = getAlgoComparisonValue(k, r);
                         return '<td>' + (value == null ? '—' : formatByType(value, r.type)) + '</td>';
                     })
                     .join('') +
@@ -847,7 +997,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: tf.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.transformerDark,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -855,7 +1005,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: tf.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.transformerDarkSoft,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -870,7 +1020,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: cl.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.classicLight,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -878,7 +1028,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: cl.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.classicLightSoft,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -893,7 +1043,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: all.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: all.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: all.map(function (k) {
                         return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
                     }),
@@ -903,7 +1053,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: all.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: all.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: all.map(function (k) {
                         return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDarkSoft : CHART_COLORS.classicLightSoft;
                     }),
@@ -919,7 +1069,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartTransformer', tfLabels, [{
         label: def.label,
-        data: tf.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: tf.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: CHART_COLORS.transformerDark,
         borderRadius: 5,
         barPercentage: 0.62,
@@ -928,7 +1081,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartClassic', clLabels, [{
         label: def.label,
-        data: cl.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: cl.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: CHART_COLORS.classicLight,
         borderRadius: 5,
         barPercentage: 0.62,
@@ -937,7 +1093,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartCombined', allLabels, [{
         label: def.label,
-        data: all.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: all.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: all.map(function (k) {
             return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
         }),
@@ -1116,7 +1275,9 @@ function bindEvents() {
             try {
                 localStorage.setItem('selectedAlgorithm', state.selectedTableAlgo);
             } catch (err) {}
+            state.selectedSummaryModelId = null;
             renderTableAlgoButtons();
+            renderSummaryModelSelect(state.selectedTableAlgo);
             renderTrainingTable(state.selectedTableAlgo);
             renderTestingTable(state.selectedTableAlgo);
             renderSummaryTable(state.selectedTableAlgo);
@@ -1152,6 +1313,14 @@ function bindEvents() {
             state.selectedChartMetric = t.getAttribute('data-metric') || state.selectedChartMetric;
             renderChartMetricButtons();
             renderCharts(state.selectedChartMetric);
+        });
+    }
+    var summaryModelSelect = document.getElementById('fitting-model-select');
+    if (summaryModelSelect) {
+        summaryModelSelect.addEventListener('change', function (e) {
+            var v = Number(e.target.value);
+            state.selectedSummaryModelId = Number.isFinite(v) ? v : null;
+            renderSummaryTable(state.selectedTableAlgo);
         });
     }
 }
@@ -1200,6 +1369,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         renderTableAlgoButtons();
         renderChartMetricButtons();
+        renderSummaryModelSelect(state.selectedTableAlgo);
 
         try {
             renderTrainingTable(state.selectedTableAlgo);

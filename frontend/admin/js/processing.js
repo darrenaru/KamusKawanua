@@ -29,6 +29,20 @@
   let epochResultsData = []; // Untuk menyimpan hasil per epoch
   const MBERT_MULTI_SEEDS = [42, 123, 2024, 7];
 
+  function refreshAdminPageAOS() {
+    requestAnimationFrame(() => {
+      if (typeof window.refreshPageAOS === "function") {
+        window.refreshPageAOS();
+      } else if (typeof window.AOS !== "undefined" && typeof window.AOS.refresh === "function") {
+        try {
+          window.AOS.refresh();
+        } catch (err) {
+          /* ignore */
+        }
+      }
+    });
+  }
+
   function normalizeAlgoKey(value) {
     return String(value || "").trim().toLowerCase();
   }
@@ -680,6 +694,7 @@
         fillParametersFromGlobalBest();
       }
       applyRatioSearchContextState();
+      refreshAdminPageAOS();
     });
 
     const datasetList = document.getElementById("dataset-list");
@@ -951,7 +966,9 @@
       if (currentMode === "training-final") {
         renderHistoryTable();
       }
+      refreshAdminPageAOS();
     });
+    refreshAdminPageAOS();
   }
 
   function applyModeSpecificVisibility() {
@@ -3321,6 +3338,7 @@
         behavior: "smooth",
         block: "nearest",
       });
+      refreshAdminPageAOS();
     });
   }
 
@@ -3418,14 +3436,10 @@
       return Number.isFinite(n) ? n : null;
     })();
 
-    const algoKey = String(params.algo || currentAlgo || "").toLowerCase();
-    const maxLengthToSave =
-      algoKey === "mbert"
-        ? 16
-        : (() => {
-            const ml = parseInt(params.maxLength || 64, 10);
-            return Number.isFinite(ml) ? ml : 64;
-          })();
+    const maxLengthToSave = (() => {
+      const ml = parseInt(params.maxLength || 64, 10);
+      return Number.isFinite(ml) ? ml : 64;
+    })();
 
     const modelData = {
       nama_model: modelName,

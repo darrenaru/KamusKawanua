@@ -60,6 +60,8 @@ class TestingModelItem(BaseModel):
     algoritma: str
     dataset_id: int | None = None
     dataset_name: str | None = None
+    split_ratio: str | None = None
+    training_accuracy: float | None = None
     max_length: int | None = None
     created_at: str | None = None
     latest_testing: TestingLatestResultSummary | None = None

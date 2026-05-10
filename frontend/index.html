@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kamus Kawanua</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/logo-only-white.svg">
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,13 +18,22 @@
 
 <div class="container">
 
-    <h1>KAMUS KAWANUA</h1>
+    <div class="brand-logo-wrap" data-aos="fade-up" data-aos-delay="40">
+        <img
+            src="assets/images/logo.svg"
+            alt="Kamus Kawanua"
+            class="brand-logo"
+            id="brandLogo"
+            draggable="false"
+            oncontextmenu="return false;"
+        />
+    </div>
 
-    <div class="language-title">
+    <div class="language-title" data-aos="fade-up" data-aos-delay="110">
         Manado &bull; Indonesia
     </div>
 
-    <div class="language-row">
+    <div class="language-row" data-aos="fade-up" data-aos-delay="160">
 
             <div class="lang-box">
                 <input type="text" id="inputLang" readonly>
@@ -40,17 +51,25 @@
 
 </div>
 
-    <div class="search-box">
+    <div class="search-box" data-aos="fade-up" data-aos-delay="220">
         <input type="text" id="query" placeholder="Masukkan kata..." />
-        <button onclick="search()" class="search-btn">
+        <button onclick="search()" class="search-btn" id="searchBtn">
             <img src="assets/images/search.png" alt="search">
         </button>
+    </div>
+
+    <div id="searchLoading" class="search-loading" style="display:none" aria-live="polite" aria-busy="true">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="search-loading-text">Searching…</div>
     </div>
 
     <div id="results"></div>
 
 </div>
 
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="animations.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

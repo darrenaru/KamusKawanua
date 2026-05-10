@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Processing - Kamus Kawanua</title>
+    <link rel="icon" type="image/svg+xml" href="../../assets/images/logo-only-white.svg">
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="../css/processing.css" />
   </head>
   <body>
@@ -26,8 +28,8 @@
 
       <!-- MAIN -->
       <main class="main">
-        <div class="main-header">
-          <h1 class="title-with-icon">
+        <div class="main-header" data-aos="fade-up" data-aos-delay="40">
+          <h1 class="title-with-icon" data-aos="fade-up" data-aos-delay="80">
             <span class="title-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg>
             </span>
@@ -37,7 +39,7 @@
 
         <div class="processing-container">
           <!-- SECTION RASIO DATA SPLIT -->
-          <div class="ratio-section">
+          <div class="ratio-section" data-aos="fade-up" data-aos-delay="60">
             <div class="ratio-header">
               <h3 class="section-heading-with-icon">
                 <span class="section-heading-icon" aria-hidden="true">
@@ -112,7 +114,7 @@
           </div>
 
           <!-- TOP CONTROLS -->
-          <div class="top-controls">
+          <div class="top-controls" data-aos="fade-up" data-aos-delay="100">
             <select id="algo-select">
               <option value="" disabled selected>Select Algorithm</option>
               <option value="indobert">IndoBERT</option>
@@ -200,7 +202,7 @@
           </div>
 
           <!-- PARAMETER CARD - Mode Cari Rasio Terbaik -->
-          <div class="parameter-card" id="param-card-cari-rasio">
+          <div class="parameter-card" id="param-card-cari-rasio" data-aos="fade-up" data-aos-delay="140">
             <h3 style="margin-bottom: 20px">Find the Best Ratio</h3>
 
             <div id="dynamic-params-cari-rasio"></div>
@@ -223,6 +225,8 @@
           <div
             class="parameter-card"
             id="param-card-training-final"
+            data-aos="fade-up"
+            data-aos-delay="160"
             style="display: none"
           >
             <h3 style="margin-bottom: 20px">
@@ -732,6 +736,9 @@
 
     <!-- SUPABASE -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="../../animations.js"></script>
     <script src="../js/processing.js"></script>
   </body>
 </html>

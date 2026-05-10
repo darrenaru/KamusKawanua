@@ -6,6 +6,20 @@ const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
+function bumpPageAOS() {
+    requestAnimationFrame(() => {
+        if (typeof window.refreshPageAOS === "function") {
+            window.refreshPageAOS();
+        } else if (typeof window.AOS !== "undefined" && typeof window.AOS.refresh === "function") {
+            try {
+                window.AOS.refresh();
+            } catch (e) {
+                /* ignore */
+            }
+        }
+    });
+}
+
 // ==============================
 // DATA
 // ==============================
@@ -153,20 +167,23 @@ function renderDatasets(list = datasets) {
 
     if (!list.length) {
         const hasSourceData = datasets.length > 0;
-        container.innerHTML = `<div class="dataset-empty">${
+        container.innerHTML = `<div class="dataset-empty" data-aos="fade-up" data-aos-delay="60">${
             hasSourceData
                 ? "No dataset matches your current search keyword."
                 : "No datasets are available yet. Upload a CSV file to get started."
         }</div>`;
         setDatasetStatus(hasSourceData ? "Search completed." : "Waiting for dataset upload.");
+        bumpPageAOS();
         return;
     }
 
     setDatasetStatus(`Showing ${list.length} dataset(s).`);
 
-    list.forEach(ds => {
+    list.forEach((ds, idx) => {
         const card = document.createElement("div");
         card.className = "dataset-card";
+        card.setAttribute("data-aos", "fade-up");
+        card.setAttribute("data-aos-delay", String(Math.min(60 + idx * 50, 320)));
 
         card.innerHTML = `
             <div class="card-header">
@@ -187,6 +204,8 @@ function renderDatasets(list = datasets) {
 
         container.appendChild(card);
     });
+
+    bumpPageAOS();
 }
 
 // ==============================

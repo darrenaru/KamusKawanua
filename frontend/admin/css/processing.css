@@ -151,10 +151,12 @@ body::before {
   cursor: not-allowed;
 }
 
+/* Gunakan scroll jendela (bukan overflow di .main) agar AOS/scroll trigger bekerja */
 .main {
   flex: 1;
-  height: 100vh;
-  overflow-y: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: visible;
   padding: 40px 60px 60px;
   display: flex;
   flex-direction: column;

@@ -144,7 +144,7 @@ def _fetch_preprocessed_rows(dataset_id: int) -> list[dict]:
         res = (
             supabase.table("preprocessed_data")
             .select(
-                "id, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
+                "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
                 "manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean, "
                 "final_text, jenis_label"
             )
@@ -247,12 +247,15 @@ def train_indobert_softmax(
 
     texts: list[str] = []
     raw_labels: list[str] = []
+    row_keys: list[str] = []
     for r in rows:
         t = _build_text(r)
         y = str(r.get("jenis") or "").strip()
         if t and y:
             texts.append(t)
             raw_labels.append(y)
+            row_key = str(r.get("id_kata") or r.get("id") or "").strip()
+            row_keys.append(row_key)
 
     if len(texts) < 10:
         raise ValueError("Data terlalu sedikit untuk training (min 10 baris valid).")
@@ -443,6 +446,18 @@ def train_indobert_softmax(
     tokenizer.save_pretrained(model_dir)
     with open(os.path.join(model_dir, "label_map.json"), "w", encoding="utf-8") as f:
         json.dump({"label2id": label2id, "id2label": id2label}, f, ensure_ascii=False)
+    val_row_ids = [row_keys[i] for i in val_idx.tolist() if i < len(row_keys) and row_keys[i]]
+    with open(os.path.join(model_dir, "model_holdout.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "dataset_id": int(dataset_id),
+                "split_ratio": str(split_ratio),
+                "seed": int(seed),
+                "val_row_ids": val_row_ids,
+            },
+            f,
+            ensure_ascii=False,
+        )
 
     return {
         "status": "ok",
@@ -511,12 +526,15 @@ def train_mbert_softmax(
 
         texts: list[str] = []
         raw_labels: list[str] = []
+        row_keys: list[str] = []
         for r in rows:
             t = _build_text(r)
             y = str(r.get("jenis") or "").strip()
             if t and y:
                 texts.append(t)
                 raw_labels.append(y)
+                row_key = str(r.get("id_kata") or r.get("id") or "").strip()
+                row_keys.append(row_key)
 
         if len(texts) < 10:
             raise ValueError("Data terlalu sedikit untuk training (min 10 baris valid).")
@@ -745,6 +763,18 @@ def train_mbert_softmax(
         tokenizer.save_pretrained(model_dir)
         with open(os.path.join(model_dir, "label_map.json"), "w", encoding="utf-8") as f:
             json.dump({"label2id": label2id, "id2label": id2label}, f, ensure_ascii=False)
+        val_row_ids = [row_keys[i] for i in val_idx.tolist() if i < len(row_keys) and row_keys[i]]
+        with open(os.path.join(model_dir, "model_holdout.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "dataset_id": int(dataset_id),
+                    "split_ratio": str(split_ratio),
+                    "seed": int(seed),
+                    "val_row_ids": val_row_ids,
+                },
+                f,
+                ensure_ascii=False,
+            )
 
         return {
             "status": "ok",

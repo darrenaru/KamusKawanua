@@ -8,7 +8,11 @@ import torch
 from fastapi import FastAPI, Query
 from transformers import AutoTokenizer
 
-from backend.main import clean_basic, get_preprocess_tokenizer
+from backend.main import (
+    clean_basic,
+    get_preprocess_tokenizer,
+    _maybe_stem_indonesian_for_preprocess,
+)
 from backend.supabase_client import supabase
 
 app = FastAPI()
@@ -102,6 +106,12 @@ def preprocess(dataset_id: int, tokenizer: TokenizerName = Query("mbert")):
             )
             kalimat_indonesia_clean = clean_basic(
                 row.get("kalimat_indonesia_clean") or row.get("kalimat_indonesia")
+            )
+            indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                indonesia_clean, tokenizer
+            )
+            kalimat_indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                kalimat_indonesia_clean, tokenizer
             )
 
             manado_tokens = tok.tokenize(manado_clean)

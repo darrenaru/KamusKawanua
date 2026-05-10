@@ -14,6 +14,218 @@ try {
     // ignore
 }
 
+/* =============================
+   PREPROCESSING (same flow as preprocessing.html)
+   — seed preprocessed_data from raw_data, then backend tokenizer job
+============================= */
+var TESTING_SUPABASE_URL = 'https://fhpjbkelhvopvfzykjne.supabase.co';
+var TESTING_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTQ2NTQsImV4cCI6MjA5MDk3MDY1NH0.xSUPwXaPCcO4uDi-rH1MdeaJCeJU56pwvLDEgVT_SDQ';
+var testingSupabaseClient = null;
+
+function getTestingSupabaseClient() {
+    if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        return null;
+    }
+    if (!testingSupabaseClient) {
+        testingSupabaseClient = window.supabase.createClient(TESTING_SUPABASE_URL, TESTING_SUPABASE_KEY);
+    }
+    return testingSupabaseClient;
+}
+
+function cleanTextForTesting(text) {
+    if (!text) return '';
+    text = String(text).toLowerCase();
+    text = text.replace(/[^a-zA-Z\s]/g, '');
+    text = text.replace(/(.)\1{2,}/g, '$1$1');
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+}
+
+async function fetchAllRawDataForTesting(datasetId) {
+    var client = getTestingSupabaseClient();
+    if (!client) {
+        throw new Error('Supabase client is not available. Reload the page and try again.');
+    }
+    var allData = [];
+    var from = 0;
+    var limit = 1000;
+    while (true) {
+        var res = await client
+            .from('raw_data')
+            .select('*')
+            .eq('dataset_id', datasetId)
+            .range(from, from + limit - 1);
+        if (res.error) throw res.error;
+        var data = res.data;
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        from += limit;
+    }
+    return allData;
+}
+
+function parseSplitRatioForTesting(splitRatio) {
+    var raw = String(splitRatio || '').trim();
+    var m = raw.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!m) return { train: 80, test: 20 };
+    var train = Number(m[1]);
+    var test = Number(m[2]);
+    if (!Number.isFinite(train) || !Number.isFinite(test) || train + test !== 100 || test <= 0) {
+        return { train: 80, test: 20 };
+    }
+    return { train: train, test: test };
+}
+
+function pickTestingSubsetByRatio(rows, splitRatio) {
+    var ratio = parseSplitRatioForTesting(splitRatio);
+    var testFrac = ratio.test / 100;
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    if (rows.length === 1 || testFrac >= 1) return rows.slice();
+    var targetCount = Math.max(1, Math.round(rows.length * testFrac));
+    if (targetCount >= rows.length) return rows.slice();
+
+    // Deterministik berdasarkan id_kata agar subset test konsisten antar-run.
+    var sorted = rows.slice().sort(function(a, b) {
+        var ka = String((a && a.id_kata) || '');
+        var kb = String((b && b.id_kata) || '');
+        return ka.localeCompare(kb);
+    });
+    return sorted.slice(0, targetCount);
+}
+
+async function pollTestingPreprocessJob(jobId, onProgress) {
+    while (true) {
+        var res = await fetch(API_BASE + '/preprocess/status/' + jobId);
+        var status = await res.json();
+        if (!res.ok) {
+            throw new Error(status && status.message ? status.message : 'Failed to read preprocessing status');
+        }
+        var total = Number(status.total || 0);
+        var processed = Number(status.processed || 0);
+        var deviceLabel = status.device ? ' | Device: ' + String(status.device).toUpperCase() : '';
+        var hasTotal = total > 0;
+        var msg = hasTotal
+            ? 'Tokenizing ' + processed + '/' + total + deviceLabel
+            : 'Preparing tokenizer...' + deviceLabel;
+        // Preprocess backend phase: 30%–72% mengikuti processed/total (proporsional lama tokenisasi).
+        var frac = hasTotal ? Math.min(1, processed / total) : 0;
+        var pct = hasTotal ? 30 + Math.round(42 * frac) : 31;
+        if (status.status === 'cancelled') {
+            throw new Error('Preprocessing was cancelled');
+        }
+        if (status.status === 'error') {
+            throw new Error(status.error || 'Backend tokenizer failed');
+        }
+        if (status.status === 'done') {
+            if (typeof onProgress === 'function') {
+                var doneMsg = hasTotal
+                    ? 'Tokenizer selesai: ' + processed + '/' + total + ' baris diproses' + deviceLabel
+                    : 'Tokenizer selesai: 0 baris — semua sudah punya token (tidak perlu ulang; perilaku sama seperti Preprocessing ke-2)' + deviceLabel;
+                onProgress(72, doneMsg);
+            }
+            return status;
+        }
+        if (typeof onProgress === 'function') {
+            onProgress(Math.min(71, pct), msg);
+        }
+        await new Promise(function(resolve) { setTimeout(resolve, 800); });
+    }
+}
+
+/**
+ * Mirrors preprocessing.js: upsert cleaned rows from raw_data, then POST /preprocess/start + poll.
+ * @param {number} datasetId
+ * @param {'indobert'|'mbert'} tokenizerKey
+ * @param {function(number, string)=} onProgress
+ */
+async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio, onProgress) {
+    var client = getTestingSupabaseClient();
+    if (!client) {
+        throw new Error('Supabase client is not available. Reload the page and try again.');
+    }
+    var tk = tokenizerKey === 'indobert' ? 'indobert' : 'mbert';
+    var algoLabel = tk === 'indobert' ? 'IndoBERT' : 'mBERT';
+
+    if (typeof onProgress === 'function') {
+        onProgress(2, 'Preprocessing (' + algoLabel + '): reading raw_data...');
+    }
+
+    var allData = await fetchAllRawDataForTesting(datasetId);
+    if (!allData || allData.length === 0) {
+        throw new Error('Raw data is empty for this dataset. Import data first.');
+    }
+    var testRows = pickTestingSubsetByRatio(allData, splitRatio);
+    if (!testRows || testRows.length === 0) {
+        throw new Error('No rows selected for testing subset. Check model split ratio and dataset content.');
+    }
+    var idKataFilter = testRows
+        .map(function(row) { return String((row && row.id_kata) || '').trim(); })
+        .filter(function(v) { return !!v; });
+
+    var chunkSize = 100;
+    for (var i = 0; i < testRows.length; i += chunkSize) {
+        var chunk = testRows.slice(i, i + chunkSize);
+        var processed = chunk.map(function(row) {
+            return {
+                dataset_id: row.dataset_id,
+                id_kata: row.id_kata,
+                jenis: row.jenis,
+                manado: row.manado,
+                indonesia: row.indonesia,
+                kalimat_manado: row.kalimat_manado,
+                kalimat_indonesia: row.kalimat_indonesia,
+                manado_clean: cleanTextForTesting(row.manado),
+                indonesia_clean: cleanTextForTesting(row.indonesia),
+                kalimat_manado_clean: cleanTextForTesting(row.kalimat_manado),
+                kalimat_indonesia_clean: cleanTextForTesting(row.kalimat_indonesia),
+                // Paksa subset test ini ditokenisasi ulang, tanpa mereset seluruh dataset.
+                input_ids: null,
+                attention_mask: null,
+                bert_tokens: null,
+                manado_tokens: null,
+                indonesia_tokens: null,
+                kalimat_manado_tokens: null,
+                kalimat_indonesia_tokens: null,
+                final_text: null,
+                jenis_label: null
+            };
+        });
+        var up = await client.from('preprocessed_data').upsert(processed, {
+            onConflict: 'dataset_id,id_kata',
+            ignoreDuplicates: false
+        });
+        if (up.error) throw up.error;
+        var inserted = Math.min(testRows.length, i + chunk.length);
+        // Seeding: 3%–30% mengikuti jumlah baris (proporsional lama upsert Supabase).
+        var insertPercent = 3 + Math.round((inserted / testRows.length) * 27);
+        if (typeof onProgress === 'function') {
+            onProgress(insertPercent, 'Seeding preprocessed_data (test subset) ' + inserted + '/' + testRows.length);
+        }
+    }
+
+    if (typeof onProgress === 'function') {
+        onProgress(30, 'Starting backend tokenizer (' + algoLabel + ')...');
+    }
+
+    var startRes = await fetch(
+        API_BASE + '/preprocess/start/' + datasetId +
+            '?tokenizer=' + encodeURIComponent(tk) +
+            '&force_retokenize=0' +
+            '&id_kata_filter=' + encodeURIComponent(idKataFilter.join(',')),
+        { method: 'POST' }
+    );
+    var startData = await startRes.json();
+    if (!startRes.ok || !startData || !startData.job_id) {
+        throw new Error((startData && startData.message) ? startData.message : 'Failed to start backend tokenizer');
+    }
+    await pollTestingPreprocessJob(startData.job_id, onProgress);
+
+    var dsUp = await client.from('datasets').update({ is_preprocessed: true }).eq('id', datasetId);
+    if (dsUp.error) {
+        console.warn('testing: could not update datasets.is_preprocessed', dsUp.error);
+    }
+}
+
 var kamusM2I = {
     'torang': 'kita',
     'ngana': 'kamu',
@@ -100,10 +312,29 @@ var selectedModelId = null;
 var selectedModelName = '';
 var selectedModelMaxLength = 64;
 var selectedLatestTesting = null;
+var selectedModelSplitRatio = '80:20';
+var selectedModelTrainingAccuracy = null;
 var testingModels = [];
 var progressTimer = null;
 var progressStartedAt = null;
+var testingFetchProgressTimer = null;
 var progressStepOrder = ['prepare', 'connect', 'process', 'metrics', 'finish'];
+
+function normalizeAccuracyToFraction(value) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    // models.accuracy lama disimpan dalam persen (mis. 87), sedangkan hasil backend testing 0..1.
+    if (n > 1) return n / 100;
+    if (n < 0) return null;
+    return n;
+}
+
+function clearTestingFetchProgressTimer() {
+    if (testingFetchProgressTimer) {
+        clearInterval(testingFetchProgressTimer);
+        testingFetchProgressTimer = null;
+    }
+}
 
 function normalizeAlgorithmKey(str) {
     return String(str || '')
@@ -274,6 +505,8 @@ async function refreshSelectedModelLatestTestingFromBackend() {
             found.dataset_name ||
             null;
         selectedModelMaxLength = found.max_length || 64;
+        selectedModelSplitRatio = found.split_ratio || '80:20';
+        selectedModelTrainingAccuracy = normalizeAccuracyToFraction(found.training_accuracy);
         selectedModelName = found.nama_model || '';
     } catch (e) {
         // Keep current state if refresh fails.
@@ -339,6 +572,8 @@ function initAlgorithmModelSelect() {
                 found.dataset_name ||
                 null;
             selectedModelMaxLength = found.max_length || 64;
+            selectedModelSplitRatio = found.split_ratio || '80:20';
+            selectedModelTrainingAccuracy = normalizeAccuracyToFraction(found.training_accuracy);
             selectedModelName = found.nama_model || '';
             // Do not auto-fill dataset card UI for old models.
             // Keep dataset reference internally and show it through info messages only.
@@ -347,6 +582,8 @@ function initAlgorithmModelSelect() {
             selectedDatasetId = null;
             selectedDatasetName = null;
             selectedModelMaxLength = 64;
+            selectedModelSplitRatio = '80:20';
+            selectedModelTrainingAccuracy = null;
             selectedLatestTesting = null;
             selectedModelName = '';
         }
@@ -759,6 +996,7 @@ function setStatus(status) {
    RESET METRICS
 ============================= */
 function resetMetrics() {
+    clearTestingFetchProgressTimer();
     metricIds.forEach(function(id) {
         document.getElementById(id).textContent = id === 'mcc' ? '0.00' : '0%';
         document.getElementById(id).classList.remove('revealed');
@@ -927,13 +1165,28 @@ async function startTesting() {
     var bar = document.getElementById('progressBar');
     bar.classList.add('running');
     startProgressElapsedTimer();
-        setProgressStep('prepare', 10, 'Validating testing configuration...');
+    setProgressStep('prepare', 10, 'Validating testing configuration...');
 
     var backendResult = null;
     try {
-        setProgressStep('connect', 30, 'Sending request to backend...');
         var selectedAlgo = normalizeTestingAlgo(document.getElementById('selAlgorithm').value);
         if (!selectedAlgo) selectedAlgo = 'indobert';
+
+        setProgressStep('prepare', 12, 'Preparing exact holdout testing set from selected model...');
+
+        // Evaluasi model tanpa preprocess job terpisah (mengikuti alur holdout model training).
+        clearTestingFetchProgressTimer();
+        var evalBarPct = 40;
+        setProgressStep('connect', evalBarPct, 'Running model evaluation (batch inference)...');
+        testingFetchProgressTimer = setInterval(function() {
+            if (!isRunning) {
+                clearTestingFetchProgressTimer();
+                return;
+            }
+            evalBarPct = Math.min(88, evalBarPct + Math.max(0.5, (88 - evalBarPct) * 0.08));
+            setProgressStep('connect', Math.round(evalBarPct), 'Running model evaluation (batch inference)...');
+        }, 480);
+
         var res = await fetch(API_BASE + '/testing/' + selectedAlgo, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -947,12 +1200,14 @@ async function startTesting() {
             })
         });
         var data = await res.json();
+        clearTestingFetchProgressTimer();
         if (!res.ok) {
             throw new Error(data && (data.detail || data.message) ? (data.detail || data.message) : 'Backend testing failed.');
         }
         backendResult = data;
-        setProgressStep('process', 75, 'Backend finished processing model testing.');
+        setProgressStep('process', 91, 'Backend finished processing model testing.');
     } catch (err) {
+        clearTestingFetchProgressTimer();
         bar.classList.remove('running');
         stopProgressElapsedTimer();
         setStatus('idle');
@@ -962,7 +1217,7 @@ async function startTesting() {
         isRunning = false;
         return;
     }
-    setProgressStep('metrics', 90, 'Preparing metrics for display...');
+    setProgressStep('metrics', 96, 'Preparing metrics for display...');
     bar.classList.remove('running');
     setStatus('tested');
     finishTesting(backendResult, direction);
@@ -1021,7 +1276,18 @@ function finishTesting(result, direction) {
     var testedRowsText = Number.isFinite(testedRows) && testedRows > 0
         ? ' Total tested data: ' + testedRows + ' rows.'
         : '';
-    showTestingInfo('Testing result saved successfully.' + testedRowsText + ' If you run testing again, the previous result will be replaced by the new one.');
+    var overfittingText = '';
+    if (Number.isFinite(selectedModelTrainingAccuracy)) {
+        var trainAccPct = normalizeAccuracyToFraction(selectedModelTrainingAccuracy) * 100;
+        var testAccPct = Number(result.accuracy || 0) * 100;
+        var trainMinusTest = trainAccPct - testAccPct;
+        if (trainMinusTest > 3) {
+            overfittingText =
+                ' [OVERFITTING] Gap accuracy training vs testing is ' +
+                trainMinusTest.toFixed(2) + '% (> 3%).';
+        }
+    }
+    showTestingInfo('Testing result saved successfully.' + testedRowsText + overfittingText + ' If you run testing again, the previous result will be replaced by the new one.');
     setTestingUiBusy(false);
     isRunning = false;
 }
