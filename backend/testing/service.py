@@ -18,11 +18,13 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from backend.processing.service import (
     _build_text,
+    _build_text_with_preprocessed_fallback,
     _fetch_preprocessed_rows,
     _parse_ratio,
     _safe_name,
     predict_indobert_softmax,
     predict_mbert_softmax,
+    predict_xlm_r_softmax,
 )
 from backend.supabase_client import supabase
 
@@ -104,6 +106,12 @@ def get_available_testing_models() -> list[dict]:
 
     # Testing dropdown must only list final-training models.
     models = [row for row in raw_models if is_final_training_mode(row.get("mode"))]
+    # Shared DB: sembunyikan baris algoritma xlm-r mitra; pemilik situs memakai xlm-r-2.
+    models = [
+        row
+        for row in models
+        if str(row.get("algoritma") or "").strip().lower().replace("_", "-") != "xlm-r"
+    ]
 
     dataset_ids = sorted(
         {
@@ -391,17 +399,19 @@ def test_indobert_model(
     max_length: int,
     limit: int | None,
     save_result: bool,
+    use_preprocessed_final_text: bool = False,
 ) -> dict:
     rows = _fetch_preprocessed_rows(dataset_id)
     if not rows:
         raise ValueError("Dataset not found or preprocessed_data is empty for this dataset_id.")
 
+    text_fn = _build_text_with_preprocessed_fallback if use_preprocessed_final_text else _build_text
     valid_rows: list[dict] = []
     for row in rows:
         label = str(row.get("jenis") or "").strip()
         if not label:
             continue
-        text = _build_text(row)
+        text = text_fn(row)
         if not text:
             continue
         valid_rows.append(
@@ -674,6 +684,26 @@ def test_mbert_model(
     )
 
 
+def test_xlm_r_model(
+    *,
+    dataset_id: int,
+    model_name: str,
+    model_id: int | None,
+    max_length: int,
+    limit: int | None,
+    save_result: bool,
+) -> dict:
+    return test_indobert_model(
+        dataset_id=dataset_id,
+        model_name=model_name,
+        model_id=model_id,
+        max_length=max_length,
+        limit=limit,
+        save_result=save_result,
+        use_preprocessed_final_text=True,
+    )
+
+
 def predict_with_testing_model(
     *,
     algorithm: str,
@@ -715,6 +745,22 @@ def predict_with_testing_model(
             "probs": result.get("probs") or {},
         }
 
+    if algorithm_norm == "xlm-r-2":
+        result = predict_xlm_r_softmax(
+            text=text,
+            model_name=model_name,
+            max_length=max_length,
+        )
+        return {
+            "status": "ok",
+            "algorithm": algorithm,
+            "model_name": model_name,
+            "text": text,
+            "label": str(result.get("label") or ""),
+            "score": float(result.get("score") or 0.0),
+            "probs": result.get("probs") or {},
+        }
+
     raise ValueError(f"Prediction endpoint for {algorithm} is not implemented yet.")
 
 
@@ -736,6 +782,8 @@ def get_best_models_by_algorithm() -> list[dict]:
     for row in rows:
         algorithm = str(row.get("algoritma") or "").strip()
         if not algorithm:
+            continue
+        if algorithm.lower().replace("_", "-") == "xlm-r":
             continue
 
         model_id = row.get("id")

@@ -177,6 +177,14 @@ body::before {
   stroke-linejoin: round;
 }
 
+.preprocessing-algo-hint {
+  margin: 0.35rem 0 1rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--text-secondary, rgba(28, 20, 10, 0.72));
+  max-width: 52rem;
+}
+
 /* =========================
    TABLE FIX (INI KUNCI)
 ========================= */

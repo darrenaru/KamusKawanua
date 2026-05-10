@@ -17,7 +17,7 @@ from backend.supabase_client import supabase
 
 app = FastAPI()
 
-TokenizerName = Literal["mbert", "indobert"]
+TokenizerName = Literal["mbert", "indobert", "xlm-r-2"]
 
 
 def _build_text(row: dict) -> str:

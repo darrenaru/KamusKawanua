@@ -198,11 +198,13 @@ function buildSearchSummaryCardHtml(data) {
     }
 
     const modelBlock =
-        modelSummaryRow("IndoBERT", "indobert") + modelSummaryRow("mBERT", "mbert");
+        modelSummaryRow("IndoBERT", "indobert") +
+        modelSummaryRow("mBERT", "mbert") +
+        modelSummaryRow("XLM-R", "xlm-r-2");
 
     const modelHint =
         analyses.length === 0
-            ? `<p class="search-summary-testing-hint">Model predictions are not available. Ensure IndoBERT/mBERT checkpoints exist on the server and the <code class="inline-code">models</code> table is populated.</p>`
+            ? `<p class="search-summary-testing-hint">Model predictions are not available. Ensure IndoBERT, mBERT, and/or XLM-R (<code class="inline-code">xlm-r-2</code>) checkpoints exist on the server and the <code class="inline-code">models</code> table is populated.</p>`
             : "";
 
     return `
@@ -452,6 +454,7 @@ function renderResultGroup(container, data, title, items) {
         const matchBits = [];
         if (item.model_match_indobert) matchBits.push("POS matches IndoBERT");
         if (item.model_match_mbert) matchBits.push("POS matches mBERT");
+        if (item.model_match_xlm) matchBits.push("POS matches XLM-R");
         const matchStr =
             matchBits.length > 0 ? ` | ${matchBits.join(", ")}` : "";
 

@@ -347,6 +347,7 @@ function normalizeTestingAlgo(value) {
     var key = normalizeAlgorithmKey(value);
     if (key === 'indobert' || key === 'indo-bert' || key === 'indobenchmark') return 'indobert';
     if (key === 'mbert' || key === 'm-bert' || key === 'bert-base-multilingual-cased') return 'mbert';
+    if (key === 'xlm-r-2' || key === 'xlmr' || key === 'xlm-r') return 'xlm-r-2';
     return key;
 }
 
@@ -354,7 +355,7 @@ function getAlgorithmDisplayName(key) {
     var normalized = normalizeTestingAlgo(key);
     if (normalized === 'mbert') return 'mBERT';
     if (normalized === 'indobert') return 'IndoBERT';
-    if (normalized === 'xlmr') return 'XLM-R';
+    if (normalized === 'xlm-r-2') return 'XLM-R';
     if (normalized === 'word2vec') return 'Word2Vec';
     if (normalized === 'glove') return 'GloVe';
     return String(key || '').toUpperCase();
@@ -654,7 +655,10 @@ function initAlgorithmModelSelect() {
                 algorithmSelect.appendChild(option);
             });
 
-            var preferred = normalizeTestingAlgo(localStorage.getItem('selectedAlgorithm'));
+            var preferred = normalizeTestingAlgo(
+                localStorage.getItem('kamusWorkflowAlgorithm') ||
+                    localStorage.getItem('selectedAlgorithm'),
+            );
             if (preferred && !algorithmModelMap[preferred]) {
                 algorithmModelMap[preferred] = [];
                 var missingOption = document.createElement('option');

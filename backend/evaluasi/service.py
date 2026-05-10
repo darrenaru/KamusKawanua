@@ -112,7 +112,7 @@ def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
 
 
 def _canonical_algo_key(algoritma: str) -> str | None:
-    """Match frontend column keys: indobert, mbert, xlm-r, word2vec, glove."""
+    """Match frontend column keys: indobert, mbert, xlm-r-2, word2vec, glove."""
     if not algoritma:
         return None
     k = str(algoritma).strip().lower().replace("_", "-")
@@ -120,6 +120,8 @@ def _canonical_algo_key(algoritma: str) -> str | None:
         return "indobert"
     if k in ("m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
         return "mbert"
+    if k == "xlm-r-2":
+        return "xlm-r-2"
     if k in ("xlmr", "xlm-r"):
         return "xlm-r"
     if k in ("word2vec", "word-2-vec"):
@@ -177,6 +179,9 @@ def get_best_models_by_algorithm() -> list[dict]:
         algorithm = str(row.get("algoritma") or "").strip()
         key = _canonical_algo_key(algorithm)
         if not key:
+            continue
+        # Shared Supabase: kolom XLM di situs ini memakai xlm-r-2; abaikan bucket xlm-r (mitra).
+        if key == "xlm-r":
             continue
 
         model_id = row.get("id")
@@ -287,6 +292,8 @@ def get_models_metrics() -> list[dict]:
         algorithm = str(row.get("algoritma") or "").strip()
         key = _canonical_algo_key(algorithm)
         if not key:
+            continue
+        if key == "xlm-r":
             continue
 
         merged = dict(row)

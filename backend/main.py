@@ -51,9 +51,27 @@ stemmer = factory.create_stemmer()
 
 
 def _preprocess_tokenizer_is_mbert(name: str) -> bool:
-    """True untuk mBERT / multilingual; False untuk IndoBERT."""
-    n = (name or "").lower().strip()
-    return n not in ("indobert", "indo-bert", "indobenchmark")
+    """True hanya untuk mode tokenizer mBERT (stem bahasa Indonesia). IndoBERT & XLM-R tidak."""
+    n = (name or "").lower().strip().replace("_", "-")
+    if n in ("indobert", "indo-bert", "indobenchmark"):
+        return False
+    if n in ("xlm-r-2", "xlm-r", "xlmr", "xlm-roberta-base", "xlm-roberta"):
+        return False
+    if n in (
+        "mbert",
+        "m-bert",
+        "multilingual-bert",
+        "bert-base-multilingual-cased",
+        "bert-multilingual-cased",
+        "bert-multilingual",
+    ):
+        return True
+    if n.startswith("bert-") and "multilingual" in n:
+        return True
+    # Default query param lama: "mbert"
+    if not n or n == "mbert":
+        return True
+    return False
 
 
 def _maybe_stem_indonesian_for_preprocess(text: str, tokenizer_mode: str) -> str:
@@ -376,15 +394,30 @@ model = BertModel.from_pretrained("bert-base-multilingual-cased")
 # Preprocess tokenizer bisa dipilih via query param (mbert/indobert)
 tokenizer_pre_mbert = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
 tokenizer_pre_indobert = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p2")
+tokenizer_pre_xlm: AutoTokenizer | None = None
 
 PREPROCESS_JOBS: dict[str, dict] = {}
 PREPROCESS_JOBS_LOCK = threading.Lock()
 
 
+def _get_preprocess_tokenizer_xlm() -> AutoTokenizer:
+    """Muat sekali — tidak di import startup agar server tetap hidup tanpa akses HF."""
+    global tokenizer_pre_xlm
+    if tokenizer_pre_xlm is None:
+        # token=False = unduh anonim; HF_TOKEN salah sering menghasilkan 401 pada repo publik.
+        tokenizer_pre_xlm = AutoTokenizer.from_pretrained(
+            "facebook/xlm-roberta-base",
+            token=False,
+        )
+    return tokenizer_pre_xlm
+
+
 def get_preprocess_tokenizer(name: str):
-    name = (name or "").lower().strip()
+    name = (name or "").lower().strip().replace("_", "-")
     if name in ("indobert", "indo-bert", "indobenchmark"):
         return tokenizer_pre_indobert
+    if name in ("xlm-r-2", "xlm-r", "xlmr", "xlm-roberta-base", "xlm-roberta"):
+        return _get_preprocess_tokenizer_xlm()
     return tokenizer_pre_mbert
 
 def encode(text):
@@ -448,6 +481,8 @@ def _algo_family_from_row(algoritma: str) -> str | None:
         return "mbert"
     if a.startswith("bert-") and "multilingual" in a:
         return "mbert"
+    if a == "xlm-r-2":
+        return "xlm-r-2"
     return None
 
 
@@ -512,6 +547,8 @@ def _empty_search_model_bundle() -> dict:
         "model_used": None,
         "predicted_jenis_mbert": None,
         "model_used_mbert": None,
+        "predicted_jenis_xlm": None,
+        "model_used_xlm": None,
         "model_consensus": None,
     }
 
@@ -629,7 +666,11 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
         return bundle
 
     try:
-        from backend.processing.service import predict_indobert_softmax, predict_mbert_softmax
+        from backend.processing.service import (
+            predict_indobert_softmax,
+            predict_mbert_softmax,
+            predict_xlm_r_softmax,
+        )
     except Exception:
         return bundle
 
@@ -712,6 +753,9 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
                 elif family == "mbert":
                     bundle["predicted_jenis_mbert"] = label
                     bundle["model_used_mbert"] = nama
+                elif family == "xlm-r-2":
+                    bundle["predicted_jenis_xlm"] = label
+                    bundle["model_used_xlm"] = nama
                 return
             except Exception as e:
                 last_err = str(e)
@@ -729,6 +773,7 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
 
     run_one("indobert", "IndoBERT", predict_indobert_softmax)
     run_one("mbert", "mBERT", predict_mbert_softmax)
+    run_one("xlm-r-2", "XLM-R", predict_xlm_r_softmax)
     bundle["model_consensus"] = _compute_model_consensus(bundle["model_analyses"])
     return bundle
 
@@ -1283,7 +1328,7 @@ def cancel_preprocess(job_id: str):
     return {"job_id": job_id, "status": "cancelling", "message": "cancel requested"}
 
 # =========================
-# SEARCH (multi-model: IndoBERT + mBERT)
+# SEARCH (multi-model: IndoBERT + mBERT + XLM-R)
 # =========================
 @app.get("/search")
 def search(query: str, lang: str, use_model: bool = True):
@@ -1305,13 +1350,19 @@ def search(query: str, lang: str, use_model: bool = True):
     model_bundle = _run_dual_model_analysis(query_original, use_model)
     predicted_jenis_indo = model_bundle.get("predicted_jenis")
     predicted_jenis_mbert = model_bundle.get("predicted_jenis_mbert")
+    predicted_jenis_xlm = model_bundle.get("predicted_jenis_xlm")
 
     def row_boost_matches(jenis_norm: str) -> bool:
         if not jenis_norm:
             return False
         pi = str(predicted_jenis_indo or "").strip().lower()
         pm = str(predicted_jenis_mbert or "").strip().lower()
-        return (bool(pi) and jenis_norm == pi) or (bool(pm) and jenis_norm == pm)
+        px = str(predicted_jenis_xlm or "").strip().lower()
+        return (
+            (bool(pi) and jenis_norm == pi)
+            or (bool(pm) and jenis_norm == pm)
+            or (bool(px) and jenis_norm == px)
+        )
 
     def format_result(row, lang, query_original, score, method):
         # `row` bisa berupa dict (Supabase) atau pandas Series (DataFrame).
@@ -1319,11 +1370,15 @@ def search(query: str, lang: str, use_model: bool = True):
         row_jenis_norm = row_jenis.lower()
         pred_indo_norm = str(predicted_jenis_indo or "").strip().lower()
         pred_mbert_norm = str(predicted_jenis_mbert or "").strip().lower()
+        pred_xlm_norm = str(predicted_jenis_xlm or "").strip().lower()
         match_indo = bool(
             pred_indo_norm and row_jenis_norm and row_jenis_norm == pred_indo_norm
         )
         match_mbert = bool(
             pred_mbert_norm and row_jenis_norm and row_jenis_norm == pred_mbert_norm
+        )
+        match_xlm = bool(
+            pred_xlm_norm and row_jenis_norm and row_jenis_norm == pred_xlm_norm
         )
         return {
             "manado": highlight_match(row["manado"], query_original),
@@ -1337,9 +1392,10 @@ def search(query: str, lang: str, use_model: bool = True):
 
             "score": round(float(score), 3),
             "method": method,
-            "model_match": match_indo or match_mbert,
+            "model_match": match_indo or match_mbert or match_xlm,
             "model_match_indobert": match_indo,
             "model_match_mbert": match_mbert,
+            "model_match_xlm": match_xlm,
         }
 
     # Prioritas 1: exact match langsung ke tabel Supabase `dictionary`.

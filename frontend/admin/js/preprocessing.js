@@ -3,6 +3,8 @@ const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
+const WORKFLOW_ALGORITHM_KEY = "kamusWorkflowAlgorithm";
+
 let datasets = [];
 let selectedDataset = null;
 let isProcessing = false;
@@ -13,13 +15,52 @@ let activePreprocessAlgorithm = "mbert";
 function normalizeAlgorithmForPreprocess(raw) {
     const value = String(raw || "").toLowerCase().trim();
     if (value === "indobert" || value === "indo-bert") return "indobert";
+    if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r-2";
     return "mbert";
 }
 
+function preprocessTokenizerLabel(algo) {
+    if (algo === "indobert") return "IndoBERT";
+    if (algo === "xlm-r-2") return "XLM-R";
+    return "mBERT";
+}
+
 function resolvePreprocessAlgorithm() {
-    const saved = localStorage.getItem("selectedAlgorithm");
+    const saved =
+        localStorage.getItem(WORKFLOW_ALGORITHM_KEY) ||
+        localStorage.getItem("selectedAlgorithm");
     activePreprocessAlgorithm = normalizeAlgorithmForPreprocess(saved);
     return activePreprocessAlgorithm;
+}
+
+/** Bar penjelasan di halaman: tokenizer = pilihan Beranda (+ fallback). */
+function refreshPreprocessAlgoBanner() {
+    const savedRaw =
+        localStorage.getItem(WORKFLOW_ALGORITHM_KEY) ||
+        localStorage.getItem("selectedAlgorithm") ||
+        "";
+    resolvePreprocessAlgorithm();
+    const label = preprocessTokenizerLabel(activePreprocessAlgorithm);
+    const el = document.getElementById("preprocessAlgoBanner");
+    if (!el) return;
+
+    const trimmed = savedRaw ? String(savedRaw).trim() : "";
+    const lower = trimmed.toLowerCase();
+
+    let line =
+        "Tokenizer preprocessing: " +
+        label +
+        ". Diprioritaskan dari «kamusWorkflowAlgorithm» (Beranda), fallback «selectedAlgorithm».";
+
+    if (!trimmed) {
+        line +=
+            " Saat ini belum ada pilihan di Beranda; dipakai default mBERT. Buka Beranda → pilih IndoBERT atau XLM-R jika itu yang Anda inginkan.";
+    } else if (lower === "word2vec" || lower === "glove") {
+        line +=
+            " Untuk Word2Vec / GloVe, pemetaan preprocessing tetap memakai tokenizer mBERT.";
+    }
+
+    el.textContent = line;
 }
 
 function openDatasetModal() {
@@ -137,7 +178,8 @@ function selectDataset(ds) {
     document.getElementById("keterangan").innerText = ds.kata_keterangan;
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
-    const algoLabel = activePreprocessAlgorithm === "indobert" ? "IndoBERT" : "mBERT";
+    refreshPreprocessAlgoBanner();
+    const algoLabel = preprocessTokenizerLabel(activePreprocessAlgorithm);
     updateProgressUI(0, `Ready to process (${algoLabel})`);
 }
 
@@ -322,11 +364,11 @@ async function startPreprocessing() {
         }
 
         const selectedAlgo = resolvePreprocessAlgorithm();
-        const algoLabel = selectedAlgo === "indobert" ? "IndoBERT" : "mBERT";
+        const algoLabel = preprocessTokenizerLabel(selectedAlgo);
 
         // Jalankan tokenizer backend secara async + polling progres real.
         const startRes = await fetch(
-            `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=${selectedAlgo}`,
+            `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=${encodeURIComponent(selectedAlgo)}`,
             { method: "POST" },
         );
         const startData = await startRes.json();
@@ -607,5 +649,9 @@ async function deleteSlangWord(slang) {
 }
 
 // INIT
+refreshPreprocessAlgoBanner();
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshPreprocessAlgoBanner();
+});
 loadDatasets();
 wireLexiconControls();

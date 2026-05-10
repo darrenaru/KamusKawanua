@@ -1,13 +1,13 @@
 var API_BASE = 'http://127.0.0.1:8000';
-var ALGO_ORDER = ['xlm-r', 'mbert', 'indobert', 'word2vec', 'glove'];
+var ALGO_ORDER = ['xlm-r-2', 'mbert', 'indobert', 'word2vec', 'glove'];
 var ALGO_LABELS = {
-    'xlm-r': 'XLM-R',
+    'xlm-r-2': 'XLM-R',
     mbert: 'mBERT',
     indobert: 'INDOBERT',
     word2vec: 'Word2Vec',
     glove: 'GloVe',
 };
-var TRANSFORMER_KEYS = ['xlm-r', 'mbert', 'indobert'];
+var TRANSFORMER_KEYS = ['xlm-r-2', 'mbert', 'indobert'];
 var CLASSIC_KEYS = ['word2vec', 'glove'];
 var CHART_COLORS = {
     transformerDark: 'rgba(28, 20, 10, 0.9)',
@@ -53,6 +53,7 @@ function canonicalAlgoKey(raw) {
     var v = String(raw || '').toLowerCase().trim().replace(/_/g, '-');
     if (v === 'indo-bert' || v === 'indobenchmark') return 'indobert';
     if (v === 'm-bert' || v === 'multilingual-bert' || v === 'bert-base-multilingual-cased') return 'mbert';
+    if (v === 'xlm-r-2') return 'xlm-r-2';
     if (v === 'xlmr' || v === 'xlm-r') return 'xlm-r';
     if (v === 'word2vec' || v === 'word-2-vec') return 'word2vec';
     return v;
@@ -140,7 +141,17 @@ function formatPercentOrDash(value) {
 
 function readPreferredAlgorithm() {
     try {
-        return canonicalAlgoKey(localStorage.getItem('selectedAlgorithm') || '');
+        var raw =
+            localStorage.getItem('kamusWorkflowAlgorithm') ||
+            localStorage.getItem('selectedAlgorithm') ||
+            '';
+        try {
+            var sess = sessionStorage.getItem('evaluasi_selectedTableAlgo');
+            if (sess) raw = sess;
+        } catch (e2) {}
+        var k = canonicalAlgoKey(raw || '');
+        if (k === 'xlm-r') return 'xlm-r-2';
+        return k;
     } catch (e) {
         return '';
     }
@@ -152,6 +163,7 @@ function groupByAlgorithm(items) {
         var row = items[i];
         var key = row.canonical_algorithm || canonicalAlgoKey(row.algoritma);
         if (!key) continue;
+        if (key === 'xlm-r') continue;
         if (!out[key]) out[key] = [];
         out[key].push(row);
     }
@@ -1272,8 +1284,9 @@ function bindEvents() {
             var t = e.target;
             if (!t || !t.classList || !t.classList.contains('algo-btn')) return;
             state.selectedTableAlgo = t.getAttribute('data-algo') || state.selectedTableAlgo;
+            /* Jangan tulis selectedAlgorithm: mempengaruhi preprocessing. Hanya sesi evaluasi. */
             try {
-                localStorage.setItem('selectedAlgorithm', state.selectedTableAlgo);
+                sessionStorage.setItem('evaluasi_selectedTableAlgo', state.selectedTableAlgo);
             } catch (err) {}
             state.selectedSummaryModelId = null;
             renderTableAlgoButtons();

@@ -5,6 +5,7 @@ import os
 import random
 import re
 import gc
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,10 +28,15 @@ from backend.supabase_client import supabase
 
 INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p2"
 MBERT_MODEL_ID = "bert-base-multilingual-cased"
+XLMR_MODEL_ID = "facebook/xlm-roberta-base"
 
 # Internal defaults khusus mBERT
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
+_INDOBERT_FAST_MAX_LENGTH = 64
+
+# Unduh pretrained publik secara anonim; HF_TOKEN invalid sering menghasilkan 401.
+_HF_HUB_PUBLIC: dict[str, object] = {"token": False}
 
 
 def _set_global_seed(seed: int) -> None:
@@ -213,8 +219,12 @@ def train_indobert_softmax(
     seed: int = 42,
     on_epoch_end=None,
     base_model_id: str = INDOBERT_MODEL_ID,
+    fast_mode: bool = False,
+    algorithm: str | None = None,
+    text_extractor: Callable[[dict], str] | None = None,
 ) -> dict:
     _set_global_seed(seed)
+    row_to_text = text_extractor or _build_text
     rows = _fetch_preprocessed_rows(dataset_id)
     data_source = "preprocessed_data"
     if not rows:
@@ -249,7 +259,7 @@ def train_indobert_softmax(
     raw_labels: list[str] = []
     row_keys: list[str] = []
     for r in rows:
-        t = _build_text(r)
+        t = row_to_text(r)
         y = str(r.get("jenis") or "").strip()
         if t and y:
             texts.append(t)
@@ -282,33 +292,76 @@ def train_indobert_softmax(
     train_idx = np.array(train_idx)
     val_idx = np.array(val_idx)
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        base_model_id,
-        num_labels=len(label2id),
-        id2label=id2label,
-        label2id=label2id,
-        classifier_dropout=dropout,
-        hidden_dropout_prob=dropout,
-        attention_probs_dropout_prob=dropout,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id, **_HF_HUB_PUBLIC)
+    try:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            base_model_id,
+            num_labels=len(label2id),
+            id2label=id2label,
+            label2id=label2id,
+            classifier_dropout=dropout,
+            hidden_dropout_prob=dropout,
+            attention_probs_dropout_prob=dropout,
+            **_HF_HUB_PUBLIC,
+        )
+    except TypeError:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            base_model_id,
+            num_labels=len(label2id),
+            id2label=id2label,
+            label2id=label2id,
+            classifier_dropout=dropout,
+            **_HF_HUB_PUBLIC,
+        )
+
+    indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID
+    if indobert_fast:
+        # Fast mode IndoBERT: freeze mayoritas backbone, fine-tune layer atas + head.
+        base = getattr(model, "bert", None)
+        if base is not None:
+            for p in base.parameters():
+                p.requires_grad = False
+            try:
+                encoder = getattr(base, "encoder", None)
+                layers = getattr(encoder, "layer", None) if encoder is not None else None
+                if layers is not None:
+                    for layer in list(layers)[-4:]:
+                        for p in layer.parameters():
+                            p.requires_grad = True
+            except Exception:
+                pass
+            try:
+                pooler = getattr(base, "pooler", None)
+                if pooler is not None:
+                    for p in pooler.parameters():
+                        p.requires_grad = True
+            except Exception:
+                pass
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     use_amp = device.type == "cuda"
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
+    requested_max_length = int(max_length) if isinstance(max_length, int) else _MBERT_FIXED_MAX_LENGTH
+    requested_max_length = max(8, min(512, requested_max_length))
+    effective_max_length = (
+        min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length)
+        if indobert_fast
+        else requested_max_length
+    )
+
     train_ds = TextClsDataset(
         [texts[i] for i in train_idx.tolist()],
         [y_all[i] for i in train_idx.tolist()],
         tokenizer,
-        max_length,
+        effective_max_length,
     )
     val_ds = TextClsDataset(
         [texts[i] for i in val_idx.tolist()],
         [y_all[i] for i in val_idx.tolist()],
         tokenizer,
-        max_length,
+        effective_max_length,
     )
 
     train_loader = DataLoader(
@@ -459,9 +512,13 @@ def train_indobert_softmax(
             ensure_ascii=False,
         )
 
+    algo_out = algorithm
+    if algo_out is None:
+        algo_out = "mbert" if base_model_id == MBERT_MODEL_ID else "indobert"
+
     return {
         "status": "ok",
-        "algorithm": "mbert" if base_model_id == MBERT_MODEL_ID else "indobert",
+        "algorithm": algo_out,
         "data_source": data_source,
         "device": str(device),
         "num_labels": len(label2id),
@@ -471,6 +528,47 @@ def train_indobert_softmax(
         "metrics": metrics,
         "model_dir": model_dir,
     }
+
+
+def train_xlm_r_softmax(
+    *,
+    dataset_id: int,
+    model_name: str,
+    split_ratio: str,
+    lr: float,
+    epoch: int,
+    batch_size: int,
+    max_length: int,
+    weight_decay: float,
+    warmup_ratio: float,
+    dropout: float,
+    grad_accum: int,
+    early_stopping_patience: int,
+    seed: int = 42,
+    on_epoch_end=None,
+    fast_mode: bool = False,
+) -> dict:
+    """Fine-tune XLM-R; input teks mengikuti `final_text` dari preprocessing tokenizer XLM."""
+    return train_indobert_softmax(
+        dataset_id=dataset_id,
+        model_name=model_name,
+        split_ratio=split_ratio,
+        lr=lr,
+        epoch=epoch,
+        batch_size=batch_size,
+        max_length=max_length,
+        weight_decay=weight_decay,
+        warmup_ratio=warmup_ratio,
+        dropout=dropout,
+        grad_accum=grad_accum,
+        early_stopping_patience=early_stopping_patience,
+        seed=seed,
+        on_epoch_end=on_epoch_end,
+        base_model_id=XLMR_MODEL_ID,
+        fast_mode=fast_mode,
+        algorithm="xlm-r-2",
+        text_extractor=_build_text_with_preprocessed_fallback,
+    )
 
 
 def train_mbert_softmax(
@@ -559,7 +657,7 @@ def train_mbert_softmax(
         train_idx = np.array(train_idx)
         val_idx = np.array(val_idx)
 
-        tokenizer = AutoTokenizer.from_pretrained(MBERT_MODEL_ID)
+        tokenizer = AutoTokenizer.from_pretrained(MBERT_MODEL_ID, **_HF_HUB_PUBLIC)
         model = AutoModelForSequenceClassification.from_pretrained(
             MBERT_MODEL_ID,
             num_labels=len(label2id),
@@ -568,6 +666,7 @@ def train_mbert_softmax(
             classifier_dropout=dropout,
             hidden_dropout_prob=dropout,
             attention_probs_dropout_prob=dropout,
+            **_HF_HUB_PUBLIC,
         )
 
         if force_cpu:
@@ -838,5 +937,9 @@ def predict_indobert_softmax(*, text: str, model_name: str, max_length: int) -> 
 def predict_mbert_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     # Model mBERT dan IndoBERT sama-sama disimpan dalam folder trained_models;
     # tokenizer + config dibaca langsung dari model artifact saat prediksi.
+    return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
+
+
+def predict_xlm_r_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
 

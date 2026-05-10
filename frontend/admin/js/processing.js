@@ -22,6 +22,7 @@
   const STORAGE_SELECTED_DATASET_ID = "processing_selected_dataset_id";
   const STORAGE_SELECTED_DATASET_NAME = "processing_selected_dataset_name";
   const STORAGE_RATIO_SEARCH_BY_CONTEXT = "processing_ratio_search_by_context";
+  const WORKFLOW_ALGORITHM_KEY = "kamusWorkflowAlgorithm";
 
   // Variable untuk menyimpan parameter terbaik global
   let globalBestParams = null;
@@ -45,6 +46,13 @@
 
   function normalizeAlgoKey(value) {
     return String(value || "").trim().toLowerCase();
+  }
+
+  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase untuk XLM pemilik situs: xlm-r-2. */
+  function normalizeStoredAlgorithmSelection(raw) {
+    const k = normalizeAlgoKey(raw);
+    if (k === "xlmr" || k === "xlm-r") return "xlm-r-2";
+    return k;
   }
 
   function getCurrentRatioContextKey() {
@@ -97,6 +105,12 @@
 
   function isMbertParams(params = {}) {
     return normalizeAlgoKey(params?.algo || currentAlgo) === "mbert";
+  }
+
+  /** IndoBERT / XLM-R: satu nilai seed (tanpa mode multi seperti mBERT). */
+  function isIndobertOrXlmParams(params = {}) {
+    const k = normalizeAlgoKey(params?.algo || currentAlgo);
+    return k === "indobert" || k === "xlm-r-2";
   }
 
   function mbertSeedValue(params = {}) {
@@ -173,12 +187,21 @@
     }
 
     const usesMbert = isMbertParams(globalBestParams);
+    const usesIndoXlm = isIndobertOrXlmParams(globalBestParams);
+    let maxLenSeedHtml = `<p><strong>Max Length:</strong> ${globalBestParams.maxLength || "-"}</p>`;
+    if (usesMbert) {
+      maxLenSeedHtml = `<p><strong>Seed:</strong> ${mbertSeedValue(globalBestParams)}</p>`;
+    } else if (usesIndoXlm) {
+      maxLenSeedHtml = `
+      <p><strong>Max Length:</strong> ${globalBestParams.maxLength || "-"}</p>
+      <p><strong>Seed:</strong> ${globalBestParams.seed || "-"}</p>`;
+    }
     globalBestContent.innerHTML = `
       <p><strong>Split Ratio:</strong> ${globalBestParams.splitRatio || "-"}</p>
       <p><strong>Learning Rate:</strong> ${globalBestParams.lr || "-"}</p>
       <p><strong>Epoch:</strong> ${globalBestParams.epoch || "-"}</p>
       <p><strong>Batch Size:</strong> ${globalBestParams.batchSize || "-"}</p>
-      <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(globalBestParams) : (globalBestParams.maxLength || "-")}</p>
+      ${maxLenSeedHtml}
       <p><strong>Best Score (Accuracy + F1):</strong> ${Number(globalBestParams.avgScore || 0).toFixed(2)}%</p>
     `;
     bestParamsDisplay.style.display = currentMode === "cari-rasio" ? "block" : "none";
@@ -660,10 +683,16 @@
     initRatioManager();
     loadPreprocessedDatasets();
 
-    const preferredAlgo = (localStorage.getItem("selectedAlgorithm") || "").toLowerCase().trim();
+    const preferredAlgo = normalizeStoredAlgorithmSelection(
+      localStorage.getItem(WORKFLOW_ALGORITHM_KEY) ||
+        localStorage.getItem("selectedAlgorithm") ||
+        "",
+    );
     if (preferredAlgo && Array.from(algoSelect.options || []).some((opt) => opt.value === preferredAlgo)) {
       algoSelect.value = preferredAlgo;
       currentAlgo = preferredAlgo;
+      localStorage.setItem("selectedAlgorithm", preferredAlgo);
+      localStorage.setItem(WORKFLOW_ALGORITHM_KEY, preferredAlgo);
     }
 
     algoSelect.addEventListener("change", onAlgoChange);
@@ -876,6 +905,7 @@
   function onAlgoChange(e) {
     currentAlgo = e.target.value;
     localStorage.setItem("selectedAlgorithm", currentAlgo);
+    localStorage.setItem(WORKFLOW_ALGORITHM_KEY, currentAlgo);
     updateTrainingNamePlaceholder();
 
     if (currentMode === "training-final") {
@@ -1046,7 +1076,7 @@
     const a = String(algo || "").toLowerCase().trim();
     if (a === "indobert") return "IndoBERT";
     if (a === "mbert") return "mBERT";
-    if (a === "xlm-r") return "XLM-R";
+    if (a === "xlm-r-2") return "XLM-R";
     if (a === "word2vec") return "Word2Vec";
     if (a === "glove") return "GloVe";
     return a || "selected algorithm";
@@ -1179,7 +1209,9 @@
 
     const useCoreOnlyForRatio =
       mode === "cari-rasio" &&
-      (currentAlgo === "indobert" || currentAlgo === "mbert");
+      (currentAlgo === "indobert" ||
+        currentAlgo === "mbert" ||
+        currentAlgo === "xlm-r-2");
 
     if (useCoreOnlyForRatio) {
       html += generateFindBestRatioCoreParams(currentAlgo);
@@ -1191,7 +1223,7 @@
         case "mbert":
           html += generateMBERTParams();
           break;
-        case "xlm-r":
+        case "xlm-r-2":
           html += generateXLMRParams();
           break;
         case "glove":
@@ -1348,7 +1380,7 @@
     const a = normalizeAlgoKey(algo);
     const isMbert = a === "mbert";
     const lrOptions =
-      a === "xlm-r"
+      a === "xlm-r-2"
         ? `
           <option value="1e-5">1e-5 (Recommended)</option>
           <option value="1.5e-5">1.5e-5</option>
@@ -1386,7 +1418,7 @@
         </datalist>
       </div>
     `;
-    const seedField = `
+    const seedFieldCoreMbert = `
       <div class="param-group">
         ${renderLabelWithTooltip("Seed", "seed")}
         <input type="text" id="seed" list="seed-options-core" placeholder="Select or type manually" value="">
@@ -1396,6 +1428,18 @@
           <option value="123">123</option>
           <option value="2024">2024</option>
           <option value="all">all (42,123,2024,7)</option>
+        </datalist>
+      </div>
+    `;
+    const seedFieldCoreSingle = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options-core-single" placeholder="Select or type manually" value="">
+        <datalist id="seed-options-core-single">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
         </datalist>
       </div>
     `;
@@ -1427,7 +1471,13 @@
         </div>
         ${maxLengthField}
       </div>
-      ${isMbert ? `<div class="param-row">${seedField}</div>` : ""}
+      ${
+        isMbert
+          ? `<div class="param-row">${seedFieldCoreMbert}</div>`
+          : a === "indobert" || a === "xlm-r-2"
+            ? `<div class="param-row">${seedFieldCoreSingle}</div>`
+            : ""
+      }
     `;
   }
 
@@ -1491,7 +1541,28 @@
   // ==================== BERT FAMILY (IndoBERT / mBERT) PARAMETERS (DROPDOWN) ====================
   function generateBertTransformerParams(bertDisplayName) {
     const bert = bertDisplayName || "IndoBERT";
-    const isMbert = normalizeAlgoKey(currentAlgo) === "mbert";
+    const algoKey = normalizeAlgoKey(currentAlgo);
+    const isMbert = algoKey === "mbert";
+    const isIndobert = algoKey === "indobert";
+    const isXlm = algoKey === "xlm-r-2";
+    const lrDatalistOptions = isXlm
+      ? `
+            <option value="1e-5">1e-5 (Recommended)</option>
+            <option value="1.5e-5">1.5e-5</option>
+            <option value="2e-5">2e-5</option>
+          `
+      : `
+            <option value="1e-5">1e-5</option>
+            <option value="2e-5">2e-5 (Recommended)</option>
+            <option value="3e-5">3e-5</option>
+            <option value="5e-5">5e-5</option>
+          `;
+    const inputReprValue = isXlm
+      ? "SentencePiece tokens (XLM-RoBERTa)"
+      : "WordPiece Tokens + [CLS]/[SEP]";
+    const inputReprHint = isXlm
+      ? `Input representation follows the ${bert} / RoBERTa tokenizer (preprocessed final_text).`
+      : `Input representation follows the default ${bert} tokenizer.`;
     const maxLengthField = `
       <div class="param-group">
         ${renderLabelWithTooltip("Max Length", "max_length")}
@@ -1518,6 +1589,18 @@
         </datalist>
       </div>
     `;
+    const indoXlmSeedField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options-indo-xlm" placeholder="Select or type manually" value="">
+        <datalist id="seed-options-indo-xlm">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
+        </datalist>
+      </div>
+    `;
     return `
     <div class="layer-card">
       <div class="layer-header">
@@ -1537,11 +1620,12 @@
         ${isMbert ? seedField : maxLengthField}
       </div>
       ${isMbert ? `<div class="param-row">${maxLengthField}</div>` : ""}
+      ${isIndobert || isXlm ? `<div class="param-row">${indoXlmSeedField}</div>` : ""}
       <div class="param-row">
         <div class="param-group">
           <label>Input Representation</label>
-          <input type="text" value="WordPiece Tokens + [CLS]/[SEP]" disabled>
-          <small>Input representation follows the default ${bert} tokenizer.</small>
+          <input type="text" value="${inputReprValue}" disabled>
+          <small>${inputReprHint}</small>
         </div>
         <div class="param-group">
           <label>Attention Mask</label>
@@ -1561,10 +1645,7 @@
           ${renderLabelWithTooltip("Learning Rate", "lr")}
           <input type="text" id="lr" list="lr-options" placeholder="Select or type manually" value="">
           <datalist id="lr-options">
-            <option value="1e-5">1e-5</option>
-            <option value="2e-5">2e-5 (Recommended)</option>
-            <option value="3e-5">3e-5</option>
-            <option value="5e-5">5e-5</option>
+            ${lrDatalistOptions}
           </datalist>
         </div>
         <div class="param-group">
@@ -1685,124 +1766,9 @@
     return generateBertTransformerParams("mBERT");
   }
 
-  // ==================== XLM-R PARAMETERS (DROPDOWN + INPUT MANUAL) ====================
-  // ==================== XLM-R PARAMETERS (DATALIST) ====================
+  // ==================== XLM-R (alur UI sama IndoBERT / mBERT: layered BERT transformer) ====================
   function generateXLMRParams() {
-    return `
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="lr-options-xlmr">
-          <option value="1e-5">1e-5 (Recommended)</option>
-          <option value="1.5e-5">1.5e-5</option>
-          <option value="2e-5">2e-5</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Example: 3 (Range: 3-5)" value="" min="1" max="100">
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Batch Size", "batch_size")}
-        <input type="text" id="batch-size" list="batch-size-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="batch-size-options-xlmr">
-          <option value="8">8 (Recommended)</option>
-          <option value="16">16</option>
-          <option value="32">32</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Max Length", "max_length")}
-        <input type="text" id="max-length" list="max-length-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="max-length-options-xlmr">
-          <option value="8">8</option>
-          <option value="16">16</option>
-          <option value="32">32 (Recommended)</option>
-          <option value="64">64</option>
-          <option value="128">128</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Optimizer", "optimizer")}
-        <input type="text" id="optimizer" list="optimizer-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="optimizer-options-xlmr">
-          <option value="AdamW">AdamW (Recommended)</option>
-          <option value="Adam">Adam</option>
-          <option value="SGD">SGD</option>
-          <option value="RMSProp">RMSProp</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-        <input type="text" id="weight-decay" list="weight-decay-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="weight-decay-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.01">0.01 (Recommended)</option>
-          <option value="0.05">0.05</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Scheduler", "scheduler")}
-        <input type="text" id="scheduler" list="scheduler-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="scheduler-options-xlmr">
-          <option value="linear">Linear (Recommended)</option>
-          <option value="cosine">Cosine</option>
-          <option value="step">Step</option>
-          <option value="exponential">Exponential</option>
-          <option value="constant">Constant</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Warmup Steps", "warmup")}
-        <input type="text" id="warmup" list="warmup-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="warmup-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.1">0.1 (Recommended)</option>
-          <option value="0.2">0.2</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Dropout", "dropout")}
-        <input type="text" id="dropout" list="dropout-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="dropout-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.1">0.1 (Recommended)</option>
-          <option value="0.2">0.2</option>
-          <option value="0.3">0.3</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-        <input type="text" id="early-stopping" list="early-stopping-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="early-stopping-options-xlmr">
-          <option value="0">Disabled</option>
-          <option value="2">2 (Recommended)</option>
-          <option value="3">3</option>
-          <option value="5">5</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-        <input type="text" id="grad-accum" list="grad-accum-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="grad-accum-options-xlmr">
-          <option value="1">1 (Recommended)</option>
-          <option value="2">2</option>
-          <option value="4">4</option>
-        </datalist>
-      </div>
-    </div>
-  `;
+    return generateBertTransformerParams("XLM-R");
   }
 
   // ==================== Word2Vec PARAMETERS (DATALIST) ====================
@@ -2160,15 +2126,18 @@
       const maxLenDisplay = params.maxLength || "-";
       const seedDisplay = params.seed || "-";
       const optimizerDisplay = params.optimizer || "-";
-      const inputParamLabel = isMbertParams(params) ? "Seed" : "MaxLen";
-      const inputParamValue = isMbertParams(params) ? seedDisplay : maxLenDisplay;
+      let inputSnippet = `<strong>MaxLen:</strong> ${maxLenDisplay}`;
+      if (isMbertParams(params)) inputSnippet = `<strong>Seed:</strong> ${seedDisplay}`;
+      else if (isIndobertOrXlmParams(params)) {
+        inputSnippet = `<strong>MaxLen:</strong> ${maxLenDisplay} | <strong>Seed:</strong> ${seedDisplay}`;
+      }
 
       paramsInfo.innerHTML = `
       <strong>Split:</strong> ${splitRatio} | 
       <strong>LR:</strong> ${lrDisplay} | 
       <strong>Epoch:</strong> ${epochDisplay} | 
       <strong>Batch:</strong> ${batchDisplay} | 
-      <strong>${inputParamLabel}:</strong> ${inputParamValue} | 
+      ${inputSnippet} | 
       <strong>Optimizer:</strong> ${optimizerDisplay}
     `;
     }
@@ -2280,11 +2249,14 @@
       }
     }
 
-    // Find Best Ratio menggunakan parameter inti; untuk mBERT sertakan max-length + seed.
-    const requiredFields =
-      currentAlgo === "mbert"
-        ? ["lr", "epoch", "batch-size", "max-length", "seed"]
-        : ["lr", "epoch", "batch-size", "max-length"];
+    // Parameter inti: transformer (mBERT / IndoBERT / XLM-R) wajib isi seed + max-length.
+    const bertFamilyNeedsSeed =
+      currentAlgo === "mbert" ||
+      currentAlgo === "indobert" ||
+      currentAlgo === "xlm-r-2";
+    const requiredFields = bertFamilyNeedsSeed
+      ? ["lr", "epoch", "batch-size", "max-length", "seed"]
+      : ["lr", "epoch", "batch-size", "max-length"];
     for (let field of requiredFields) {
       const element = document.getElementById(field);
       if (element && !element.value) {
@@ -2326,7 +2298,9 @@
 
     const isCoreOnlyRatioSearch =
       mode === "cari-rasio" &&
-      (currentAlgo === "indobert" || currentAlgo === "mbert");
+      (currentAlgo === "indobert" ||
+        currentAlgo === "mbert" ||
+        currentAlgo === "xlm-r-2");
 
     const params = {
       splitRatio: splitRatio,
@@ -2543,7 +2517,7 @@
 
   async function simulateTrainingInCard(card, mode, params) {
     // Real training via backend for BERT-family models.
-    if (["indobert", "mbert"].includes((params.algo || currentAlgo))) {
+    if (["indobert", "mbert", "xlm-r-2"].includes(params.algo || currentAlgo)) {
       await runBackendBertTraining(card, mode, params);
       return;
     }
@@ -2627,7 +2601,9 @@
       modelName = document.getElementById("model-card-name")?.innerText?.trim() || "";
     }
     if (!modelName || modelName === "—") {
-      const algoTag = ((params.algo || currentAlgo) === "mbert") ? "mBERT" : "IndoBERT";
+      const ak = params.algo || currentAlgo;
+      const algoTag =
+        ak === "mbert" ? "mBERT" : ak === "xlm-r-2" ? "XLM-R" : "IndoBERT";
       modelName =
         document.getElementById("training-name")?.value?.trim() || `${algoTag}_${Date.now()}`;
     }
@@ -2644,8 +2620,16 @@
       progressText.innerText = `${Math.round(safe)}% — Training in progress...`;
     };
     setProgressPct(0);
-    const selectedAlgo = (params.algo || currentAlgo) === "mbert" ? "mbert" : "indobert";
-    const algoLabel = selectedAlgo === "mbert" ? "mBERT" : "IndoBERT";
+    const algoKeyTrain = params.algo || currentAlgo;
+    let backendTrainSlug = "indobert";
+    if (algoKeyTrain === "mbert") backendTrainSlug = "mbert";
+    else if (algoKeyTrain === "xlm-r-2") backendTrainSlug = "xlm-r-2";
+    const algoLabel =
+      algoKeyTrain === "mbert"
+        ? "mBERT"
+        : algoKeyTrain === "xlm-r-2"
+          ? "XLM-R"
+          : "IndoBERT";
     resetProgressLog(card, `Preparing ${algoLabel} training job...`);
     setLoadingVisual(card, true, "Sending job request to backend...");
 
@@ -2672,11 +2656,14 @@
       };
 
       // Start async job
-      const res = await fetch(`${API_BASE}/processing/train/${selectedAlgo}/async`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `${API_BASE}/processing/train/${encodeURIComponent(backendTrainSlug)}/async`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       const startResult = await res.json();
       if (!res.ok) {
@@ -3170,12 +3157,21 @@
 
       if (bestParamsContent) {
         const usesMbert = isMbertParams(params);
+        const usesIndoXlm = isIndobertOrXlmParams(params);
+        let maxLenSeedLine = `<p><strong>Max Length:</strong> ${params.maxLength}</p>`;
+        if (usesMbert)
+          maxLenSeedLine = `<p><strong>Seed:</strong> ${mbertSeedValue(params)}</p>`;
+        else if (usesIndoXlm) {
+          maxLenSeedLine = `
+        <p><strong>Max Length:</strong> ${params.maxLength}</p>
+        <p><strong>Seed:</strong> ${params.seed || "-"}</p>`;
+        }
         bestParamsContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
+        ${maxLenSeedLine}
         <p><strong>Best Score (Accuracy + F1):</strong> ${bestScore.toFixed(2)}%</p>
       `;
       }
@@ -3316,12 +3312,21 @@
       );
       if (globalBestContent) {
         const usesMbert = isMbertParams(params);
+        const usesIndoXlm = isIndobertOrXlmParams(params);
+        let maxLenSeedLine = `<p><strong>Max Length:</strong> ${params.maxLength}</p>`;
+        if (usesMbert)
+          maxLenSeedLine = `<p><strong>Seed:</strong> ${mbertSeedValue(params)}</p>`;
+        else if (usesIndoXlm) {
+          maxLenSeedLine = `
+        <p><strong>Max Length:</strong> ${params.maxLength}</p>
+        <p><strong>Seed:</strong> ${params.seed || "-"}</p>`;
+        }
         globalBestContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
+        ${maxLenSeedLine}
         <p><strong>Optimizer:</strong> ${params.optimizer || "-"}</p>
       `;
       }
@@ -3612,8 +3617,14 @@
         <h5 class="layer-title">1. Input Layer</h5>
         <div class="layer-grid">
           ${item("Batch Size", p.batchSize)}
-          ${item(algo === "mbert" ? "Seed" : "Max Length", algo === "mbert" ? p.seed : p.maxLength)}
-          ${item("Input Representation", ["indobert", "mbert", "xlm-r"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
+          ${
+            algo === "mbert"
+              ? item("Seed", p.seed)
+              : algo === "indobert" || algo === "xlm-r-2"
+                ? `${item("Max Length", p.maxLength)}${item("Seed", p.seed)}`
+                : item("Max Length", p.maxLength)
+          }
+          ${item("Input Representation", ["indobert", "mbert", "xlm-r-2"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
         </div>
       </div>
     `;
@@ -3627,7 +3638,7 @@
       item("Dropout", p.dropout),
     ];
 
-    if (["indobert", "mbert", "xlm-r"].includes(algo)) {
+    if (["indobert", "mbert", "xlm-r-2"].includes(algo)) {
       hiddenItems.push(item("Warmup", p.warmup));
       hiddenItems.push(item("Gradient Accumulation", p.gradAccum));
     } else if (algo === "word2vec") {
