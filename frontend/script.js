@@ -45,11 +45,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const logo = document.getElementById("brandLogo");
     if (!logo) return;
 
-    // Cegah drag/save langsung dari elemen gambar.
+    // Prevent dragging/saving the logo image from the page.
     logo.addEventListener("dragstart", (e) => e.preventDefault());
     logo.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    // Cegah shortcut simpan saat fokus di halaman utama.
+    // Block save shortcut while focused on the public search page.
     document.addEventListener("keydown", (e) => {
         const isSave =
             (e.ctrlKey || e.metaKey) && String(e.key || "").toLowerCase() === "s";
@@ -108,15 +108,18 @@ function formatWordTypeLabel(raw) {
         .trim()
         .replace(/\s+/g, " ");
     const map = {
-        "kata kerja": "Verb / Kata kerja",
-        kerja: "Verb / Kata kerja",
-        verb: "Verb / Kata kerja",
-        "kata benda": "Noun / Kata benda",
-        benda: "Noun / Kata benda",
-        noun: "Noun / Kata benda",
-        "kata sifat": "Adjective / Kata sifat",
-        sifat: "Adjective / Kata sifat",
-        adjective: "Adjective / Kata sifat",
+        "kata kerja": "Verb",
+        kerja: "Verb",
+        verb: "Verb",
+        "kata benda": "Noun",
+        benda: "Noun",
+        noun: "Noun",
+        "kata sifat": "Adjective",
+        sifat: "Adjective",
+        adjective: "Adjective",
+        "kata keterangan": "Adverb",
+        keterangan: "Adverb",
+        adverb: "Adverb",
     };
     return map[v] || String(raw || "");
 }
@@ -129,6 +132,7 @@ function canonicalWordType(raw) {
     if (v === "kata kerja" || v === "kerja" || v === "verb") return "verb";
     if (v === "kata benda" || v === "benda" || v === "noun") return "noun";
     if (v === "kata sifat" || v === "sifat" || v === "adjective") return "adjective";
+    if (v === "kata keterangan" || v === "keterangan" || v === "adverb") return "adverb";
     return v;
 }
 
@@ -139,7 +143,7 @@ function stripHtmlForDisplay(s) {
 }
 
 /**
- * Isi kartu ringkasan (seperti Testing): kata → padanan kamus + kelas kata & keyakinan per model.
+ * Summary card (like Testing): query → dictionary match + word type & confidence per model.
  */
 function buildSearchSummaryCardHtml(data) {
     const qRaw = String(data?.query || "").trim() || "—";
@@ -336,7 +340,7 @@ function buildConsensusTooltipHtml(data, item) {
     return html;
 }
 
-/** Ringkasan satu baris di atas daftar hasil */
+/** One-line summary strip above the result list */
 function buildConsensusStripHtml(data) {
     const mc = data.model_consensus;
     if (!mc || !data.model_analyses || data.model_analyses.length === 0) {

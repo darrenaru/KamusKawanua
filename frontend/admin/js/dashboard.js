@@ -1,5 +1,5 @@
 // ==============================
-// AUTH CHECK (PROTEKSI HALAMAN)
+// AUTH GUARD
 // ==============================
 
 const isLoggedIn = localStorage.getItem("isLoggedIn");
@@ -8,7 +8,16 @@ if (!isLoggedIn) {
     window.location.href = "../../login/login.html";
 }
 
-// Pilihan alur utama (preprocess/train); jangan sampai tertimpa tab Evaluasi.
+const logoutBtn = document.getElementById("logoutBtn");
+if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem("username");
+        window.location.href = "../../index.html";
+    });
+}
+
+// Workflow algorithm for preprocess/train; keep separate from Evaluation tab overrides.
 const WORKFLOW_ALGORITHM_KEY = "kamusWorkflowAlgorithm";
 
 // ==============================
@@ -63,7 +72,7 @@ function persistDashboardAlgorithm(algo) {
 
 buttons.forEach(btn => {
     btn.addEventListener("click", () => {
-        /* getAttribute menghindari perbedaan dataset di beberapa lingkungan */
+        /* getAttribute avoids dataset quirks across browsers */
         const algo = btn.getAttribute("data-algo") || btn.dataset.algo || "";
 
         persistDashboardAlgorithm(algo);

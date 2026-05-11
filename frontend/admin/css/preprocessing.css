@@ -502,7 +502,23 @@ tbody tr.selected {
 }
 
 .lex-section h4 {
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+.lex-section-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.lex-list-count {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .lex-input-row {

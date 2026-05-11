@@ -20,7 +20,7 @@
     }
   }
 
-  /** Untuk halaman admin yang mengisi DOM dinamis (kartu dataset, dll.). */
+  /** Admin pages that inject dynamic DOM (dataset cards, etc.). */
   window.refreshPageAOS = refreshPageAOS;
 
   function initAOS() {
@@ -42,7 +42,7 @@
   }
 
   /**
-   * @returns {boolean} true jika AOS akan di-init setelah GSAP (layout admin), false jika bisa init AOS segera setelah fungsi ini.
+   * @returns {boolean} true if AOS init is deferred until after GSAP (admin layout), false if AOS can init immediately after this call.
    */
   function runGSAP() {
     if (prefersReducedMotion) return false;

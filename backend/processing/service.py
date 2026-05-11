@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+
+# Sebelum transformers/huggingface_hub: hindari token ENV rusak (401) → pesan "bukan model valid".
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+
 import random
 import re
 import gc
@@ -28,15 +32,28 @@ from backend.supabase_client import supabase
 
 INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p2"
 MBERT_MODEL_ID = "bert-base-multilingual-cased"
-XLMR_MODEL_ID = "facebook/xlm-roberta-base"
+_DEFAULT_XLMR_HUB_ID = "xlm-roberta-base"
+# Alias `facebook/xlm-roberta-base` sering 401 tanpa login HF; `xlm-roberta-base` sama arsitektur, unduh anonim OK.
+# Override: set `KAMUS_XLMR_MODEL` ke folder lokal atau repo lain.
+XLMR_MODEL_ID = (os.environ.get("KAMUS_XLMR_MODEL") or "").strip() or _DEFAULT_XLMR_HUB_ID
 
 # Internal defaults khusus mBERT
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
 _INDOBERT_FAST_MAX_LENGTH = 64
 
-# Unduh pretrained publik secara anonim; HF_TOKEN invalid sering menghasilkan 401.
+# Unduh pretrained: IndoBERT, mBERT, & XLM-R default pakai unduhan anonim (token=False) agar HF_TOKEN
+# rusak di ENV tidak memicu 401. Repo lain (mis. `facebook/xlm-roberta-base`) pakai auth default.
 _HF_HUB_PUBLIC: dict[str, object] = {"token": False}
+
+
+def _hub_kwargs_for_pretrained(repo_or_path: str) -> dict[str, object]:
+    p = str(repo_or_path).strip()
+    if os.path.isdir(p):
+        return {}
+    if p in (INDOBERT_MODEL_ID, MBERT_MODEL_ID, _DEFAULT_XLMR_HUB_ID):
+        return _HF_HUB_PUBLIC
+    return {}
 
 
 def _set_global_seed(seed: int) -> None:
@@ -292,7 +309,7 @@ def train_indobert_softmax(
     train_idx = np.array(train_idx)
     val_idx = np.array(val_idx)
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id, **_HF_HUB_PUBLIC)
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id, **_hub_kwargs_for_pretrained(base_model_id))
     try:
         model = AutoModelForSequenceClassification.from_pretrained(
             base_model_id,
@@ -302,7 +319,7 @@ def train_indobert_softmax(
             classifier_dropout=dropout,
             hidden_dropout_prob=dropout,
             attention_probs_dropout_prob=dropout,
-            **_HF_HUB_PUBLIC,
+            **_hub_kwargs_for_pretrained(base_model_id),
         )
     except TypeError:
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -311,7 +328,7 @@ def train_indobert_softmax(
             id2label=id2label,
             label2id=label2id,
             classifier_dropout=dropout,
-            **_HF_HUB_PUBLIC,
+            **_hub_kwargs_for_pretrained(base_model_id),
         )
 
     indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID

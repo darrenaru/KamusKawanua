@@ -470,7 +470,7 @@ mark {
   margin-top: 0;
 }
 
-/* Satu “kartu” besar: rapatkan margin anak supaya tidak dobel-tebal */
+/* One large “card”: tighten child margins so borders do not look doubled */
 .search-model-insights-collapsible-inner .search-summary-testing {
   margin-top: 4px;
   margin-bottom: 12px;
@@ -795,7 +795,7 @@ mark {
   /* biar tetap sejajar */
   align-self: center;
 
-  /* spacing dari box */
+  /* spacing from parent box */
   margin: 0 10px;
 }
 

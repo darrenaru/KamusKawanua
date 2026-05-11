@@ -1,5 +1,5 @@
 // ==============================
-// SUPABASE INIT (WAJIB GANTI)
+// SUPABASE INIT (REPLACE WITH YOUR KEYS)
 // ==============================
 const supabaseUrl = "https://fhpjbkelhvopvfzykjne.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTQ2NTQsImV4cCI6MjA5MDk3MDY1NH0.xSUPwXaPCcO4uDi-rH1MdeaJCeJU56pwvLDEgVT_SDQ";

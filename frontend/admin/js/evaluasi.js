@@ -670,7 +670,7 @@ function getAlgoComparisonValue(algoKey, metricDef) {
         value = normalizeMetricValue(bestTraining.train_loss, metricDef.type);
     }
 
-    // Fallback 1: ambil dari best testing model jika best training model tidak punya nilai testing ini.
+    // Fallback: use best testing model when best training lacks this testing metric.
     if (value == null && metricDef.testField) {
         value = normalizeMetricValue(tBestTesting[metricDef.testField], metricDef.type);
     }

@@ -438,7 +438,7 @@
     );
 
     if (isDuplicate) {
-      showToast("This rasio already exists in the table", "error");
+      showToast("This split ratio already exists in the table", "error");
       return;
     }
 
@@ -529,7 +529,7 @@
     const item = ratioData[index];
 
     const modalP = confirmModal.querySelector("p");
-    modalP.innerHTML = `Are you sure you want to delete rasio <strong>${item.train}:${item.test}</strong>?`;
+    modalP.innerHTML = `Are you sure you want to delete split ratio <strong>${item.train}:${item.test}</strong>?`;
     confirmModal.style.display = "flex";
   }
 
@@ -2228,7 +2228,7 @@
     const splitRatio = splitSelect?.value;
 
     if (!splitRatio) {
-      showToast("Please select a split rasio first.");
+      showToast("Please select a split ratio first.");
       return;
     }
 
@@ -2676,7 +2676,7 @@
       setProcessingStep(card, "queue");
       appendProgressLog(
         card,
-        `Job dibuat: ${jobId.slice(0, 8)} | device akan dipilih otomatis`,
+        `Job created: ${jobId.slice(0, 8)} | device will be selected automatically`,
         "info",
       );
 
@@ -2831,7 +2831,7 @@
         // Training selesai - simpan ke history
         const trainingName =
           document.getElementById("training-name")?.value ||
-          `Training_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}`;
+          `Training_${new Date().toLocaleDateString("en-US").replace(/\//g, "-")}`;
         const trainingDesc =
           document.getElementById("training-desc")?.value || "";
         const splitRatio =
@@ -3036,7 +3036,7 @@
     if (mode === "training-final") {
       const trainingName =
         document.getElementById("training-name")?.value ||
-        `Training_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}`;
+        `Training_${new Date().toLocaleDateString("en-US").replace(/\//g, "-")}`;
       const trainingDesc =
         document.getElementById("training-desc")?.value || "";
       const splitRatio =
@@ -3334,7 +3334,7 @@
       // document.getElementById('best-params-display').style.display = 'block';
 
       showToast(
-        `The best model from rasio ${params.splitRatio} was applied. Proceeding to Final Training.`,
+        `The best model from split ratio ${params.splitRatio} was applied. Proceeding to Final Training.`,
         "success",
       );
 
@@ -3714,7 +3714,7 @@
     tbody.innerHTML = sorted
       .map((item, index) => {
         const originalIndex = history.length - 1 - index;
-        const date = new Date(item.tanggal).toLocaleString("id-ID", {
+        const date = new Date(item.tanggal).toLocaleString("en-US", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
@@ -3777,7 +3777,7 @@
     // 🔧 Isi info - Date
     const dateEl = document.getElementById("detail-date");
     if (dateEl) {
-      dateEl.innerText = new Date(data.tanggal).toLocaleString("id-ID", {
+      dateEl.innerText = new Date(data.tanggal).toLocaleString("en-US", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -3819,7 +3819,7 @@
     if (data.hasil && data.hasil.length > 0) {
       const results = data.hasil;
 
-      // 🔧 Cari epoch dengan Accuracy tertinggi (untuk confusion matrix)
+      // Pick the epoch with the highest accuracy (for confusion matrix)
       let bestAcc = -Infinity;
       let bestEpoch = -1;
       results.forEach((r) => {
@@ -3872,7 +3872,7 @@
       </tr>
     `;
 
-      // Confusion Matrix (ambil epoch dengan Accuracy tertinggi)
+      // Confusion matrix: use the epoch with the highest accuracy
       const confusionSection = document.getElementById("history-confusion-section");
       const confusionMeta = document.getElementById("history-confusion-meta");
       const confusionTable = document.getElementById("history-confusion-table");

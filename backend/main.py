@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import os
+
+# Sebelum transformers: hindari token HF di ENV (salah/kadaluarsa) memaksa request ber-auth → 401.
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+
 import pandas as pd
 from rapidfuzz import fuzz
 import numpy as np
@@ -404,9 +408,11 @@ def _get_preprocess_tokenizer_xlm() -> AutoTokenizer:
     """Muat sekali — tidak di import startup agar server tetap hidup tanpa akses HF."""
     global tokenizer_pre_xlm
     if tokenizer_pre_xlm is None:
+        from backend.processing.service import XLMR_MODEL_ID
+
         # token=False = unduh anonim; HF_TOKEN salah sering menghasilkan 401 pada repo publik.
         tokenizer_pre_xlm = AutoTokenizer.from_pretrained(
-            "facebook/xlm-roberta-base",
+            XLMR_MODEL_ID,
             token=False,
         )
     return tokenizer_pre_xlm

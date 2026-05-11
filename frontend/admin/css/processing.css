@@ -151,7 +151,7 @@ body::before {
   cursor: not-allowed;
 }
 
-/* Gunakan scroll jendela (bukan overflow di .main) agar AOS/scroll trigger bekerja */
+/* Use window scroll (not overflow on .main) so AOS scroll triggers work */
 .main {
   flex: 1;
   min-height: 100vh;
@@ -397,7 +397,7 @@ body::before {
   border-top: 2px solid var(--accent);
 }
 
-/* Style untuk rasio display */
+/* Ratio display block */
 .result-ratio-display {
   color: var(--accent);
   font-weight: 700;
@@ -551,7 +551,7 @@ body::before {
   background: #b71c1c;
 }
 
-/* Mode Cari Rasio vs Training Final */
+/* Best-ratio search vs final training */
 .mode-cari-rasio .ratio-section {
   opacity: 1;
   pointer-events: all;
@@ -1313,14 +1313,14 @@ body::before {
   background: #b0965a;
 }
 
-/* ==================== TABEL PERBANDINGAN ANTAR RASIO ==================== */
-/* Styling dibuat sama persis dengan .results-table */
+/* ==================== Cross-ratio comparison table ==================== */
+/* Styling aligned with .results-table */
 
 .comparison-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  min-width: 900px; /* Sama dengan .results-table */
+  min-width: 900px; /* Match .results-table */
   background: white;
   border-radius: 12px;
   overflow: hidden;
@@ -1346,7 +1346,7 @@ body::before {
 }
 
 .comparison-table tbody tr:hover {
-  background: #f8f6f2; /* Hover effect sama */
+  background: #f8f6f2; /* Same hover treatment */
 }
 
 .comparison-table .best-row {
@@ -1362,7 +1362,7 @@ body::before {
 
 /* Container tabel perbandingan */
 #ratio-comparison-section {
-  background: var(--panel); /* Sama dengan background training card */
+  background: var(--panel); /* Match training card panel */
   border-radius: 18px;
   padding: 18px;
   border: 1px solid var(--border-soft);
@@ -1376,7 +1376,7 @@ body::before {
   margin-bottom: 20px;
 }
 
-/* Table container untuk comparison */
+/* Comparison table container */
 #ratio-comparison-section .table-container {
   overflow-x: auto;
   border-radius: 12px;

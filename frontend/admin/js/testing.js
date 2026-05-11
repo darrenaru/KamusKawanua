@@ -119,8 +119,8 @@ async function pollTestingPreprocessJob(jobId, onProgress) {
         if (status.status === 'done') {
             if (typeof onProgress === 'function') {
                 var doneMsg = hasTotal
-                    ? 'Tokenizer selesai: ' + processed + '/' + total + ' baris diproses' + deviceLabel
-                    : 'Tokenizer selesai: 0 baris — semua sudah punya token (tidak perlu ulang; perilaku sama seperti Preprocessing ke-2)' + deviceLabel;
+                    ? 'Tokenizer finished: ' + processed + '/' + total + ' rows processed' + deviceLabel
+                    : 'Tokenizer finished: 0 rows — all rows already had tokens (no re-run needed; same as a second preprocessing pass)' + deviceLabel;
                 onProgress(72, doneMsg);
             }
             return status;
@@ -178,7 +178,7 @@ async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio,
                 indonesia_clean: cleanTextForTesting(row.indonesia),
                 kalimat_manado_clean: cleanTextForTesting(row.kalimat_manado),
                 kalimat_indonesia_clean: cleanTextForTesting(row.kalimat_indonesia),
-                // Paksa subset test ini ditokenisasi ulang, tanpa mereset seluruh dataset.
+        // Force this test subset to be re-tokenized without resetting the whole dataset.
                 input_ids: null,
                 attention_mask: null,
                 bert_tokens: null,
@@ -196,7 +196,7 @@ async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio,
         });
         if (up.error) throw up.error;
         var inserted = Math.min(testRows.length, i + chunk.length);
-        // Seeding: 3%–30% mengikuti jumlah baris (proporsional lama upsert Supabase).
+        // Seeding: 3%–30% scales with row count (roughly proportional to Supabase upsert time).
         var insertPercent = 3 + Math.round((inserted / testRows.length) * 27);
         if (typeof onProgress === 'function') {
             onProgress(insertPercent, 'Seeding preprocessed_data (test subset) ' + inserted + '/' + testRows.length);
@@ -446,7 +446,7 @@ function applyStoredTestingMetrics(summary) {
         metricEl.textContent = id === 'mcc' ? m[id].toFixed(2) : Math.round(m[id]) + '%';
     });
 
-    var createdAt = summary.created_at ? new Date(summary.created_at).toLocaleString('id-ID') : '-';
+    var createdAt = summary.created_at ? new Date(summary.created_at).toLocaleString('en-US') : '-';
     var progressText = document.getElementById('progressText');
     if (progressText) {
         progressText.textContent = 'Loaded latest testing result from Supabase.';
@@ -904,7 +904,7 @@ function testKata() {
                 var predictedLabel = 'prediction unavailable';
                 var confidenceLabel = '-';
 
-                // Buat item dulu agar UI responsif, lalu update setelah backend selesai.
+                // Create the row first for a responsive UI, then refresh after the backend finishes.
                 var item = document.createElement('div');
                 item.className = 'kata-result-item';
                 item.innerHTML =

@@ -793,7 +793,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: OPSI SUMBER DATA
+   /* Data source options */
 =================================================== */
 
 .ds-options {
@@ -879,7 +879,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: UPLOAD AREA
+   /* Upload area */
 =================================================== */
 
 .upload-area {
@@ -917,7 +917,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: INPUT KATA
+   /* Word input */
 =================================================== */
 
 .input-text {
@@ -960,7 +960,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: TOMBOL UJI KATA
+   /* Test word button */
 =================================================== */
 
 .btn-test-kata {
@@ -989,7 +989,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: HASIL UJI KATA
+   /* Word test results */
 =================================================== */
 
 .kata-result {
@@ -1100,7 +1100,7 @@ select:focus {
 
 
 /* ===================================================
-   TAMBAHAN: TABEL EVALUASI (MENGAJANG KE KANAN)
+   /* Evaluation table (horizontal scroll) */
 =================================================== */
 
 .eval-table {

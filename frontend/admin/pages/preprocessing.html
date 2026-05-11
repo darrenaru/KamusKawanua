@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Preprocessing</title>
@@ -37,7 +37,7 @@
     </h1>
     <p id="preprocessAlgoBanner" class="preprocessing-algo-hint" data-aos="fade-up" data-aos-delay="55" aria-live="polite"></p>
     <div class="lexicon-toolbar" data-aos="fade-up" data-aos-delay="90">
-      <button id="openLexiconModalBtn" type="button" class="lex-btn-primary">Manage Stopword & Slang</button>
+      <button id="openLexiconModalBtn" type="button" class="lex-btn-primary">Manage stopwords & slang</button>
     </div>
 
     <!-- TABLE WRAPPER -->
@@ -74,9 +74,12 @@
       <button id="showSlangBtn" class="lex-btn-secondary" type="button">Slang</button>
     </div>
     <div id="stopwordView" class="lex-section">
-        <h4 id="stopwordTitle">Stopwords</h4>
+        <div class="lex-section-heading-row">
+          <h4 id="stopwordTitle">Stopwords</h4>
+          <span id="stopwordListCount" class="lex-list-count" aria-live="polite"></span>
+        </div>
         <div class="lex-input-row">
-          <input id="newStopwordInput" type="text" placeholder="e.g. yang">
+          <input id="newStopwordInput" type="text" placeholder="e.g. very">
           <button id="addStopwordBtn" class="lex-btn-primary">Add</button>
         </div>
         <div class="lex-table-wrap">
@@ -89,7 +92,10 @@
         </div>
       </div>
       <div id="slangView" class="lex-section" style="display:none;">
-        <h4>Slang Normalization</h4>
+        <div class="lex-section-heading-row">
+          <h4>Slang normalization</h4>
+          <span id="slangListCount" class="lex-list-count" aria-live="polite"></span>
+        </div>
         <div class="lex-input-row">
           <input id="newSlangInput" type="text" placeholder="slang">
           <input id="newFormalInput" type="text" placeholder="formal">

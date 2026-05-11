@@ -33,34 +33,27 @@ function resolvePreprocessAlgorithm() {
     return activePreprocessAlgorithm;
 }
 
-/** Bar penjelasan di halaman: tokenizer = pilihan Beranda (+ fallback). */
+/** One-line label: selected tokenizer for preprocessing (from Home workflow). */
 function refreshPreprocessAlgoBanner() {
-    const savedRaw =
-        localStorage.getItem(WORKFLOW_ALGORITHM_KEY) ||
-        localStorage.getItem("selectedAlgorithm") ||
-        "";
     resolvePreprocessAlgorithm();
     const label = preprocessTokenizerLabel(activePreprocessAlgorithm);
     const el = document.getElementById("preprocessAlgoBanner");
     if (!el) return;
+    el.textContent = `Selected algorithm: ${label}`;
+}
 
-    const trimmed = savedRaw ? String(savedRaw).trim() : "";
-    const lower = trimmed.toLowerCase();
+function setStopwordListCount(n) {
+    const el = document.getElementById("stopwordListCount");
+    if (!el) return;
+    const label =
+        activeStopwordLanguage === "indonesia" ? "Indonesia stopwords" : "Manado stopwords";
+    el.textContent = `${label}: ${Number(n) || 0}`;
+}
 
-    let line =
-        "Tokenizer preprocessing: " +
-        label +
-        ". Diprioritaskan dari «kamusWorkflowAlgorithm» (Beranda), fallback «selectedAlgorithm».";
-
-    if (!trimmed) {
-        line +=
-            " Saat ini belum ada pilihan di Beranda; dipakai default mBERT. Buka Beranda → pilih IndoBERT atau XLM-R jika itu yang Anda inginkan.";
-    } else if (lower === "word2vec" || lower === "glove") {
-        line +=
-            " Untuk Word2Vec / GloVe, pemetaan preprocessing tetap memakai tokenizer mBERT.";
-    }
-
-    el.textContent = line;
+function setSlangListCount(n) {
+    const el = document.getElementById("slangListCount");
+    if (!el) return;
+    el.textContent = `Slang pairs: ${Number(n) || 0}`;
 }
 
 function openDatasetModal() {
@@ -135,7 +128,7 @@ function renderTable() {
             <td>${ds.kata_keterangan ?? 0}</td>
             <td>
                 <span class="status ${ds.is_preprocessed ? 'done' : 'pending'}">
-                    ${ds.is_preprocessed ? 'Completed' : 'Not Yet'}
+                    ${ds.is_preprocessed ? 'Completed' : 'Pending'}
                 </span>
             </td>
         `;
@@ -366,7 +359,7 @@ async function startPreprocessing() {
         const selectedAlgo = resolvePreprocessAlgorithm();
         const algoLabel = preprocessTokenizerLabel(selectedAlgo);
 
-        // Jalankan tokenizer backend secara async + polling progres real.
+        // Run backend tokenizer asynchronously with live progress polling.
         const startRes = await fetch(
             `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=${encodeURIComponent(selectedAlgo)}`,
             { method: "POST" },
@@ -397,7 +390,7 @@ async function startPreprocessing() {
 
         await loadDatasets();
 
-        // Pastikan card/detail tetap sinkron dengan data terbaru (status is_preprocessed).
+        // Keep the modal card in sync after refresh (is_preprocessed flag).
         if (selectedDataset?.id) {
             const refreshed = datasets.find(d => d.id === selectedDataset.id);
             if (refreshed) selectDataset(refreshed);
@@ -521,28 +514,39 @@ async function loadLexiconData() {
             return;
         }
 
-        setLexiconStatus(`Loading stopwords (${activeStopwordLanguage})...`);
+        setLexiconStatus(`Loading stopwords (${activeStopwordLanguage === "indonesia" ? "Indonesia" : "Manado"})...`);
         const stopRes = await fetch(
             `http://127.0.0.1:8000/preprocess/stopwords?language=${encodeURIComponent(activeStopwordLanguage)}`,
         );
         const stopData = await stopRes.json();
         if (!stopRes.ok) throw new Error(stopData?.detail || "Failed loading stopwords");
         renderStopwords(stopData.items || []);
-        setLexiconStatus(`Stopwords (${activeStopwordLanguage}) loaded.`);
+        setLexiconStatus(
+            activeStopwordLanguage === "indonesia"
+                ? "Stopwords (Indonesia) loaded."
+                : "Stopwords (Manado) loaded.",
+        );
     } catch (err) {
         console.error(err);
         setLexiconStatus(err.message || "Failed loading lexicon", true);
+        if (activeLexiconView === "slang") {
+            setSlangListCount(0);
+        } else {
+            setStopwordListCount(0);
+        }
     }
 }
 
 function renderStopwords(items) {
     const tbody = document.getElementById("stopwordTableBody");
     if (!tbody) return;
-    if (!items.length) {
+    const list = Array.isArray(items) ? items : [];
+    setStopwordListCount(list.length);
+    if (!list.length) {
         tbody.innerHTML = `<tr><td colspan="2">No stopword data</td></tr>`;
         return;
     }
-    tbody.innerHTML = items
+    tbody.innerHTML = list
         .map((it) => `
             <tr>
                 <td>${it.word || "-"}</td>
@@ -558,11 +562,13 @@ function renderStopwords(items) {
 function renderSlangWords(items) {
     const tbody = document.getElementById("slangTableBody");
     if (!tbody) return;
-    if (!items.length) {
+    const list = Array.isArray(items) ? items : [];
+    setSlangListCount(list.length);
+    if (!list.length) {
         tbody.innerHTML = `<tr><td colspan="3">No slang data</td></tr>`;
         return;
     }
-    tbody.innerHTML = items
+    tbody.innerHTML = list
         .map((it) => `
             <tr>
                 <td>${it.slang || "-"}</td>
@@ -651,7 +657,9 @@ async function deleteSlangWord(slang) {
 // INIT
 refreshPreprocessAlgoBanner();
 document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") refreshPreprocessAlgoBanner();
+    if (document.visibilityState === "visible") {
+        refreshPreprocessAlgoBanner();
+    }
 });
 loadDatasets();
 wireLexiconControls();
