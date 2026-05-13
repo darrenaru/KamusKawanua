@@ -67,10 +67,15 @@
 
                             <!-- Panel Upload -->
                             <div class="ds-panel show" id="panelUpload">
-                                <label class="upload-area" id="uploadArea">
-                                    <input type="file" id="fileDataset" accept=".csv" hidden>
-                                    <span id="uploadText">Select or drag a dataset file (.csv)</span>
-                                </label>
+                                <div class="testing-upload-shell">
+                                    <label class="upload-area" id="uploadArea" for="fileDataset">
+                                        <input type="file" id="fileDataset" accept=".csv" hidden>
+                                        <span class="upload-area-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                                        </span>
+                                        <span id="uploadText" class="upload-area-text">Select or drag a dataset file (.csv)</span>
+                                    </label>
+                                </div>
                                 <div class="helper-text">Tip: use the same dataset used during training for more relevant testing results.</div>
                             </div>
 

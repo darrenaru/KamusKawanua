@@ -18,8 +18,8 @@ try {
    PREPROCESSING (same flow as preprocessing.html)
    — seed preprocessed_data from raw_data, then backend tokenizer job
 ============================= */
-var TESTING_SUPABASE_URL = 'https://fhpjbkelhvopvfzykjne.supabase.co';
-var TESTING_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTQ2NTQsImV4cCI6MjA5MDk3MDY1NH0.xSUPwXaPCcO4uDi-rH1MdeaJCeJU56pwvLDEgVT_SDQ';
+var TESTING_SUPABASE_URL = 'https://cdrabgiuvfisxntfzskd.supabase.co';
+var TESTING_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxMTcwNiwiZXhwIjoyMDk0MDg3NzA2fQ.k5Ixw-G0mmZDqdAlMLRZr97joaA2tvIM_vMXfQZCQbo';
 var testingSupabaseClient = null;
 
 function getTestingSupabaseClient() {

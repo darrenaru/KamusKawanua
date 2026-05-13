@@ -69,6 +69,12 @@ def _set_global_seed(seed: int) -> None:
 def _cleanup_torch_memory() -> None:
     gc.collect()
     if torch.cuda.is_available():
+        # Setelah OOM, error CUDA bisa "numpuk" asinkron; sync dulu lalu kosongkan cache
+        # agar retry (mis. ke CPU) tidak langsung gagal dengan pesan CUDA palsu.
+        try:
+            torch.cuda.synchronize()
+        except Exception:
+            pass
         try:
             torch.cuda.empty_cache()
         except Exception:

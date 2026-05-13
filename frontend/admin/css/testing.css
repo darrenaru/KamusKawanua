@@ -792,9 +792,7 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Data source options */
-=================================================== */
+/* ---- Data source options ---- */
 
 .ds-options {
     display: flex;
@@ -878,23 +876,60 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Upload area */
-=================================================== */
+/* ---- Upload area (dataset file) ---- */
+
+.testing-upload-shell {
+    width: 100%;
+    box-sizing: border-box;
+}
 
 .upload-area {
     display: flex;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 10px;
-    padding: 14px 16px;
-    border: 1.5px dashed #ccc;
+    min-height: 132px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 22px 18px;
+    border: 1.5px dashed var(--border-strong);
     border-radius: 12px;
-    background: #fafafa;
+    background: rgba(255, 252, 245, 0.9);
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     max-width: 100%;
     font-size: 13px;
-    color: var(--muted);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.upload-area-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.upload-area-icon svg {
+    width: 22px;
+    height: 22px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.upload-area-text {
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.45;
+    max-width: 280px;
 }
 
 .upload-area:focus-within {
@@ -916,9 +951,7 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Word input */
-=================================================== */
+/* ---- Word input ---- */
 
 .input-text {
     width: 100%;
@@ -959,9 +992,7 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Test word button */
-=================================================== */
+/* ---- Test word button ---- */
 
 .btn-test-kata {
     margin-top: 10px;
@@ -988,9 +1019,7 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Word test results */
-=================================================== */
+/* ---- Word test results ---- */
 
 .kata-result {
     display: none;
@@ -1099,9 +1128,7 @@ select:focus {
 }
 
 
-/* ===================================================
-   /* Evaluation table (horizontal scroll) */
-=================================================== */
+/* ---- Evaluation table (horizontal scroll) ---- */
 
 .eval-table {
     width: 100%;
