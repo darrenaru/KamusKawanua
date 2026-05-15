@@ -22,7 +22,8 @@ var CHART_METRIC_DEFS = [
     { key: 'recall', label: 'Recall', testField: 'recall_macro', asPercent: true },
     { key: 'f1', label: 'F1', testField: 'f1_macro', asPercent: true },
     { key: 'weighted', label: 'Weighted Avg', testField: 'weighted_avg', asPercent: true },
-    { key: 'std_dev', label: 'Std Dev', testField: 'std_deviation', asPercent: false },
+    { key: 'loss', label: 'Loss', testField: null, asPercent: true },
+    { key: 'std_dev', label: 'Std Dev', testField: 'std_deviation', asPercent: true },
     { key: 'mcc', label: 'MCC', testField: 'mcc', asPercent: true },
     { key: 'roc_auc', label: 'ROC-AUC', testField: 'roc_auc', asPercent: true },
 ];
@@ -33,8 +34,8 @@ var TABLE_METRIC_DEFS = [
     { key: 'f1', label: 'F1', trainField: 'f1_score', testField: 'f1_macro', type: 'percent' },
     { key: 'macro_avg', label: 'Macro Avg', trainField: 'macro_avg', testField: null, type: 'percent' },
     { key: 'weighted_avg', label: 'Weighted Avg', trainField: null, testField: 'weighted_avg', type: 'percent' },
-    { key: 'std_dev', label: 'Std Dev', trainField: null, testField: 'std_deviation', type: 'float2' },
-    { key: 'loss', label: 'Loss', trainField: 'train_loss', testField: null, type: 'float4' },
+    { key: 'std_dev', label: 'Std Dev', trainField: null, testField: 'std_deviation', type: 'percent' },
+    { key: 'loss', label: 'Loss', trainField: 'train_loss', testField: null, type: 'loss_pct' },
     { key: 'mcc', label: 'MCC', trainField: 'train_mcc', testField: 'mcc', type: 'percent' },
     { key: 'roc_auc', label: 'ROC-AUC', trainField: null, testField: 'roc_auc', type: 'percent' },
 ];
@@ -78,6 +79,15 @@ function formatPercent(raw) {
     return (Math.round(n * 10) / 10).toFixed(1) + '%';
 }
 
+/** Loss (raw, e.g. cross-entropy) shown as percentage = raw × 100 with % sign. */
+function formatLossPct(raw) {
+    if (raw === undefined || raw === null || raw === '') return '—';
+    var n = Number(raw);
+    if (!Number.isFinite(n)) return '—';
+    var v = n * 100;
+    return (Math.round(v * 100) / 100).toFixed(2) + '%';
+}
+
 function formatFloatOrDash(raw, decimals) {
     if (raw === undefined || raw === null || raw === '') return '—';
     var n = Number(raw);
@@ -87,6 +97,7 @@ function formatFloatOrDash(raw, decimals) {
 
 function formatByType(raw, type) {
     if (type === 'percent') return formatPercent(raw);
+    if (type === 'loss_pct') return formatLossPct(raw);
     if (type === 'float4') return formatFloatOrDash(raw, 4);
     if (type === 'float2') return formatFloatOrDash(raw, 2);
     return raw == null ? '—' : String(raw);
@@ -396,7 +407,7 @@ function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, c
             '<td>' + formatFloatOrDash(r.precision, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.recall, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.f1, 2) + '%</td>' +
-            '<td>' + formatFloatOrDash(r.loss, 4) + '</td>' +
+            '<td>' + formatLossPct(r.loss) + '</td>' +
             '</tr>'
         );
     }).join('');
@@ -417,7 +428,7 @@ function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, c
         '<td>' + (sum.precision / count).toFixed(2) + '%</td>' +
         '<td>' + (sum.recall / count).toFixed(2) + '%</td>' +
         '<td>' + (sum.f1 / count).toFixed(2) + '%</td>' +
-        '<td>' + (sum.loss / count).toFixed(4) + '</td>' +
+        '<td>' + formatLossPct(sum.loss / count) + '</td>' +
         '</tr>';
 
     if (!(confusionSection && confusionMeta && confusionTable && confusionEmpty)) return;
@@ -526,9 +537,10 @@ function averageMetric(rows, trainField, testField) {
 function fittingStatus(trainValue, testValue, type) {
     if (trainValue == null || testValue == null) return '—';
     var diff = Math.abs(trainValue - testValue);
-    var rawText = type === 'percent' ? diff.toFixed(4) + '%' : diff.toFixed(6);
-    var txt = type === 'percent' ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
-    if (type === 'percent' && diff < 2) {
+    var pctLike = type === 'percent' || type === 'loss_pct';
+    var rawText = pctLike ? diff.toFixed(4) + '%' : diff.toFixed(6);
+    var txt = pctLike ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
+    if (pctLike && diff < 2) {
         return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
     }
     if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + ' <small>(raw ' + rawText + ')</small></span>';
@@ -683,7 +695,7 @@ function getAlgoComparisonValue(algoKey, metricDef) {
 
     // Fallback 2: rata-rata per algoritma (sesuai semangat tabel testing per model).
     if (value == null && metricDef.testField) {
-        var avg = avgTestingByAlgo(algoKey, metricDef.testField, metricDef.type === 'percent');
+        var avg = avgTestingByAlgo(algoKey, metricDef.testField, metricDef.type);
         value = avg == null ? null : avg;
     }
 
@@ -695,16 +707,13 @@ function getAlgoComparisonValue(algoKey, metricDef) {
     return value;
 }
 
-function avgTestingByAlgo(algoKey, testField, asPercent) {
+function avgTestingByAlgo(algoKey, testField, metricType) {
     var rows = state.byAlgo[algoKey] || [];
+    var mt = metricType != null ? metricType : 'percent';
     var vals = rows
         .map(function (r) {
             var t = r.testing_result || {};
-            if (!asPercent) {
-                var n = Number(t[testField]);
-                return Number.isFinite(n) ? n : null;
-            }
-            return normalizePercent(t[testField]);
+            return normalizeMetricValue(t[testField], mt);
         })
         .filter(function (v) {
             return v != null;
@@ -719,7 +728,10 @@ function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent)
 
     var value = null;
     if (testField) {
-        value = asPercent ? normalizePercent(t[testField]) : normalizeMetricValue(t[testField], 'float2');
+        var mdef = TABLE_METRIC_DEFS.find(function (d) {
+            return d.key === metricKey;
+        });
+        value = normalizeMetricValue(t[testField], mdef ? mdef.type : 'percent');
     }
 
     if (value == null && metricKey === 'macro_avg') {
@@ -732,7 +744,7 @@ function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent)
     }
 
     if (value == null && metricKey === 'loss') {
-        value = normalizeMetricValue(refModel.train_loss, 'float4');
+        value = normalizeMetricValue(refModel.train_loss, 'loss_pct');
     }
 
     return value;
@@ -741,6 +753,11 @@ function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent)
 function normalizeMetricValue(raw, type) {
     if (raw === undefined || raw === null || raw === '') return null;
     if (type === 'percent') return normalizePercent(raw);
+    if (type === 'loss_pct') {
+        var ln = Number(raw);
+        if (!Number.isFinite(ln)) return null;
+        return ln * 100;
+    }
     var n = Number(raw);
     return Number.isFinite(n) ? n : null;
 }
@@ -892,9 +909,10 @@ function renderAlgoComparisonTable() {
         .join('');
 }
 
-function makeChart(canvasId, labels, datasets, asPercent) {
+function makeChart(canvasId, labels, datasets, asPercent, yCapAt100) {
     var el = document.getElementById(canvasId);
     if (!el || typeof Chart === 'undefined') return;
+    if (yCapAt100 === undefined) yCapAt100 = true;
     if (!labels.length) labels = ['No Data'];
     if (!Array.isArray(datasets) || !datasets.length) {
         datasets = [
@@ -960,7 +978,7 @@ function makeChart(canvasId, labels, datasets, asPercent) {
                 },
                 y: {
                     beginAtZero: true,
-                    suggestedMax: asPercent ? 100 : undefined,
+                    suggestedMax: asPercent && yCapAt100 ? 100 : undefined,
                     ticks: {
                         font: { size: 12, weight: '600' },
                         callback: function (v) {
@@ -1025,6 +1043,7 @@ function renderCharts(metricKey) {
                 },
             ],
             true,
+            true,
         );
         makeChart(
             'chartClassic',
@@ -1047,6 +1066,7 @@ function renderCharts(metricKey) {
                     categoryPercentage: 0.7,
                 },
             ],
+            true,
             true,
         );
         makeChart(
@@ -1075,38 +1095,55 @@ function renderCharts(metricKey) {
                 },
             ],
             true,
+            true,
         );
         return;
     }
 
+    var yCap = def.key !== 'loss';
     makeChart('chartTransformer', tfLabels, [{
         label: def.label,
         data: tf.map(function (k) {
-            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || {
+                key: def.key,
+                testField: def.testField,
+                trainField: null,
+                type: def.key === 'loss' ? 'loss_pct' : 'percent',
+            };
             return getAlgoComparisonValue(k, metricDef);
         }),
         backgroundColor: CHART_COLORS.transformerDark,
         borderRadius: 5,
         barPercentage: 0.62,
         categoryPercentage: 0.7,
-    }], asPercent);
+    }], asPercent, yCap);
 
     makeChart('chartClassic', clLabels, [{
         label: def.label,
         data: cl.map(function (k) {
-            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || {
+                key: def.key,
+                testField: def.testField,
+                trainField: null,
+                type: def.key === 'loss' ? 'loss_pct' : 'percent',
+            };
             return getAlgoComparisonValue(k, metricDef);
         }),
         backgroundColor: CHART_COLORS.classicLight,
         borderRadius: 5,
         barPercentage: 0.62,
         categoryPercentage: 0.7,
-    }], asPercent);
+    }], asPercent, yCap);
 
     makeChart('chartCombined', allLabels, [{
         label: def.label,
         data: all.map(function (k) {
-            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || {
+                key: def.key,
+                testField: def.testField,
+                trainField: null,
+                type: def.key === 'loss' ? 'loss_pct' : 'percent',
+            };
             return getAlgoComparisonValue(k, metricDef);
         }),
         backgroundColor: all.map(function (k) {
@@ -1115,7 +1152,7 @@ function renderCharts(metricKey) {
         borderRadius: 5,
         barPercentage: 0.62,
         categoryPercentage: 0.7,
-    }], asPercent);
+    }], asPercent, yCap);
 }
 
 function renderChartMetricButtons() {
@@ -1277,6 +1314,208 @@ function renderEvaluationConclusion(items) {
     }
 }
 
+function findChartForCanvasId(canvasId) {
+    for (var i = 0; i < state.charts.length; i++) {
+        var ch = state.charts[i];
+        if (ch && ch.canvas && ch.canvas.id === canvasId) return ch;
+    }
+    return null;
+}
+
+/**
+ * Renders chart at higher pixel size for a crisp PNG, then restores layout (no lasting UI change).
+ */
+function exportChartDataUrlHiRes(chart, targetW, targetH) {
+    return new Promise(function (resolve) {
+        if (!chart || !chart.canvas) {
+            resolve('');
+            return;
+        }
+        var prevW = chart.width;
+        var prevH = chart.height;
+        if (!prevW || !prevH) {
+            prevW = chart.canvas.clientWidth || 640;
+            prevH = chart.canvas.clientHeight || 360;
+        }
+        var tw = Math.max(480, Math.floor(targetW));
+        var th = Math.max(280, Math.floor(targetH));
+        try {
+            chart.resize(tw, th);
+            chart.update('none');
+        } catch (e) {
+            resolve('');
+            return;
+        }
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                var url = '';
+                try {
+                    url = chart.canvas.toDataURL('image/png', 1.0);
+                } catch (e2) {
+                    url = '';
+                }
+                try {
+                    if (prevW >= 16 && prevH >= 16) {
+                        chart.resize(prevW, prevH);
+                    } else {
+                        chart.resize();
+                    }
+                    chart.update('none');
+                } catch (e3) {}
+                resolve(url || '');
+            });
+        });
+    });
+}
+
+function scaledCanvasDataUrlFromElement(canvasEl, targetW, targetH) {
+    if (!canvasEl || typeof canvasEl.toDataURL !== 'function') return '';
+    var tw = Math.max(480, Math.floor(targetW));
+    var th = Math.max(280, Math.floor(targetH));
+    var tmp = document.createElement('canvas');
+    tmp.width = tw;
+    tmp.height = th;
+    var ctx = tmp.getContext('2d');
+    if (!ctx) return '';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tw, th);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    try {
+        ctx.drawImage(canvasEl, 0, 0, tw, th);
+        return tmp.toDataURL('image/png', 1.0);
+    } catch (e) {
+        return '';
+    }
+}
+
+async function buildEvalChartExportImages(chartLabel) {
+    var specs = [
+        { id: 'chartTransformer', title: 'Transformer models', expW: 1040, expH: 540, excelW: 780, excelH: 405 },
+        { id: 'chartClassic', title: 'Classic models', expW: 1040, expH: 540, excelW: 780, excelH: 405 },
+        { id: 'chartCombined', title: 'Transformer vs classic (combined)', expW: 1280, expH: 560, excelW: 820, excelH: 359 },
+    ];
+    var imgs = [];
+    for (var i = 0; i < specs.length; i++) {
+        var spec = specs[i];
+        var ch = findChartForCanvasId(spec.id);
+        var dataUrl = '';
+        if (ch) {
+            dataUrl = await exportChartDataUrlHiRes(ch, spec.expW, spec.expH);
+        }
+        if (!dataUrl || dataUrl.length < 64) {
+            var el = document.getElementById(spec.id);
+            dataUrl = scaledCanvasDataUrlFromElement(el, spec.expW, spec.expH);
+        }
+        if (dataUrl && dataUrl.length > 64) {
+            imgs.push({
+                title: spec.title + ' — ' + chartLabel,
+                base64: dataUrl,
+                width: spec.excelW,
+                height: spec.excelH,
+            });
+        }
+    }
+    return imgs;
+}
+
+function matrixFromElementPlainLines(el) {
+    if (!el) return [['(empty)']];
+    var text = String(el.innerText || '')
+        .split(/\r?\n/)
+        .map(function (s) {
+            return s.trim();
+        })
+        .filter(Boolean);
+    if (!text.length) return [['(empty)']];
+    return text.map(function (line) {
+        return [line];
+    });
+}
+
+async function exportEvaluasiWorkbook() {
+    if (!window.KamusExcel) {
+        alert('Excel export module is not loaded.');
+        return;
+    }
+    var btn = document.getElementById('btn-export-evaluasi-xlsx');
+    var orig = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Exporting…';
+    }
+    try {
+        await window.KamusExcel.ensureExcelJs();
+        var algo = state.selectedTableAlgo;
+        var algoLabel = ALGO_LABELS[algo] || algo || '-';
+        var chartDef = CHART_METRIC_DEFS.find(function (d) {
+            return d.key === state.selectedChartMetric;
+        });
+        var chartLabel = chartDef ? chartDef.label : state.selectedChartMetric;
+        var ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+
+        var trainingTable = document.querySelector('#training-metrics-card table.data-table');
+        var testingTable = document.querySelector('#testing-metrics-card table.data-table');
+        var fittingTable = document.querySelector('#fitting-summary-card table.summary-table');
+        var algoTable = document.querySelector('#algo-compare-card table.comp-table');
+        var conclusionEl = document.getElementById('eval-conclusion-content');
+
+        var sheets = [
+            {
+                name: 'Metadata',
+                matrix: [
+                    ['Exported (local time)', new Date().toLocaleString()],
+                    ['Table algorithm', algoLabel],
+                    ['Chart metric (images)', chartLabel],
+                ],
+            },
+            {
+                name: 'Training metrics',
+                title: 'Training metrics — ' + algoLabel,
+                table: trainingTable,
+            },
+            {
+                name: 'Testing metrics',
+                title: 'Testing metrics — ' + algoLabel,
+                table: testingTable,
+            },
+            {
+                name: 'Train vs test',
+                title: 'Best metrics comparison (selected model)',
+                table: fittingTable,
+            },
+            {
+                name: 'Algo comparison',
+                title: 'Algorithm comparison (all algos)',
+                table: algoTable,
+            },
+            {
+                name: 'Conclusion',
+                title: 'Evaluation conclusion',
+                matrix: matrixFromElementPlainLines(conclusionEl),
+            },
+        ];
+
+        var imgs = await buildEvalChartExportImages(chartLabel);
+        if (imgs.length) {
+            sheets.push({
+                name: 'Charts',
+                title: 'Comparison charts (high-resolution images)',
+                images: imgs,
+            });
+        }
+
+        await window.KamusExcel.exportWorkbook('evaluasi_' + algo + '_' + ts, sheets);
+    } catch (err) {
+        alert(err && err.message ? err.message : String(err));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = orig || 'Export Excel';
+        }
+    }
+}
+
 function bindEvents() {
     var algoWrap = document.getElementById('table-algo-buttons');
     if (algoWrap) {
@@ -1334,6 +1573,12 @@ function bindEvents() {
             var v = Number(e.target.value);
             state.selectedSummaryModelId = Number.isFinite(v) ? v : null;
             renderSummaryTable(state.selectedTableAlgo);
+        });
+    }
+    var exportEvalBtn = document.getElementById('btn-export-evaluasi-xlsx');
+    if (exportEvalBtn) {
+        exportEvalBtn.addEventListener('click', function () {
+            void exportEvaluasiWorkbook();
         });
     }
 }

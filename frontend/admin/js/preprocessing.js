@@ -3,6 +3,8 @@ const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
+const PREPROCESS_API_BASE = "http://127.0.0.1:8000";
+
 const WORKFLOW_ALGORITHM_KEY = "kamusWorkflowAlgorithm";
 
 let datasets = [];
@@ -663,3 +665,103 @@ document.addEventListener("visibilitychange", () => {
 });
 loadDatasets();
 wireLexiconControls();
+
+async function exportPreprocessingWorkbook() {
+    const K = window.KamusExcel;
+    if (!K) {
+        alert("Excel export module is not loaded.");
+        return;
+    }
+    const btn = document.getElementById("btn-export-preprocessing-xlsx");
+    const orig = btn ? btn.textContent : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Exporting…";
+    }
+    try {
+        resolvePreprocessAlgorithm();
+        await K.ensureExcelJs();
+        const dsRows = [
+            ["Name", "Total", "Verb", "Noun", "Adjective", "Adverb", "Status"],
+        ];
+        (datasets || []).forEach((ds) => {
+            dsRows.push([
+                ds.name || "-",
+                ds.total_data ?? 0,
+                ds.kata_kerja ?? 0,
+                ds.kata_benda ?? 0,
+                ds.kata_sifat ?? 0,
+                ds.kata_keterangan ?? 0,
+                ds.is_preprocessed ? "Completed" : "Pending",
+            ]);
+        });
+        if (dsRows.length === 1) {
+            dsRows.push(["(No datasets loaded)", "", "", "", "", "", ""]);
+        }
+
+        const fetchJson = async (url) => {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.detail || res.statusText || "Request failed");
+            return data;
+        };
+
+        let manItems = [];
+        let indoItems = [];
+        let slangItems = [];
+        let fetchNote = "";
+        try {
+            const [m, i, s] = await Promise.all([
+                fetchJson(`${PREPROCESS_API_BASE}/preprocess/stopwords?language=manado`),
+                fetchJson(`${PREPROCESS_API_BASE}/preprocess/stopwords?language=indonesia`),
+                fetchJson(`${PREPROCESS_API_BASE}/preprocess/slang`),
+            ]);
+            manItems = m.items || [];
+            indoItems = i.items || [];
+            slangItems = s.items || [];
+        } catch (err) {
+            console.error(err);
+            fetchNote = err.message || String(err);
+        }
+
+        const manRows = [["Word"]];
+        manItems.forEach((it) => manRows.push([it.word || "-"]));
+        if (manRows.length === 1) manRows.push(["(empty)"]);
+
+        const indoRows = [["Word"]];
+        indoItems.forEach((it) => indoRows.push([it.word || "-"]));
+        if (indoRows.length === 1) indoRows.push(["(empty)"]);
+
+        const slangRows = [["Slang", "Formal"]];
+        slangItems.forEach((it) => slangRows.push([it.slang || "-", it.formal || "-"]));
+        if (slangRows.length === 1) slangRows.push(["(empty)", ""]);
+
+        const sheets = [
+            {
+                name: "Metadata",
+                matrix: [
+                    ["Exported", new Date().toLocaleString()],
+                    ["Tokenizer context", preprocessTokenizerLabel(activePreprocessAlgorithm)],
+                    ...(fetchNote ? [["Lexicon API note", fetchNote]] : []),
+                ],
+            },
+            { name: "Datasets", title: "Dataset list (main table)", matrix: dsRows },
+            { name: "Stopwords_Manado", title: "Stopwords — Manado", matrix: manRows },
+            { name: "Stopwords_Indonesia", title: "Stopwords — Indonesia", matrix: indoRows },
+            { name: "Slang", title: "Slang normalization pairs", matrix: slangRows },
+        ];
+
+        await K.exportWorkbook(`preprocessing_export_${Date.now()}`, sheets);
+    } catch (err) {
+        alert(err.message || String(err));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = orig || "Export tables to Excel";
+        }
+    }
+}
+
+document.getElementById("btn-export-preprocessing-xlsx")?.addEventListener("click", () => {
+    void exportPreprocessingWorkbook();
+});

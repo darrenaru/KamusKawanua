@@ -103,6 +103,24 @@
     return (accuracy + f1) / 2;
   }
 
+  /** Cross-entropy style loss: display as (raw × 100)% — same convention as evaluation page. */
+  function formatLossAsPercent(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return "—";
+    return `${(Math.round(n * 10000) / 100).toFixed(2)}%`;
+  }
+
+  /** Parse loss cell: "45.30%" → 0.453 ; legacy "0.4530" → 0.4530 */
+  function parseLossPercentCell(text) {
+    const rawStr = String(text || "").trim();
+    const hadPercent = rawStr.includes("%");
+    const cleaned = rawStr.replace(/%/g, "").replace(",", ".");
+    const n = parseFloat(cleaned);
+    if (!Number.isFinite(n)) return null;
+    if (hadPercent) return n / 100;
+    return n;
+  }
+
   function isMbertParams(params = {}) {
     return normalizeAlgoKey(params?.algo || currentAlgo) === "mbert";
   }
@@ -258,7 +276,7 @@
           <td style="padding: 12px 15px; text-align: center;">${metrics.precision.toFixed(2)}%</td>
           <td style="padding: 12px 15px; text-align: center;">${metrics.recall.toFixed(2)}%</td>
           <td style="padding: 12px 15px; text-align: center;">${metrics.f1.toFixed(2)}%</td>
-          <td style="padding: 12px 15px; text-align: center;">${metrics.loss.toFixed(4)}</td>
+          <td style="padding: 12px 15px; text-align: center;">${formatLossAsPercent(metrics.loss)}</td>
         </tr>
       `;
       })
@@ -673,6 +691,192 @@
 
   // ==================== END RASIO MANAGER ====================
 
+  // ----- Excel export (read-only; does not alter training UI state) -----
+  async function exportProcessingTableXlsx({
+    filename,
+    sheetName,
+    table,
+    tableOpts,
+    title,
+    extraMatrix,
+  }) {
+    if (!window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    await window.KamusExcel.ensureExcelJs();
+    const sheets = [];
+    if (extraMatrix && extraMatrix.length) {
+      sheets.push({ name: "Context", matrix: extraMatrix });
+    }
+    sheets.push({
+      name: sheetName || "Export",
+      title: title || undefined,
+      table,
+      tableOpts: tableOpts || {},
+    });
+    await window.KamusExcel.exportWorkbook(filename, sheets);
+  }
+
+  async function exportRatioSplitsXlsx() {
+    const tbl = document.getElementById("ratio-table");
+    if (!tbl) {
+      showToast("Split ratio table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Algorithm", currentAlgo || document.getElementById("algo-select")?.value || "-"],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_split_ratios_${Date.now()}`,
+      sheetName: "Split_ratios",
+      table: tbl,
+      tableOpts: { skipColumnsFromEnd: 1 },
+      title: "Configured train/test split ratios",
+      extraMatrix: meta,
+    });
+    showToast("Split ratios exported.", "success");
+  }
+
+  async function exportRatioComparisonXlsx() {
+    const tbl = document.getElementById("comparison-table");
+    if (!tbl) {
+      showToast("Comparison table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Algorithm", currentAlgo || "-"],
+      ["Mode", currentMode || "-"],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_ratio_comparison_${Date.now()}`,
+      sheetName: "Ratio_compare",
+      table: tbl,
+      title: "Ratio comparison (Find Best Ratio)",
+      extraMatrix: meta,
+    });
+    showToast("Ratio comparison exported.", "success");
+  }
+
+  async function exportTrainingLogTableXlsx() {
+    const tbl = document.getElementById("history-table");
+    if (!tbl) {
+      showToast("Training log table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Note", "Browser-stored final training history (summary row)."],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_training_log_${Date.now()}`,
+      sheetName: "Training_log",
+      table: tbl,
+      tableOpts: { skipColumnsFromEnd: 1 },
+      title: "Training log",
+      extraMatrix: meta,
+    });
+    showToast("Training log exported.", "success");
+  }
+
+  async function exportTrainingCardEpochs(card) {
+    if (!card || !window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    const table = card.querySelector(".results-table");
+    if (!table) {
+      showToast("Results table not found on this card.", "error");
+      return;
+    }
+    const titleEl = card.querySelector(".training-title");
+    const ratioEl = card.querySelector(".result-ratio-display");
+    const title = titleEl ? titleEl.innerText.trim() : "Training";
+    const ratio = ratioEl ? ratioEl.innerText.trim() : "";
+    await window.KamusExcel.ensureExcelJs();
+    await window.KamusExcel.exportWorkbook(`processing_training_epochs_${Date.now()}`, [
+      {
+        name: "Info",
+        matrix: [
+          ["Title", title],
+          ["Ratio", ratio || "-"],
+          ["Exported", new Date().toLocaleString()],
+          ["Algorithm", currentAlgo || "-"],
+        ],
+      },
+      {
+        name: "Epochs",
+        title: "Per-epoch training results",
+        table,
+      },
+    ]);
+    showToast("Training epochs exported.", "success");
+  }
+
+  async function exportHistoryDetailModalXlsx() {
+    if (!window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    const name =
+      document.getElementById("detail-training-name")?.innerText?.trim() ||
+      "training_detail";
+    const safe = window.KamusExcel.sanitizeFilename(name).slice(0, 60);
+    const resultsTable = document.getElementById("history-results-table");
+    const confusionTable = document.getElementById("history-confusion-table");
+    const confusionSection = document.getElementById("history-confusion-section");
+    const hasConfusion =
+      confusionSection &&
+      confusionSection.style.display !== "none" &&
+      confusionTable &&
+      confusionTable.querySelector("tr");
+
+    await window.KamusExcel.ensureExcelJs();
+
+    const summaryRows = [
+      ["Training name", document.getElementById("detail-training-name")?.innerText || "-"],
+      ["Model name", document.getElementById("detail-model-name")?.innerText || "-"],
+      ["Split ratio", document.getElementById("detail-ratio")?.innerText || "-"],
+      ["Date", document.getElementById("detail-date")?.innerText || "-"],
+      ["Algorithm", document.getElementById("detail-algo")?.innerText || "-"],
+      ["Description", document.getElementById("detail-desc")?.innerText || "-"],
+      ["Exported", new Date().toLocaleString()],
+    ];
+
+    const sheets = [
+      { name: "Summary", matrix: summaryRows },
+      {
+        name: "Epoch_results",
+        title: "Training results by epoch",
+        table: resultsTable,
+      },
+    ];
+
+    if (hasConfusion) {
+      sheets.push({
+        name: "Confusion",
+        title: "Confusion matrix (best accuracy epoch)",
+        table: confusionTable,
+      });
+    } else {
+      sheets.push({
+        name: "Confusion",
+        matrix: [
+          [
+            "Confusion matrix was not available or not shown for this run.",
+          ],
+        ],
+      });
+    }
+
+    await window.KamusExcel.exportWorkbook(`processing_log_${safe}_${Date.now()}`, sheets);
+    showToast("Training detail exported.", "success");
+  }
+
+  window.exportHistoryDetailModalXlsx = exportHistoryDetailModalXlsx;
+
   document.addEventListener("DOMContentLoaded", function () {
     const algoSelect = document.getElementById("algo-select");
     const modelSelect = document.getElementById("model-select");
@@ -782,8 +986,37 @@
           const card = e.target.closest(".training-card");
           saveModelFromCard(card);
         }
+
+        if (
+          e.target.classList.contains("btn-export-card-epochs") ||
+          e.target.closest(".btn-export-card-epochs")
+        ) {
+          const btn = e.target.closest(".btn-export-card-epochs");
+          const card = btn && btn.closest(".training-card");
+          if (card) {
+            void exportTrainingCardEpochs(card).catch((err) => {
+              showToast(err && err.message ? err.message : String(err), "error");
+            });
+          }
+        }
       });
     }
+
+    const _exportCatch = (err) =>
+      showToast(err && err.message ? err.message : String(err), "error");
+
+    document.getElementById("btn-export-ratio-splits")?.addEventListener("click", () => {
+      void exportRatioSplitsXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-ratio-comparison")?.addEventListener("click", () => {
+      void exportRatioComparisonXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-training-log")?.addEventListener("click", () => {
+      void exportTrainingLogTableXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-history-detail-xlsx")?.addEventListener("click", () => {
+      void exportHistoryDetailModalXlsx().catch(_exportCatch);
+    });
   });
 
   async function loadPreprocessedDatasets() {
@@ -2727,7 +2960,7 @@
             <td>${precision.toFixed(2)}%</td>
             <td>${recall.toFixed(2)}%</td>
             <td>${f1.toFixed(2)}%</td>
-            <td>${parseFloat(loss).toFixed(4)}</td>
+            <td>${formatLossAsPercent(loss)}</td>
           `;
           tableBody.appendChild(row);
           epochResults.push({
@@ -2742,7 +2975,7 @@
           });
           appendProgressLog(
             card,
-            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | Prec ${precision.toFixed(2)}% | F1 ${f1.toFixed(2)}% | Loss ${parseFloat(loss).toFixed(4)}`,
+            `Epoch ${m.epoch}/${totalEpochs} | Acc ${accuracy.toFixed(2)}% | Prec ${precision.toFixed(2)}% | F1 ${f1.toFixed(2)}% | Loss ${formatLossAsPercent(loss)}`,
             "info",
           );
           renderedEpochs++;
@@ -2923,10 +3156,7 @@
     const precision = Math.min(99, basePrec + Math.random() * 2).toFixed(2);
     const recall = Math.min(99, baseRec + Math.random() * 2).toFixed(2);
     const f1 = Math.min(99, baseF1 + Math.random() * 2).toFixed(2);
-    const loss = Math.max(
-      0.1,
-      1.5 - epoch * 0.25 + Math.random() * 0.2,
-    ).toFixed(4);
+    const lossNum = Math.max(0.1, 1.5 - epoch * 0.25 + Math.random() * 0.2);
     const row = document.createElement("tr");
     row.innerHTML = `
     <td>${epoch}</td>
@@ -2934,7 +3164,7 @@
     <td>${precision}%</td>
     <td>${recall}%</td>
     <td>${f1}%</td>
-    <td>${loss}</td>
+    <td>${formatLossAsPercent(lossNum)}</td>
   `;
     tableBody.appendChild(row);
 
@@ -2945,7 +3175,7 @@
       precision: parseFloat(precision),
       recall: parseFloat(recall),
       f1: parseFloat(f1),
-      loss: parseFloat(loss),
+      loss: lossNum,
     };
   }
 
@@ -2986,7 +3216,7 @@
       avg.precision.toFixed(2) + "%";
     card.querySelector(".avg-recall").innerText = avg.recall.toFixed(2) + "%";
     card.querySelector(".avg-f1").innerText = avg.f1.toFixed(2) + "%";
-    card.querySelector(".avg-loss").innerText = avg.loss.toFixed(4);
+    card.querySelector(".avg-loss").innerText = formatLossAsPercent(avg.loss);
 
     return avg;
   }
@@ -3430,8 +3660,8 @@
       precision = parseFloat(lastRow.cells[2]?.innerText) || 0;
       recall = parseFloat(lastRow.cells[3]?.innerText) || 0;
       f1 = parseFloat(lastRow.cells[4]?.innerText) || 0;
-      const lossCell = parseFloat(lastRow.cells[5]?.innerText);
-      if (Number.isFinite(lossCell)) trainLoss = lossCell;
+      const lossCell = parseLossPercentCell(lastRow.cells[5]?.innerText);
+      if (lossCell != null && Number.isFinite(lossCell)) trainLoss = lossCell;
     }
 
     const warmupRatioParsed = (() => {
@@ -3841,7 +4071,7 @@
           <td>${r.precision.toFixed(2)}%</td>
           <td>${r.recall.toFixed(2)}%</td>
           <td>${r.f1.toFixed(2)}%</td>
-          <td>${r.loss.toFixed(4)}</td>
+          <td>${formatLossAsPercent(r.loss)}</td>
         </tr>
       `;
         })
@@ -3868,7 +4098,7 @@
         <td>${(sum.precision / count).toFixed(2)}%</td>
         <td>${(sum.recall / count).toFixed(2)}%</td>
         <td>${(sum.f1 / count).toFixed(2)}%</td>
-        <td>${(sum.loss / count).toFixed(4)}</td>
+        <td>${formatLossAsPercent(sum.loss / count)}</td>
       </tr>
     `;
 

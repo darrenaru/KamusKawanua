@@ -465,6 +465,9 @@ tbody tr.selected {
   margin: 8px 0 14px;
   display: flex;
   justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .lexicon-card {
