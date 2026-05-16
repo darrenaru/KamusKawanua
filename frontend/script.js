@@ -441,6 +441,39 @@ function groupResultsByAlgorithmMatch(results) {
     return out;
 }
 
+/** Input language on the left / card title; output on the right (follows currentLang). */
+function getDictionaryCardSides(item) {
+    const inputIsManado = currentLang === "manado";
+    if (inputIsManado) {
+        return {
+            titleHtml: item.manado,
+            input: {
+                label: "MANADO",
+                wordHtml: item.manado,
+                exampleHtml: item.kalimat_manado,
+            },
+            output: {
+                label: "INDONESIA",
+                wordHtml: item.indonesia,
+                exampleHtml: item.kalimat_indonesia,
+            },
+        };
+    }
+    return {
+        titleHtml: item.indonesia,
+        input: {
+            label: "INDONESIA",
+            wordHtml: item.indonesia,
+            exampleHtml: item.kalimat_indonesia,
+        },
+        output: {
+            label: "MANADO",
+            wordHtml: item.manado,
+            exampleHtml: item.kalimat_manado,
+        },
+    };
+}
+
 function renderResultGroup(container, data, title, items) {
     if (!items || items.length === 0) return;
     container.insertAdjacentHTML(
@@ -462,9 +495,11 @@ function renderResultGroup(container, data, title, items) {
         const matchStr =
             matchBits.length > 0 ? ` | ${matchBits.join(", ")}` : "";
 
+        const sides = getDictionaryCardSides(item);
+
         card.innerHTML = `
             <div class="result-card-heading">
-              <h3 class="result-word-title">${item.manado}</h3>
+              <h3 class="result-word-title">${sides.titleHtml}</h3>
               <span class="label-with-help label-with-help--inline">
                 <span class="param-help-icon" tabindex="0" aria-label="Per-algorithm prediction details">i
                   <span class="param-help-tooltip param-help-tooltip--wide">${tooltipInner}</span>
@@ -474,15 +509,15 @@ function renderResultGroup(container, data, title, items) {
 
             <div class="result-grid">
                 <div class="result-section">
-                    <strong>MANADO</strong>
-                    <p class="result-lemma">${item.manado}</p>
-                    <p class="example">${item.kalimat_manado}</p>
+                    <strong>${escapeHtml(sides.input.label)}</strong>
+                    <p class="result-lemma">${sides.input.wordHtml}</p>
+                    <p class="example">${sides.input.exampleHtml}</p>
                 </div>
 
                 <div class="result-section">
-                    <strong>INDONESIA</strong>
-                    <p class="result-lemma">${item.indonesia}</p>
-                    <p class="example">${item.kalimat_indonesia}</p>
+                    <strong>${escapeHtml(sides.output.label)}</strong>
+                    <p class="result-lemma">${sides.output.wordHtml}</p>
+                    <p class="example">${sides.output.exampleHtml}</p>
                 </div>
             </div>
             <p class="result-entry-meta"><strong>Dictionary POS (this entry):</strong> ${jenisDisp}</p>
