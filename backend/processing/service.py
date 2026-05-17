@@ -41,6 +41,7 @@ XLMR_MODEL_ID = (os.environ.get("KAMUS_XLMR_MODEL") or "").strip() or _DEFAULT_X
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
 _INDOBERT_FAST_MAX_LENGTH = 64
+_XLM_FAST_MAX_LENGTH = 32
 
 # Unduh pretrained: IndoBERT, mBERT, & XLM-R default pakai unduhan anonim (token=False) agar HF_TOKEN
 # rusak di ENV tidak memicu 401. Repo lain (mis. `facebook/xlm-roberta-base`) pakai auth default.
@@ -116,6 +117,41 @@ def _build_word_only_text(row: dict) -> str:
     ]
     parts = [str(p).strip() for p in parts if p is not None]
     return " [SEP] ".join([p for p in parts if p])
+
+
+def _is_xlm_roberta_model_id(model_id: str) -> bool:
+    p = str(model_id or "").strip()
+    if not p:
+        return False
+    if p == XLMR_MODEL_ID:
+        return True
+    low = p.replace("\\", "/").lower()
+    return "xlm-roberta" in low or low.endswith("xlm-roberta-base")
+
+
+def _apply_partial_transformer_unfreeze(model, backbone_attr: str, *, num_layers: int = 4) -> None:
+    """Fast ratio search: freeze backbone, unfreeze top encoder layers (+ pooler if present)."""
+    base = getattr(model, backbone_attr, None)
+    if base is None:
+        return
+    for p in base.parameters():
+        p.requires_grad = False
+    try:
+        encoder = getattr(base, "encoder", None)
+        layers = getattr(encoder, "layer", None) if encoder is not None else None
+        if layers is not None:
+            for layer in list(layers)[-num_layers:]:
+                for p in layer.parameters():
+                    p.requires_grad = True
+    except Exception:
+        pass
+    try:
+        pooler = getattr(base, "pooler", None)
+        if pooler is not None:
+            for p in pooler.parameters():
+                p.requires_grad = True
+    except Exception:
+        pass
 
 
 def _build_text_with_preprocessed_fallback(row: dict) -> str:
@@ -338,28 +374,13 @@ def train_indobert_softmax(
         )
 
     indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID
+    xlm_fast = fast_mode and (
+        algorithm == "xlm-r-2" or _is_xlm_roberta_model_id(base_model_id)
+    )
     if indobert_fast:
-        # Fast mode IndoBERT: freeze mayoritas backbone, fine-tune layer atas + head.
-        base = getattr(model, "bert", None)
-        if base is not None:
-            for p in base.parameters():
-                p.requires_grad = False
-            try:
-                encoder = getattr(base, "encoder", None)
-                layers = getattr(encoder, "layer", None) if encoder is not None else None
-                if layers is not None:
-                    for layer in list(layers)[-4:]:
-                        for p in layer.parameters():
-                            p.requires_grad = True
-            except Exception:
-                pass
-            try:
-                pooler = getattr(base, "pooler", None)
-                if pooler is not None:
-                    for p in pooler.parameters():
-                        p.requires_grad = True
-            except Exception:
-                pass
+        _apply_partial_transformer_unfreeze(model, "bert")
+    elif xlm_fast:
+        _apply_partial_transformer_unfreeze(model, "roberta")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -368,11 +389,12 @@ def train_indobert_softmax(
 
     requested_max_length = int(max_length) if isinstance(max_length, int) else _MBERT_FIXED_MAX_LENGTH
     requested_max_length = max(8, min(512, requested_max_length))
-    effective_max_length = (
-        min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length)
-        if indobert_fast
-        else requested_max_length
-    )
+    if indobert_fast:
+        effective_max_length = min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length)
+    elif xlm_fast:
+        effective_max_length = min(_XLM_FAST_MAX_LENGTH, requested_max_length)
+    else:
+        effective_max_length = requested_max_length
 
     train_ds = TextClsDataset(
         [texts[i] for i in train_idx.tolist()],
@@ -537,7 +559,12 @@ def train_indobert_softmax(
 
     algo_out = algorithm
     if algo_out is None:
-        algo_out = "mbert" if base_model_id == MBERT_MODEL_ID else "indobert"
+        if base_model_id == MBERT_MODEL_ID:
+            algo_out = "mbert"
+        elif _is_xlm_roberta_model_id(base_model_id):
+            algo_out = "xlm-r-2"
+        else:
+            algo_out = "indobert"
 
     return {
         "status": "ok",
@@ -572,26 +599,30 @@ def train_xlm_r_softmax(
     fast_mode: bool = False,
 ) -> dict:
     """Fine-tune XLM-R; input teks mengikuti `final_text` dari preprocessing tokenizer XLM."""
-    return train_indobert_softmax(
-        dataset_id=dataset_id,
-        model_name=model_name,
-        split_ratio=split_ratio,
-        lr=lr,
-        epoch=epoch,
-        batch_size=batch_size,
-        max_length=max_length,
-        weight_decay=weight_decay,
-        warmup_ratio=warmup_ratio,
-        dropout=dropout,
-        grad_accum=grad_accum,
-        early_stopping_patience=early_stopping_patience,
-        seed=seed,
-        on_epoch_end=on_epoch_end,
-        base_model_id=XLMR_MODEL_ID,
-        fast_mode=fast_mode,
-        algorithm="xlm-r-2",
-        text_extractor=_build_text_with_preprocessed_fallback,
-    )
+    _cleanup_torch_memory()
+    try:
+        return train_indobert_softmax(
+            dataset_id=dataset_id,
+            model_name=model_name,
+            split_ratio=split_ratio,
+            lr=lr,
+            epoch=epoch,
+            batch_size=batch_size,
+            max_length=max_length,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            dropout=dropout,
+            grad_accum=grad_accum,
+            early_stopping_patience=early_stopping_patience,
+            seed=seed,
+            on_epoch_end=on_epoch_end,
+            base_model_id=XLMR_MODEL_ID,
+            fast_mode=fast_mode,
+            algorithm="xlm-r-2",
+            text_extractor=_build_text_with_preprocessed_fallback,
+        )
+    finally:
+        _cleanup_torch_memory()
 
 
 def train_mbert_softmax(

@@ -2555,7 +2555,7 @@
 
     // Parameter lanjutan dipakai untuk:
     // 1) training-final semua algoritma
-    // 2) cari-rasio untuk selain IndoBERT/mBERT (agar tetap seperti sebelumnya)
+    // 2) cari-rasio untuk selain transformer BERT family (Word2Vec/GloVe tetap pakai param lengkap)
     if (mode === "training-final" || !isCoreOnlyRatioSearch) {
       Object.assign(params, {
         optimizer: document.getElementById("optimizer")?.value || "",
@@ -2879,8 +2879,9 @@
           const parsed = parseInt(params.seed || 42, 10);
           return Number.isFinite(parsed) && parsed > 0 ? parsed : 42;
         })(),
-        // Find Best Ratio dan Final Training harus sejalan; jangan ubah pipeline hanya karena mode.
-        fast_mode: false,
+        // Cari rasio: fast_mode (freeze sebagian backbone, max_length efektif lebih pendek).
+        // Final training: fine-tuning penuh agar kualitas model final tetap maksimal.
+        fast_mode: mode === "cari-rasio",
         weight_decay: parseFloat(params.weightDecay || "0.01"),
         warmup_ratio: parseFloat(params.warmup || "0.1"),
         dropout: parseFloat(params.dropout || "0.1"),
@@ -2912,6 +2913,19 @@
         `Job created: ${jobId.slice(0, 8)} | device will be selected automatically`,
         "info",
       );
+      if (mode === "cari-rasio") {
+        appendProgressLog(
+          card,
+          `${algoLabel} fast ratio search enabled (partial fine-tune, shorter sequences)`,
+          "info",
+        );
+      } else {
+        appendProgressLog(
+          card,
+          `${algoLabel} full training mode (all layers, full max length)`,
+          "info",
+        );
+      }
 
       // Poll status
       const epochResults = [];
@@ -3841,6 +3855,12 @@
     const algo = String(p.algo || "").toLowerCase();
     const v = (x) => (x === undefined || x === null || x === "" ? "-" : String(x));
     const item = (label, value) => `<span><strong>${label}:</strong> ${v(value)}</span>`;
+    const inputReprLabel = (() => {
+      if (algo === "xlm-r-2") return "SentencePiece tokens (XLM-RoBERTa)";
+      if (["indobert", "mbert"].includes(algo))
+        return "WordPiece Tokens + [CLS]/[SEP]";
+      return "Word Embedding";
+    })();
 
     const inputLayer = `
       <div class="layer-block">
@@ -3854,7 +3874,7 @@
                 ? `${item("Max Length", p.maxLength)}${item("Seed", p.seed)}`
                 : item("Max Length", p.maxLength)
           }
-          ${item("Input Representation", ["indobert", "mbert", "xlm-r-2"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
+          ${item("Input Representation", inputReprLabel)}
         </div>
       </div>
     `;

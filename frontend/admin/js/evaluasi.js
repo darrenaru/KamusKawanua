@@ -79,13 +79,19 @@ function formatPercent(raw) {
     return (Math.round(n * 10) / 10).toFixed(1) + '%';
 }
 
-/** Loss (raw, e.g. cross-entropy) shown as percentage = raw × 100 with % sign. */
-function formatLossPct(raw) {
-    if (raw === undefined || raw === null || raw === '') return '—';
+/** Loss: raw cross-entropy (0–1) or already in percent scale (e.g. 60). */
+function normalizeLossPercent(raw) {
+    if (raw === undefined || raw === null || raw === '') return null;
     var n = Number(raw);
-    if (!Number.isFinite(n)) return '—';
-    var v = n * 100;
-    return (Math.round(v * 100) / 100).toFixed(2) + '%';
+    if (!Number.isFinite(n)) return null;
+    if (n >= 0 && n <= 1) return n * 100;
+    return n;
+}
+
+function formatLossPct(raw) {
+    var n = normalizeLossPercent(raw);
+    if (n == null) return '—';
+    return (Math.round(n * 100) / 100).toFixed(2) + '%';
 }
 
 function formatFloatOrDash(raw, decimals) {
@@ -753,11 +759,7 @@ function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent)
 function normalizeMetricValue(raw, type) {
     if (raw === undefined || raw === null || raw === '') return null;
     if (type === 'percent') return normalizePercent(raw);
-    if (type === 'loss_pct') {
-        var ln = Number(raw);
-        if (!Number.isFinite(ln)) return null;
-        return ln * 100;
-    }
+    if (type === 'loss_pct') return normalizeLossPercent(raw);
     var n = Number(raw);
     return Number.isFinite(n) ? n : null;
 }

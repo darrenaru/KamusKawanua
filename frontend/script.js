@@ -385,9 +385,18 @@ function displayResults(data) {
         `<div class="result-section-title result-section-title--dictionary">Dictionary entries — words &amp; translations</div>`,
     );
 
-    renderResultGroup(container, data, "Matches both IndoBERT & mBERT", grouped.both);
+    renderResultGroup(
+        container,
+        data,
+        "Matches IndoBERT, mBERT & XLM-R",
+        grouped.allThree,
+    );
+    renderResultGroup(container, data, "Matches IndoBERT & mBERT", grouped.indoMbert);
+    renderResultGroup(container, data, "Matches IndoBERT & XLM-R", grouped.indoXlm);
+    renderResultGroup(container, data, "Matches mBERT & XLM-R", grouped.mbertXlm);
     renderResultGroup(container, data, "Matches IndoBERT", grouped.indobertOnly);
     renderResultGroup(container, data, "Matches mBERT", grouped.mbertOnly);
+    renderResultGroup(container, data, "Matches XLM-R", grouped.xlmOnly);
     renderResultGroup(container, data, "Other matches", grouped.none);
 }
 
@@ -429,13 +438,27 @@ function buildAlgorithmPanelsHtml(data) {
 }
 
 function groupResultsByAlgorithmMatch(results) {
-    const out = { both: [], indobertOnly: [], mbertOnly: [], none: [] };
+    const out = {
+        allThree: [],
+        indoMbert: [],
+        indoXlm: [],
+        mbertXlm: [],
+        indobertOnly: [],
+        mbertOnly: [],
+        xlmOnly: [],
+        none: [],
+    };
     results.forEach((item) => {
         const mi = Boolean(item?.model_match_indobert);
         const mm = Boolean(item?.model_match_mbert);
-        if (mi && mm) out.both.push(item);
+        const mx = Boolean(item?.model_match_xlm);
+        if (mi && mm && mx) out.allThree.push(item);
+        else if (mi && mm) out.indoMbert.push(item);
+        else if (mi && mx) out.indoXlm.push(item);
+        else if (mm && mx) out.mbertXlm.push(item);
         else if (mi) out.indobertOnly.push(item);
         else if (mm) out.mbertOnly.push(item);
+        else if (mx) out.xlmOnly.push(item);
         else out.none.push(item);
     });
     return out;

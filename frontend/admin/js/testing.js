@@ -135,7 +135,7 @@ async function pollTestingPreprocessJob(jobId, onProgress) {
 /**
  * Mirrors preprocessing.js: upsert cleaned rows from raw_data, then POST /preprocess/start + poll.
  * @param {number} datasetId
- * @param {'indobert'|'mbert'} tokenizerKey
+ * @param {'indobert'|'mbert'|'xlm-r-2'} tokenizerKey
  * @param {function(number, string)=} onProgress
  */
 async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio, onProgress) {
@@ -143,8 +143,11 @@ async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio,
     if (!client) {
         throw new Error('Supabase client is not available. Reload the page and try again.');
     }
-    var tk = tokenizerKey === 'indobert' ? 'indobert' : 'mbert';
-    var algoLabel = tk === 'indobert' ? 'IndoBERT' : 'mBERT';
+    var tk = normalizeTestingAlgo(tokenizerKey);
+    if (tk !== 'indobert' && tk !== 'mbert' && tk !== 'xlm-r-2') {
+        tk = 'mbert';
+    }
+    var algoLabel = getAlgorithmDisplayName(tk);
 
     if (typeof onProgress === 'function') {
         onProgress(2, 'Preprocessing (' + algoLabel + '): reading raw_data...');
