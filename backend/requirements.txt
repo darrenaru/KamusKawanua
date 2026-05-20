@@ -1,0 +1,11 @@
+--extra-index-url https://download.pytorch.org/whl/cu124
+fastapi
+uvicorn
+pandas
+numpy
+torch==2.6.0+cu124
+transformers
+rapidfuzz
+supabase
+scikit-learn
+sastrawi
