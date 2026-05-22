@@ -371,10 +371,16 @@ mark {
   color: #ffb4b4;
 }
 
-.empty-results-msg {
+.empty-results-msg,
+.search-error-msg {
   text-align: center;
   margin: 16px 0;
   color: var(--ink-muted, #6b5e50);
+}
+
+.search-error-msg {
+  color: #b42318;
+  font-weight: 500;
 }
 
 /* =========================

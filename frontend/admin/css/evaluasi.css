@@ -153,6 +153,44 @@ body::after {
     text-align: left;
 }
 
+.eval-page-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 28px;
+    max-width: 100%;
+}
+
+.eval-page-toolbar .title {
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    min-width: 200px;
+}
+
+.eval-export-xlsx-btn {
+    flex-shrink: 0;
+    border: 1px solid var(--border-strong);
+    background: #f8f6f2;
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.eval-export-xlsx-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.eval-export-xlsx-btn:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
 .title {
     margin-bottom: 36px;
     font-weight: 600;

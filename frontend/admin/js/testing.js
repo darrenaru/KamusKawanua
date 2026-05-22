@@ -119,8 +119,8 @@ async function pollTestingPreprocessJob(jobId, onProgress) {
         if (status.status === 'done') {
             if (typeof onProgress === 'function') {
                 var doneMsg = hasTotal
-                    ? 'Tokenizer selesai: ' + processed + '/' + total + ' baris diproses' + deviceLabel
-                    : 'Tokenizer selesai: 0 baris — semua sudah punya token (tidak perlu ulang; perilaku sama seperti Preprocessing ke-2)' + deviceLabel;
+                    ? 'Tokenizer finished: ' + processed + '/' + total + ' rows processed' + deviceLabel
+                    : 'Tokenizer finished: 0 rows — all rows already have tokens (no re-run needed; same as a second preprocessing pass)' + deviceLabel;
                 onProgress(72, doneMsg);
             }
             return status;
@@ -135,7 +135,7 @@ async function pollTestingPreprocessJob(jobId, onProgress) {
 /**
  * Mirrors preprocessing.js: upsert cleaned rows from raw_data, then POST /preprocess/start + poll.
  * @param {number} datasetId
- * @param {'indobert'|'mbert'} tokenizerKey
+ * @param {'indobert'|'mbert'|'xlm-r-2'} tokenizerKey
  * @param {function(number, string)=} onProgress
  */
 async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio, onProgress) {
@@ -143,8 +143,11 @@ async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio,
     if (!client) {
         throw new Error('Supabase client is not available. Reload the page and try again.');
     }
-    var tk = tokenizerKey === 'indobert' ? 'indobert' : 'mbert';
-    var algoLabel = tk === 'indobert' ? 'IndoBERT' : 'mBERT';
+    var tk = normalizeTestingAlgo(tokenizerKey);
+    if (tk !== 'indobert' && tk !== 'mbert' && tk !== 'xlm-r-2') {
+        tk = 'mbert';
+    }
+    var algoLabel = getAlgorithmDisplayName(tk);
 
     if (typeof onProgress === 'function') {
         onProgress(2, 'Preprocessing (' + algoLabel + '): reading raw_data...');
@@ -336,17 +339,63 @@ function clearTestingFetchProgressTimer() {
     }
 }
 
+function getSelectedModelLabel() {
+    var bestEl = document.getElementById('bestModelName');
+    if (bestEl) {
+        var t = String(bestEl.textContent || '').trim();
+        if (t && t !== '—' && !/^loading/i.test(t) && !/^no saved/i.test(t)) {
+            return t;
+        }
+    }
+    var sel = document.getElementById('selModel');
+    if (sel && sel.tagName === 'SELECT' && sel.options && sel.options.length > 0) {
+        var idx = sel.selectedIndex >= 0 ? sel.selectedIndex : 0;
+        return sel.options[idx].text;
+    }
+    return selectedModelName || '—';
+}
+
+function resetTestingRunUi() {
+    clearTestingFetchProgressTimer();
+    isRunning = false;
+    setTestingUiBusy(false);
+    var bar = document.getElementById('progressBar');
+    if (bar) bar.classList.remove('running');
+    stopProgressElapsedTimer();
+    setStatus('idle');
+}
+
+function fetchWithTimeout(url, options, timeoutMs) {
+    var ms = Number(timeoutMs) || 600000;
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller
+        ? setTimeout(function() {
+              controller.abort();
+          }, ms)
+        : null;
+    var opts = options || {};
+    if (controller) {
+        opts.signal = controller.signal;
+    }
+    return fetch(url, opts).finally(function() {
+        if (timer) clearTimeout(timer);
+    });
+}
+
 function normalizeAlgorithmKey(str) {
-    return String(str || '')
+    var key = String(str || '')
         .toLowerCase()
         .trim()
         .replace(/\s+/g, '-');
+    if (key === 'xlm-r-2' || key === 'xlmr' || key === 'xlm-r') return 'xlm-r-2';
+    return key;
 }
 
 function normalizeTestingAlgo(value) {
     var key = normalizeAlgorithmKey(value);
     if (key === 'indobert' || key === 'indo-bert' || key === 'indobenchmark') return 'indobert';
     if (key === 'mbert' || key === 'm-bert' || key === 'bert-base-multilingual-cased') return 'mbert';
+    if (key === 'xlm-r-2') return 'xlm-r-2';
     return key;
 }
 
@@ -354,7 +403,7 @@ function getAlgorithmDisplayName(key) {
     var normalized = normalizeTestingAlgo(key);
     if (normalized === 'mbert') return 'mBERT';
     if (normalized === 'indobert') return 'IndoBERT';
-    if (normalized === 'xlmr') return 'XLM-R';
+    if (normalized === 'xlm-r-2') return 'XLM-R';
     if (normalized === 'word2vec') return 'Word2Vec';
     if (normalized === 'glove') return 'GloVe';
     return String(key || '').toUpperCase();
@@ -423,29 +472,9 @@ function updateStartButtonState() {
 
 function applyStoredTestingMetrics(summary) {
     if (!summary) return;
-    var toPct = function(v) { return Number(v || 0) * 100; };
-    var m = {
-        acc: toPct(summary.accuracy),
-        prec: toPct(summary.precision_macro),
-        f1: toPct(summary.f1_macro),
-        macro: toPct(summary.f1_macro),
-        rec: toPct(summary.recall_macro),
-        std: toPct(summary.std_deviation),
-        weighted: toPct(summary.weighted_avg),
-        roc: toPct(summary.roc_auc),
-        mcc: Number(summary.mcc || 0)
-    };
+    renderTestingMetricCells(mapStoredTestingSummary(summary));
 
-    metricIds.forEach(function(id, i) {
-        var headerEl = document.getElementById(metricHeaderIds[i]);
-        var metricEl = document.getElementById(id);
-        if (headerEl) headerEl.classList.add('revealed');
-        if (metricEl) metricEl.classList.add('revealed');
-        if (!metricEl) return;
-        metricEl.textContent = id === 'mcc' ? m[id].toFixed(2) : Math.round(m[id]) + '%';
-    });
-
-    var createdAt = summary.created_at ? new Date(summary.created_at).toLocaleString('id-ID') : '-';
+    var createdAt = summary.created_at ? new Date(summary.created_at).toLocaleString('en-US') : '-';
     var progressText = document.getElementById('progressText');
     if (progressText) {
         progressText.textContent = 'Loaded latest testing result from Supabase.';
@@ -480,7 +509,7 @@ function syncTestingStateForSelection() {
 async function refreshSelectedModelLatestTestingFromBackend() {
     if (!selectedModelId) return;
     try {
-        var res = await fetch(API_BASE + '/testing/models');
+        var res = await fetchWithTimeout(API_BASE + '/testing/models', {}, 30000);
         var data = await res.json();
         if (!res.ok || !data || !Array.isArray(data.items)) return;
 
@@ -591,11 +620,12 @@ function initAlgorithmModelSelect() {
     }
 
     function populateModelOptions(algorithmKey) {
+        var algoKeyNorm = normalizeTestingAlgo(algorithmKey);
         var algoModels = [];
         for (var i = 0; i < testingModels.length; i++) {
             var m = testingModels[i];
-            var key = normalizeAlgorithmKey(m.algoritma || 'Unknown');
-            if (key === algorithmKey) {
+            var key = normalizeTestingAlgo(m.algoritma || 'Unknown');
+            if (key === algoKeyNorm) {
                 algoModels.push(m);
             }
         }
@@ -610,18 +640,18 @@ function initAlgorithmModelSelect() {
             showTestingError('No saved model for ' + getAlgorithmDisplayName(algorithmKey) + '. Train and save the model first from Processing.');
             showTestingInfo('');
         } else {
-            // Sort to find best
+            // Prioritas: model yang sudah punya hasil testing, lalu skor training tertinggi.
             algoModels.sort(function(a, b) {
-                var scoreA = ((Number(a.accuracy) || 0) + (Number(a.f1_score) || 0)) / 2;
-                if (!scoreA && a.training_accuracy) scoreA = Number(a.training_accuracy) || 0;
-                var scoreB = ((Number(b.accuracy) || 0) + (Number(b.f1_score) || 0)) / 2;
-                if (!scoreB && b.training_accuracy) scoreB = Number(b.training_accuracy) || 0;
-                return scoreB - scoreA; // descending
+                var testedA = a.latest_testing ? 1 : 0;
+                var testedB = b.latest_testing ? 1 : 0;
+                if (testedB !== testedA) return testedB - testedA;
+                var scoreA = Number(a.training_accuracy) || 0;
+                var scoreB = Number(b.training_accuracy) || 0;
+                return scoreB - scoreA;
             });
             var best = algoModels[0];
             selModel.value = best.id;
-            var bestScore = ((Number(best.accuracy) || 0) + (Number(best.f1_score) || 0)) / 2;
-            if (!bestScore && best.training_accuracy) bestScore = Number(best.training_accuracy) || 0;
+            var bestScore = Number(best.training_accuracy) || 0;
             if (bestModelNameEl) bestModelNameEl.textContent = best.nama_model || 'Model_' + best.id;
             if (bestModelScoreEl) bestModelScoreEl.textContent = 'Best Training Score (Accuracy+F1): ' + (bestScore > 1 ? bestScore.toFixed(2) : (bestScore * 100).toFixed(2)) + '%';
             showTestingError('');
@@ -642,10 +672,10 @@ function initAlgorithmModelSelect() {
             for (var i = 0; i < testingModels.length; i++) {
                 var model = testingModels[i];
                 var algoName = model.algoritma || 'Unknown';
-                var key = normalizeAlgorithmKey(algoName);
+                var key = normalizeTestingAlgo(algoName);
                 if (!grouped[key]) {
                     grouped[key] = {
-                        label: algoName,
+                        label: getAlgorithmDisplayName(key),
                         models: []
                     };
                 }
@@ -800,21 +830,32 @@ function handleFile(file) {
 }
 
 /* =============================
-   INPUT KATA (MAKS 2)
+   WORD INPUT (single word only)
 ============================= */
 function initKataInput() {
     var input = document.getElementById('inputKata');
     var hint = document.getElementById('kataHint');
     var btnTest = document.getElementById('btnTestKata');
 
+    input.addEventListener('keydown', function(e) {
+        if (e.key === ' ' || e.key === 'Spacebar') e.preventDefault();
+    });
+    input.addEventListener('paste', function(e) {
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text');
+        var first = String(text || '').trim().split(/\s+/)[0] || '';
+        input.value = first;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
     input.addEventListener('input', function() {
         var val = input.value.trim();
         var words = val === '' ? [] : val.split(/\s+/);
         var count = words.length;
 
-        hint.textContent = count + ' / 2 words';
+        hint.textContent = count > 0 ? '1 word' : 'Enter one word (no spaces)';
 
-        if (count > 2) {
+        if (count > 1) {
             hint.classList.add('over');
             input.classList.add('over');
             kataValid = false;
@@ -822,17 +863,17 @@ function initKataInput() {
         } else {
             hint.classList.remove('over');
             input.classList.remove('over');
-            kataValid = true;
-            btnTest.disabled = (count === 0);
+            kataValid = count === 1;
+            btnTest.disabled = count !== 1;
         }
 
         document.getElementById('kataResult').classList.remove('show');
 
-        if (count > 0 && count <= 2) {
+        if (count === 1) {
             document.getElementById('dsTitle').textContent = '"' + val + '"';
             document.getElementById('dsSubtitle').textContent = 'Manual word input';
             document.getElementById('dsFile').textContent = 'Direct input';
-            document.getElementById('dsTotal').textContent = count + ' words';
+            document.getElementById('dsTotal').textContent = '1 word';
             document.getElementById('katVerb').textContent = '0';
             document.getElementById('katNoun').textContent = '0';
             document.getElementById('katAdj').textContent = '0';
@@ -848,7 +889,7 @@ function initKataInput() {
             setStatus('idle');
         } else if (count === 0) {
             document.getElementById('dsTitle').textContent = 'No dataset selected yet';
-            document.getElementById('dsSubtitle').textContent = 'Upload a file or enter words to start';
+            document.getElementById('dsSubtitle').textContent = 'Upload a file or enter one word to start';
             document.getElementById('dsFile').textContent = '—';
             document.getElementById('dsTotal').textContent = '—';
             document.getElementById('katVerb').textContent = '0';
@@ -879,8 +920,12 @@ function testKata() {
     var direction = document.getElementById('selDirection').value;
     var algorithm = document.getElementById('selAlgorithm').value;
     var model = selectedModelName;
-    var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
-    var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
+    var modelLabel = getSelectedModelLabel();
+    var dirElKata = document.getElementById('selDirection');
+    var dirLabel =
+        dirElKata && dirElKata.options && dirElKata.options.length
+            ? dirElKata.options[dirElKata.selectedIndex].text
+            : direction;
     var kamus = direction === 'm2i' ? kamusM2I : kamusI2M; // fallback jika backend gagal
 
     var sourceLang = direction === 'm2i' ? 'manado' : 'indonesia';
@@ -1114,13 +1159,18 @@ async function startTesting() {
 
     if (currentMode === 'input') {
         if (!kataVal) {
-            showTestingError('Please enter words first.');
+            showTestingError('Please enter a word first.');
             return;
         }
         if (!kataValid) {
-            showTestingError('Word input cannot exceed 2 words.');
+            showTestingError('Please enter one word only (no spaces).');
             return;
         }
+    }
+
+    if (!selectedModelId || !selectedModelName) {
+        showTestingError('No model selected. Choose an algorithm with a saved final-training model first.');
+        return;
     }
 
     if (!selectedDatasetId || isNaN(selectedDatasetId)) {
@@ -1128,37 +1178,38 @@ async function startTesting() {
         return;
     }
 
-    await refreshSelectedModelLatestTestingFromBackend();
-    syncTestingStateForSelection();
-
-    if (selectedLatestTesting) {
-        var proceed = window.confirm(
-            'This model already has a saved testing result. If you run testing again, the previous result will be replaced by the new one. Continue?'
-        );
-        if (!proceed) {
-            return;
-        }
-    }
+    var model = selectedModelName;
+    var direction = document.getElementById('selDirection').value;
+    var modelLabel = getSelectedModelLabel();
+    var dirEl = document.getElementById('selDirection');
+    var dirLabel =
+        dirEl && dirEl.options && dirEl.options.length
+            ? dirEl.options[dirEl.selectedIndex].text
+            : direction;
 
     isRunning = true;
     runCount++;
-
     setTestingUiBusy(true);
+    showTestingError('');
 
-    resetMetrics();
+    metricIds.forEach(function(id, i) {
+        var metricEl = document.getElementById(id);
+        var headerEl = document.getElementById(metricHeaderIds[i]);
+        if (metricEl) {
+            metricEl.textContent = id === 'mcc' ? '0.00' : '0%';
+            metricEl.classList.remove('revealed');
+        }
+        if (headerEl) headerEl.classList.remove('revealed');
+    });
+
+    var bar = document.getElementById('progressBar');
+    if (bar) {
+        bar.style.width = '0%';
+        bar.classList.add('running');
+    }
     setStatus('pending');
     document.getElementById('runBadge').textContent = '#' + runCount;
-
-    var model = selectedModelName;
-    if (!model) {
-        showTestingError('Model is not available yet. Save the model first from the Processing page.');
-        setTestingUiBusy(false);
-        isRunning = false;
-        return;
-    }
-    var direction = document.getElementById('selDirection').value;
-    var modelLabel = document.getElementById('selModel').options[document.getElementById('selModel').selectedIndex].text;
-    var dirLabel = document.getElementById('selDirection').options[document.getElementById('selDirection').selectedIndex].text;
+    document.getElementById('progressSummary').classList.add('show');
 
     if (currentMode === 'upload') {
         document.getElementById('sumDataset').textContent = selectedDatasetName || ('Dataset ID ' + selectedDatasetId);
@@ -1169,21 +1220,48 @@ async function startTesting() {
     }
     document.getElementById('sumModel').textContent = modelLabel;
     document.getElementById('sumDir').textContent = dirLabel;
-    document.getElementById('progressSummary').classList.add('show');
 
-    var bar = document.getElementById('progressBar');
-    bar.classList.add('running');
     startProgressElapsedTimer();
-    setProgressStep('prepare', 10, 'Validating testing configuration...');
+    setProgressStep('prepare', 8, 'Validating testing configuration...');
+
+    try {
+        await refreshSelectedModelLatestTestingFromBackend();
+    } catch (refreshErr) {
+        console.warn('testing: refresh models skipped', refreshErr);
+    }
+
+    if (selectedLatestTesting) {
+        var proceed = window.confirm(
+            'This model already has a saved testing result. If you run testing again, the previous result will be replaced by the new one. Continue?'
+        );
+        if (!proceed) {
+            resetTestingRunUi();
+            return;
+        }
+    }
+
+    setProgressStep('prepare', 12, 'Sending request to backend...');
 
     var backendResult = null;
     try {
         var selectedAlgo = normalizeTestingAlgo(document.getElementById('selAlgorithm').value);
         if (!selectedAlgo) selectedAlgo = 'indobert';
 
-        setProgressStep('prepare', 12, 'Preparing exact holdout testing set from selected model...');
+        if (selectedAlgo === 'indobert') {
+            setProgressStep('prepare', 12, 'Preparing exact holdout testing set from selected model...');
+        } else {
+            setProgressStep(
+                'prepare',
+                12,
+                'Preparing test subset for ' +
+                    getAlgorithmDisplayName(selectedAlgo) +
+                    ' (holdout if available, otherwise split ratio ' +
+                    (selectedModelSplitRatio || '80:20') +
+                    ')...'
+            );
+        }
 
-        // Evaluasi model tanpa preprocess job terpisah (mengikuti alur holdout model training).
+        // mBERT / XLM-R: backend memilih holdout atau split_ratio; IndoBERT tetap holdout wajib.
         clearTestingFetchProgressTimer();
         var evalBarPct = 40;
         setProgressStep('connect', evalBarPct, 'Running model evaluation (batch inference)...');
@@ -1196,18 +1274,23 @@ async function startTesting() {
             setProgressStep('connect', Math.round(evalBarPct), 'Running model evaluation (batch inference)...');
         }, 480);
 
-        var res = await fetch(API_BASE + '/testing/' + selectedAlgo, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dataset_id: selectedDatasetId,
-                model_name: model,
-                model_id: selectedModelId,
-                max_length: selectedModelMaxLength || 64,
-                limit: null,
-                save_result: true
-            })
-        });
+        var testingUrl = API_BASE + '/testing/' + encodeURIComponent(selectedAlgo);
+        var res = await fetchWithTimeout(
+            testingUrl,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dataset_id: selectedDatasetId,
+                    model_name: model,
+                    model_id: selectedModelId,
+                    max_length: selectedModelMaxLength || 64,
+                    limit: null,
+                    save_result: true
+                })
+            },
+            600000
+        );
         var data = await res.json();
         clearTestingFetchProgressTimer();
         if (!res.ok) {
@@ -1216,15 +1299,18 @@ async function startTesting() {
         backendResult = data;
         setProgressStep('process', 91, 'Backend finished processing model testing.');
     } catch (err) {
-        clearTestingFetchProgressTimer();
-        bar.classList.remove('running');
-        stopProgressElapsedTimer();
-        setStatus('idle');
+        var errMsg =
+            err && err.name === 'AbortError'
+                ? 'Testing request timed out. Make sure the backend (uvicorn) is running at ' + API_BASE
+                : err && err.message
+                  ? err.message
+                  : 'Failed to run backend testing.';
         document.getElementById('progressText').textContent = 'Failed to run testing';
-        showTestingError(err && err.message ? err.message : 'Failed to run backend testing.');
-        setTestingUiBusy(false);
-        isRunning = false;
+        showTestingError(errMsg);
+        resetTestingRunUi();
         return;
+    } finally {
+        clearTestingFetchProgressTimer();
     }
     setProgressStep('metrics', 96, 'Preparing metrics for display...');
     bar.classList.remove('running');
@@ -1233,37 +1319,19 @@ async function startTesting() {
 }
 
 function finishTesting(result, direction) {
-    var acc = Number(result.accuracy || 0) * 100;
-    var precision = Number(result.precision_macro || 0) * 100;
-    var recall = Number(result.recall_macro || 0) * 100;
-    var f1 = Number(result.f1_macro || 0) * 100;
-    var mcc = Number(result.mcc || 0);
-    var roc = Number(result.roc_auc || 0) * 100;
-    var std = Number(result.std_deviation || 0) * 100;
-    var weighted = Number(result.weighted_avg || 0) * 100;
-    var macro = f1;
-
-    // MCC is on scale [-1, 1]; never Math.round — 0.74 would become 1.
-    var r = {
-        acc: Math.round(acc),
-        prec: Math.round(precision),
-        f1: Math.round(f1),
-        macro: Math.round(macro),
-        rec: Math.round(recall),
-        std: Math.round(std),
-        weighted: Math.round(weighted),
-        roc: Math.round(roc),
-        mcc: mcc
-    };
+    var r = mapFreshTestingResult(result);
+    if (!r) return;
 
     metricIds.forEach(function(id, i) {
         setTimeout(function() {
             document.getElementById(metricHeaderIds[i]).classList.add('revealed');
             document.getElementById(id).classList.add('revealed');
+            var v = r[id];
+            if (v == null || !Number.isFinite(v)) return;
             if (id === 'mcc') {
-                animateValue(document.getElementById(id), r[id], 800, { decimals: 2, suffix: '' });
+                animateValue(document.getElementById(id), v, 800, { decimals: 2, suffix: '' });
             } else {
-                animateValue(document.getElementById(id), r[id], 800, { decimals: 0, suffix: '%' });
+                animateValue(document.getElementById(id), Math.round(v), 800, { decimals: 0, suffix: '%' });
             }
         }, i * 100);
     });
@@ -1271,14 +1339,14 @@ function finishTesting(result, direction) {
     setProgressStep('finish', 100, 'Testing completed.');
     stopProgressElapsedTimer();
     selectedLatestTesting = {
-        accuracy: Number(result.accuracy || 0),
-        precision_macro: Number(result.precision_macro || 0),
-        recall_macro: Number(result.recall_macro || 0),
-        f1_macro: Number(result.f1_macro || 0),
-        std_deviation: Number(result.std_deviation || 0),
-        weighted_avg: Number(result.weighted_avg || 0),
-        roc_auc: Number(result.roc_auc || 0),
-        mcc: Number(result.mcc || 0),
+        accuracy: normalizePercent(result.accuracy),
+        precision_macro: normalizePercent(result.precision_macro),
+        recall_macro: normalizePercent(result.recall_macro),
+        f1_macro: normalizePercent(result.f1_macro),
+        std_deviation: normalizePercent(result.std_deviation),
+        weighted_avg: normalizePercent(result.weighted_avg),
+        roc_auc: normalizePercent(result.roc_auc),
+        mcc: normalizeMcc(result.mcc),
         created_at: new Date().toISOString()
     };
     var testedRows = Number(result.total_data || 0);
@@ -1288,7 +1356,7 @@ function finishTesting(result, direction) {
     var overfittingText = '';
     if (Number.isFinite(selectedModelTrainingAccuracy)) {
         var trainAccPct = normalizeAccuracyToFraction(selectedModelTrainingAccuracy) * 100;
-        var testAccPct = Number(result.accuracy || 0) * 100;
+        var testAccPct = normalizePercent(result.accuracy) || 0;
         var trainMinusTest = trainAccPct - testAccPct;
         if (trainMinusTest > 3) {
             overfittingText =
@@ -1296,7 +1364,19 @@ function finishTesting(result, direction) {
                 trainMinusTest.toFixed(2) + '% (> 3%).';
         }
     }
-    showTestingInfo('Testing result saved successfully.' + testedRowsText + overfittingText + ' If you run testing again, the previous result will be replaced by the new one.');
+    var subsetNote = '';
+    if (result.test_subset === 'split_ratio') {
+        subsetNote = ' Test subset: split ratio ' + (selectedModelSplitRatio || '80:20') + ' (no holdout file).';
+    } else if (result.test_subset === 'holdout') {
+        subsetNote = ' Test subset: training holdout rows.';
+    }
+    showTestingInfo(
+        'Testing result saved successfully.' +
+            testedRowsText +
+            subsetNote +
+            overfittingText +
+            ' If you run testing again, the previous result will be replaced by the new one.'
+    );
     setTestingUiBusy(false);
     isRunning = false;
 }

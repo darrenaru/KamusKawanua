@@ -53,9 +53,13 @@ stemmer = factory.create_stemmer()
 
 
 def _preprocess_tokenizer_is_mbert(name: str) -> bool:
-    """True untuk mBERT / multilingual; False untuk IndoBERT."""
-    n = (name or "").lower().strip()
-    return n not in ("indobert", "indo-bert", "indobenchmark")
+    """True hanya untuk mBERT; IndoBERT & XLM-R-2 tidak di-stem."""
+    n = (name or "").lower().strip().replace("_", "-")
+    if n in ("indobert", "indo-bert", "indobenchmark"):
+        return False
+    if n in ("xlm-r-2", "xlm-r", "xlmr", "xlm-roberta-base", "xlm-roberta"):
+        return False
+    return True
 
 
 def _maybe_stem_indonesian_for_preprocess(text: str, tokenizer_mode: str) -> str:
@@ -451,6 +455,8 @@ def _algo_family_from_row(algoritma: str) -> str | None:
         return "mbert"
     if a.startswith("bert-") and "multilingual" in a:
         return "mbert"
+    if a == "xlm-r-2":
+        return "xlm-r-2"
     return None
 
 
@@ -632,7 +638,11 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
         return bundle
 
     try:
-        from backend.processing.service import predict_indobert_softmax, predict_mbert_softmax
+        from backend.processing.service import (
+            predict_indobert_softmax,
+            predict_mbert_softmax,
+            predict_xlm_r_softmax,
+        )
     except Exception:
         return bundle
 
@@ -715,6 +725,9 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
                 elif family == "mbert":
                     bundle["predicted_jenis_mbert"] = label
                     bundle["model_used_mbert"] = nama
+                elif family == "xlm-r-2":
+                    bundle["predicted_jenis_xlm"] = label
+                    bundle["model_used_xlm"] = nama
                 return
             except Exception as e:
                 last_err = str(e)
@@ -732,6 +745,7 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
 
     run_one("indobert", "IndoBERT", predict_indobert_softmax)
     run_one("mbert", "mBERT", predict_mbert_softmax)
+    run_one("xlm-r-2", "XLM-R", predict_xlm_r_softmax)
     bundle["model_consensus"] = _compute_model_consensus(bundle["model_analyses"])
     return bundle
 
@@ -1359,6 +1373,13 @@ def search(query: str, lang: str, use_model: bool = True):
             "query": query_original,
             "results": [],
             "message": "Query cannot be empty.",
+            **_empty_search_model_bundle(),
+        }
+    if len(query_original.strip().split()) > 1:
+        return {
+            "query": query_original,
+            "results": [],
+            "message": "Please enter a single word only (no spaces).",
             **_empty_search_model_bundle(),
         }
     if lang not in ("manado", "indonesia", "inggris"):

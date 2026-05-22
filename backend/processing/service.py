@@ -2,18 +2,26 @@ from __future__ import annotations
 
 import json
 import os
+
+# Hindari token HF rusak di ENV (401) saat unduh model publik.
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+
 import random
 import re
 import gc
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import (
     accuracy_score,
     matthews_corrcoef,
     precision_recall_fscore_support,
 )
+
+from backend.classification_metrics import multiclass_roc_auc_weighted
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
@@ -25,12 +33,60 @@ from transformers import (
 from backend.supabase_client import supabase
 
 
+def _validation_roc_auc_score(
+    y_true: list[int],
+    all_probs: list[np.ndarray],
+    id2label: dict[int, str],
+) -> float:
+    """ROC-AUC pada subset validasi (skala 0–1, selaras metrik epoch lainnya)."""
+    if not y_true or not all_probs or len(id2label) < 2:
+        return 0.0
+    labels_order = [id2label[i] for i in range(len(id2label))]
+    y_true_str: list[str] = []
+    for yi in y_true:
+        key = int(yi)
+        if key in id2label:
+            y_true_str.append(id2label[key])
+    if len(set(y_true_str)) < 2:
+        return 0.0
+    try:
+        probas = np.vstack(all_probs)
+        roc = multiclass_roc_auc_weighted(y_true_str, probas, labels_order)
+        return float(roc)
+    except Exception:
+        return 0.0
+
+
 INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p2"
 MBERT_MODEL_ID = "bert-base-multilingual-cased"
+_DEFAULT_XLMR_HUB_ID = "xlm-roberta-base"
+XLMR_MODEL_ID = (os.environ.get("KAMUS_XLMR_MODEL") or "").strip() or _DEFAULT_XLMR_HUB_ID
 
-# Internal defaults khusus mBERT
+# Internal defaults khusus mBERT / fast training
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
+_INDOBERT_FAST_MAX_LENGTH = 64
+_XLM_FAST_MAX_LENGTH = 32
+_HF_HUB_PUBLIC: dict[str, object] = {"token": False}
+
+
+def _hub_kwargs_for_pretrained(repo_or_path: str) -> dict[str, object]:
+    p = str(repo_or_path).strip()
+    if os.path.isdir(p):
+        return {}
+    if p in (INDOBERT_MODEL_ID, MBERT_MODEL_ID, _DEFAULT_XLMR_HUB_ID):
+        return _HF_HUB_PUBLIC
+    return {}
+
+
+def _is_xlm_roberta_model_id(model_id: str) -> bool:
+    p = str(model_id or "").strip()
+    if not p:
+        return False
+    if p == XLMR_MODEL_ID:
+        return True
+    low = p.replace("\\", "/").lower()
+    return "xlm-roberta" in low or low.endswith("xlm-roberta-base")
 
 
 def _set_global_seed(seed: int) -> None:
@@ -203,9 +259,11 @@ def _make_label_maps(rows: list[dict]) -> tuple[dict[str, int], dict[int, str]]:
     return label2id, id2label
 
 
-def _apply_bert_fast_mode_partial_unfreeze(model: torch.nn.Module) -> None:
-    """Freeze encoder lalu unfreeze 4 layer terakhir + pooler (cari rasio / fast run)."""
-    base = getattr(model, "bert", None)
+def _apply_partial_transformer_unfreeze(
+    model: torch.nn.Module, backbone_attr: str, *, num_layers: int = 4
+) -> None:
+    """Freeze backbone, unfreeze top encoder layers (+ pooler) untuk cari-rasio / fast_mode."""
+    base = getattr(model, backbone_attr, None)
     if base is None:
         return
     for p in base.parameters():
@@ -214,7 +272,7 @@ def _apply_bert_fast_mode_partial_unfreeze(model: torch.nn.Module) -> None:
         encoder = getattr(base, "encoder", None)
         layers = getattr(encoder, "layer", None) if encoder is not None else None
         if layers is not None:
-            for layer in list(layers)[-4:]:
+            for layer in list(layers)[-num_layers:]:
                 for p in layer.parameters():
                     p.requires_grad = True
     except Exception:
@@ -226,6 +284,10 @@ def _apply_bert_fast_mode_partial_unfreeze(model: torch.nn.Module) -> None:
                 p.requires_grad = True
     except Exception:
         pass
+
+
+def _apply_bert_fast_mode_partial_unfreeze(model: torch.nn.Module) -> None:
+    _apply_partial_transformer_unfreeze(model, "bert")
 
 
 def train_indobert_softmax(
@@ -246,12 +308,15 @@ def train_indobert_softmax(
     fast_mode: bool = False,
     on_epoch_end=None,
     base_model_id: str = INDOBERT_MODEL_ID,
+    algorithm: str | None = None,
+    text_extractor: Callable[[dict], str] | None = None,
 ) -> dict:
     """
     Fine-tune IndoBERT untuk klasifikasi `jenis`.
     Teks training memakai `final_text` dari preprocess IndoBERT bila tersedia (selaras tokenizer).
     """
     _set_global_seed(seed)
+    row_to_text = text_extractor or _build_text_with_preprocessed_fallback
 
     def _train_once(force_cpu: bool = False) -> dict:
         rows = _fetch_preprocessed_rows(dataset_id)
@@ -287,7 +352,7 @@ def train_indobert_softmax(
         raw_labels: list[str] = []
         row_keys: list[str] = []
         for r in rows:
-            t = _build_text_with_preprocessed_fallback(r)
+            t = row_to_text(r)
             y = str(r.get("jenis") or "").strip()
             if t and y:
                 texts.append(t)
@@ -318,16 +383,28 @@ def train_indobert_softmax(
         train_idx = np.array(train_idx)
         val_idx = np.array(val_idx)
 
-        tokenizer = AutoTokenizer.from_pretrained(base_model_id)
-        model = AutoModelForSequenceClassification.from_pretrained(
-            base_model_id,
-            num_labels=len(label2id),
-            id2label=id2label,
-            label2id=label2id,
-            classifier_dropout=dropout,
-            hidden_dropout_prob=dropout,
-            attention_probs_dropout_prob=dropout,
-        )
+        hub_kw = _hub_kwargs_for_pretrained(base_model_id)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_id, **hub_kw)
+        try:
+            model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id,
+                num_labels=len(label2id),
+                id2label=id2label,
+                label2id=label2id,
+                classifier_dropout=dropout,
+                hidden_dropout_prob=dropout,
+                attention_probs_dropout_prob=dropout,
+                **hub_kw,
+            )
+        except TypeError:
+            model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id,
+                num_labels=len(label2id),
+                id2label=id2label,
+                label2id=label2id,
+                classifier_dropout=dropout,
+                **hub_kw,
+            )
 
         if force_cpu:
             device = torch.device("cpu")
@@ -337,12 +414,23 @@ def train_indobert_softmax(
         use_amp = device.type == "cuda"
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-        if fast_mode:
-            _apply_bert_fast_mode_partial_unfreeze(model)
+        indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID
+        xlm_fast = fast_mode and (
+            algorithm == "xlm-r-2" or _is_xlm_roberta_model_id(base_model_id)
+        )
+        if indobert_fast:
+            _apply_partial_transformer_unfreeze(model, "bert")
+        elif xlm_fast:
+            _apply_partial_transformer_unfreeze(model, "roberta")
 
         requested_max_length = int(max_length) if isinstance(max_length, int) else 64
         requested_max_length = max(8, min(512, requested_max_length))
-        effective_max_length = min(32, requested_max_length) if fast_mode else requested_max_length
+        if indobert_fast:
+            effective_max_length = min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length)
+        elif xlm_fast:
+            effective_max_length = min(_XLM_FAST_MAX_LENGTH, requested_max_length)
+        else:
+            effective_max_length = requested_max_length
 
         train_ds = TextClsDataset(
             [texts[i] for i in train_idx.tolist()],
@@ -413,6 +501,7 @@ def train_indobert_softmax(
             val_losses: list[float] = []
             y_true: list[int] = []
             y_pred: list[int] = []
+            val_probs: list[np.ndarray] = []
 
             with torch.no_grad():
                 for batch in val_loader:
@@ -424,6 +513,9 @@ def train_indobert_softmax(
                         out = model(input_ids=input_ids, attention_mask=attention_mask)
                         val_loss = loss_fn(out.logits, labels)
                     val_losses.append(float(val_loss.detach().cpu()))
+                    val_probs.append(
+                        F.softmax(out.logits, dim=-1).detach().cpu().numpy()
+                    )
                     preds = torch.argmax(out.logits, dim=-1)
                     y_true.extend(labels.detach().cpu().tolist())
                     y_pred.extend(preds.detach().cpu().tolist())
@@ -433,6 +525,7 @@ def train_indobert_softmax(
                 y_true, y_pred, average="macro", zero_division=0
             )
             mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+            roc_auc = _validation_roc_auc_score(y_true, val_probs, id2label)
 
             confusion_matrix = None
             confusion_labels = None
@@ -457,6 +550,7 @@ def train_indobert_softmax(
                 "recall_macro": float(rec),
                 "f1_macro": float(f1),
                 "mcc": float(mcc),
+                "roc_auc": float(roc_auc),
                 "confusion_matrix": confusion_matrix,
                 "confusion_labels": confusion_labels,
             }
@@ -501,9 +595,18 @@ def train_indobert_softmax(
                 ensure_ascii=False,
             )
 
+        algo_out = algorithm
+        if algo_out is None:
+            if base_model_id == MBERT_MODEL_ID:
+                algo_out = "mbert"
+            elif _is_xlm_roberta_model_id(base_model_id):
+                algo_out = "xlm-r-2"
+            else:
+                algo_out = "indobert"
+
         return {
             "status": "ok",
-            "algorithm": "mbert" if base_model_id == MBERT_MODEL_ID else "indobert",
+            "algorithm": algo_out,
             "data_source": data_source,
             "device": str(device),
             "num_labels": len(label2id),
@@ -713,6 +816,7 @@ def train_mbert_softmax(
             val_losses: list[float] = []
             y_true: list[int] = []
             y_pred: list[int] = []
+            val_probs: list[np.ndarray] = []
 
             with torch.no_grad():
                 for batch in val_loader:
@@ -724,6 +828,9 @@ def train_mbert_softmax(
                         out = model(input_ids=input_ids, attention_mask=attention_mask)
                         val_loss = loss_fn(out.logits, labels)
                     val_losses.append(float(val_loss.detach().cpu()))
+                    val_probs.append(
+                        F.softmax(out.logits, dim=-1).detach().cpu().numpy()
+                    )
                     preds = torch.argmax(out.logits, dim=-1)
                     y_true.extend(labels.detach().cpu().tolist())
                     y_pred.extend(preds.detach().cpu().tolist())
@@ -733,6 +840,7 @@ def train_mbert_softmax(
                 y_true, y_pred, average="macro", zero_division=0
             )
             mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+            roc_auc = _validation_roc_auc_score(y_true, val_probs, id2label)
 
             confusion_matrix = None
             confusion_labels = None
@@ -757,6 +865,7 @@ def train_mbert_softmax(
                 "recall_macro": float(rec),
                 "f1_macro": float(f1),
                 "mcc": float(mcc),
+                "roc_auc": float(roc_auc),
                 "confusion_matrix": confusion_matrix,
                 "confusion_labels": confusion_labels,
             }
@@ -867,5 +976,54 @@ def predict_indobert_softmax(*, text: str, model_name: str, max_length: int) -> 
 def predict_mbert_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     # Model mBERT dan IndoBERT sama-sama disimpan dalam folder trained_models;
     # tokenizer + config dibaca langsung dari model artifact saat prediksi.
+    return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
+
+
+def train_xlm_r_softmax(
+    *,
+    dataset_id: int,
+    model_name: str,
+    split_ratio: str,
+    lr: float,
+    epoch: int,
+    batch_size: int,
+    max_length: int,
+    weight_decay: float,
+    warmup_ratio: float,
+    dropout: float,
+    grad_accum: int,
+    early_stopping_patience: int,
+    seed: int = 42,
+    on_epoch_end=None,
+    fast_mode: bool = False,
+) -> dict:
+    """Fine-tune XLM-R; teks training memakai final_text dari preprocessing XLM."""
+    _cleanup_torch_memory()
+    try:
+        return train_indobert_softmax(
+            dataset_id=dataset_id,
+            model_name=model_name,
+            split_ratio=split_ratio,
+            lr=lr,
+            epoch=epoch,
+            batch_size=batch_size,
+            max_length=max_length,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            dropout=dropout,
+            grad_accum=grad_accum,
+            early_stopping_patience=early_stopping_patience,
+            seed=seed,
+            on_epoch_end=on_epoch_end,
+            base_model_id=XLMR_MODEL_ID,
+            fast_mode=fast_mode,
+            algorithm="xlm-r-2",
+            text_extractor=_build_text_with_preprocessed_fallback,
+        )
+    finally:
+        _cleanup_torch_memory()
+
+
+def predict_xlm_r_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
 

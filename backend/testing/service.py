@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -18,13 +20,41 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from backend.processing.service import (
     _build_text,
+    _build_text_with_preprocessed_fallback,
     _fetch_preprocessed_rows,
     _parse_ratio,
     _safe_name,
     predict_indobert_softmax,
     predict_mbert_softmax,
+    predict_xlm_r_softmax,
+)
+from backend.model_testing_metrics import (
+    build_latest_testing_api_summary,
+    build_model_update_from_testing_metrics,
+    build_testing_result_from_model_row,
 )
 from backend.supabase_client import supabase
+
+
+def _normalize_algo_slug(algoritma: str) -> str:
+    raw = str(algoritma or "").strip()
+    if not raw:
+        return "unknown"
+    k = raw.lower().replace("_", "-")
+    if k == "xlm-r-2":
+        return "xlm-r-2"
+    if k in ("xlmr", "xlm-r"):
+        return "xlm-r"
+    if k in ("indobert", "indo-bert", "indobenchmark"):
+        return "indobert"
+    if k in (
+        "mbert",
+        "m-bert",
+        "multilingual-bert",
+        "bert-base-multilingual-cased",
+    ):
+        return "mbert"
+    return k
 
 
 def _normalize_class_key(s: str) -> str:
@@ -86,11 +116,39 @@ def _multiclass_roc_auc_weighted(
         return 0.0
 
 
+def _fetch_legacy_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
+    if not model_ids:
+        return {}
+    try:
+        res = (
+            supabase.table("testing_results")
+            .select("*")
+            .in_("model_id", model_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception:
+        return {}
+    by_model: dict[int, dict] = {}
+    for row in rows:
+        mid = row.get("model_id")
+        if mid is None:
+            continue
+        try:
+            mid_int = int(mid)
+        except Exception:
+            continue
+        if mid_int not in by_model:
+            by_model[mid_int] = row
+    return by_model
+
+
 def get_available_testing_models() -> list[dict]:
     try:
         models_res = (
             supabase.table("models")
-            .select("id,nama_model,algoritma,mode,dataset_id,split_ratio,accuracy,max_length,created_at")
+            .select("*")
             .order("created_at", desc=True)
             .execute()
         )
@@ -104,6 +162,12 @@ def get_available_testing_models() -> list[dict]:
 
     # Testing dropdown must only list final-training models.
     models = [row for row in raw_models if is_final_training_mode(row.get("mode"))]
+    # Shared DB: sembunyikan baris algoritma xlm-r mitra; pemilik situs memakai xlm-r-2.
+    models = [
+        row
+        for row in models
+        if str(row.get("algoritma") or "").strip().lower().replace("_", "-") != "xlm-r"
+    ]
 
     dataset_ids = sorted(
         {
@@ -130,68 +194,8 @@ def get_available_testing_models() -> list[dict]:
         except Exception:
             dataset_name_map = {}
 
-    latest_testing_by_model_dataset: dict[tuple[int, int], dict[str, Any]] = {}
-    model_ids = sorted({int(row.get("id")) for row in models if row.get("id") is not None})
-    testing_dataset_ids: set[int] = set()
-    if model_ids:
-        try:
-            testing_res = (
-                supabase.table("testing_results")
-                .select(
-                    "id,model_id,dataset_id,accuracy,precision_macro,recall_macro,f1_macro,std_deviation,weighted_avg,roc_auc,mcc,created_at"
-                )
-                .in_("model_id", model_ids)
-                .order("created_at", desc=True)
-                .execute()
-            )
-            for row in testing_res.data or []:
-                model_id_raw = row.get("model_id")
-                dataset_id_raw = row.get("dataset_id")
-                if model_id_raw is None or dataset_id_raw is None:
-                    continue
-                dataset_id_int = int(dataset_id_raw)
-                key = (int(model_id_raw), dataset_id_int)
-                if key in latest_testing_by_model_dataset:
-                    continue
-                testing_dataset_ids.add(dataset_id_int)
-                latest_testing_by_model_dataset[key] = {
-                    "id": row.get("id"),
-                    "dataset_id": dataset_id_int,
-                    "accuracy": float(row.get("accuracy") or 0),
-                    "precision_macro": float(row.get("precision_macro") or 0),
-                    "recall_macro": float(row.get("recall_macro") or 0),
-                    "f1_macro": float(row.get("f1_macro") or 0),
-                    "std_deviation": float(row.get("std_deviation") or 0),
-                    "weighted_avg": float(row.get("weighted_avg") or 0),
-                    "roc_auc": float(row.get("roc_auc") or 0),
-                    "mcc": float(row.get("mcc") or 0),
-                    "created_at": row.get("created_at"),
-                }
-        except Exception:
-            latest_testing_by_model_dataset = {}
-
-    all_dataset_ids = sorted(set(dataset_ids) | testing_dataset_ids)
-    if all_dataset_ids:
-        try:
-            ds_all_res = (
-                supabase.table("datasets")
-                .select("id,name,file_name")
-                .in_("id", all_dataset_ids)
-                .execute()
-            )
-            for row in ds_all_res.data or []:
-                ds_id = row.get("id")
-                if ds_id is None:
-                    continue
-                dataset_name_map[int(ds_id)] = (
-                    row.get("name") or row.get("file_name") or f"Dataset {ds_id}"
-                )
-        except Exception:
-            pass
-
-    for summary in latest_testing_by_model_dataset.values():
-        ds_id = summary.get("dataset_id")
-        summary["dataset_name"] = dataset_name_map.get(int(ds_id)) if ds_id is not None else None
+    model_ids = [int(row["id"]) for row in models if row.get("id") is not None]
+    legacy_testing_map = _fetch_legacy_testing_by_model_ids(model_ids)
 
     items: list[dict] = []
     for row in models:
@@ -208,11 +212,34 @@ def get_available_testing_models() -> list[dict]:
         if not model_name:
             continue
 
+        mid_int = int(model_id)
+        legacy_row = legacy_testing_map.get(mid_int)
+        latest_testing = build_latest_testing_api_summary(
+            row=row,
+            legacy_row=legacy_row,
+            dataset_id=dataset_id,
+            dataset_name=(
+                dataset_name_map.get(dataset_id) if dataset_id is not None else None
+            ),
+        )
+        if latest_testing and not latest_testing.get("dataset_id") and legacy_row:
+            legacy_ds = legacy_row.get("dataset_id")
+            if legacy_ds is not None:
+                try:
+                    legacy_ds_int = int(legacy_ds)
+                    latest_testing["dataset_id"] = legacy_ds_int
+                    latest_testing["dataset_name"] = (
+                        dataset_name_map.get(legacy_ds_int)
+                        or latest_testing.get("dataset_name")
+                    )
+                except Exception:
+                    pass
+
         items.append(
             {
                 "id": int(model_id),
                 "nama_model": model_name,
-                "algoritma": str(row.get("algoritma") or "Unknown").strip() or "Unknown",
+                "algoritma": _normalize_algo_slug(row.get("algoritma")),
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name_map.get(dataset_id) if dataset_id is not None else None,
                 "split_ratio": str(row.get("split_ratio") or "").strip() or None,
@@ -221,9 +248,7 @@ def get_available_testing_models() -> list[dict]:
                 ),
                 "max_length": row.get("max_length"),
                 "created_at": row.get("created_at"),
-                "latest_testing": latest_testing_by_model_dataset.get((int(model_id), int(dataset_id)))
-                if dataset_id is not None
-                else None,
+                "latest_testing": latest_testing,
             }
         )
 
@@ -247,18 +272,47 @@ def _get_dataset_name(dataset_id: int) -> str | None:
         return None
 
 
-def _insert_testing_result(payload: dict[str, Any]) -> int | None:
+def _save_testing_metrics_to_model(
+    *,
+    model_id: int | None,
+    accuracy: float,
+    precision_macro: float,
+    recall_macro: float,
+    f1_macro: float,
+    std_deviation: float,
+    weighted_avg: float,
+    roc_auc: float,
+    mcc: float,
+    max_length: int | None = None,
+) -> int | None:
+    """Hanya memperbarui kolom test_* & tested_at — tidak menimpa metrik training."""
+    if model_id is None:
+        return None
+    update_payload = build_model_update_from_testing_metrics(
+        accuracy=accuracy,
+        precision_macro=precision_macro,
+        recall_macro=recall_macro,
+        f1_macro=f1_macro,
+        std_deviation=std_deviation,
+        weighted_avg=weighted_avg,
+        roc_auc=roc_auc,
+        mcc=mcc,
+        max_length=max_length,
+    )
     try:
-        res = supabase.table("testing_results").insert(payload).execute()
+        res = (
+            supabase.table("models")
+            .update(update_payload)
+            .eq("id", int(model_id))
+            .execute()
+        )
         data = res.data or []
-        print("INSERT RESPONSE:", data)
-        testing_result_id = None
-        if data and len(data) > 0:
-            testing_result_id = data[0].get("id")
-        return int(testing_result_id) if testing_result_id is not None else None
+        saved_id = int(model_id)
+        if data and data[0].get("id") is not None:
+            saved_id = int(data[0]["id"])
+        return saved_id
     except Exception as e:
-        print("INSERT ERROR:", str(e))
-        raise ValueError(f"Failed to save to testing_results: {e}")
+        raise ValueError(f"Failed to save testing metrics to models: {e}")
 
 
 def _get_model_split_ratio(
@@ -614,24 +668,18 @@ def test_indobert_model(
     testing_result_id: int | None = None
     print("SAVE RESULT:", save_result)
     if save_result:
-        insert_payload = {
-            "dataset_id": dataset_id,
-            "model_id": model_id,
-            "model_name": model_name,
-            "dataset_name": dataset_name,
-            "total_data": total_data,
-            "accuracy": accuracy,
-            "precision_macro": float(precision_macro),
-            "recall_macro": float(recall_macro),
-            "f1_macro": float(f1_macro),
-            "std_deviation": float(std_deviation),
-            "weighted_avg": float(f1_weighted),
-            "roc_auc": float(roc_auc),
-            "mcc": float(mcc),
-            "max_length": max_length,
-        }
-        print("INSERT PAYLOAD:", insert_payload)
-        testing_result_id = _insert_testing_result(insert_payload)
+        testing_result_id = _save_testing_metrics_to_model(
+            model_id=model_id,
+            accuracy=accuracy,
+            precision_macro=float(precision_macro),
+            recall_macro=float(recall_macro),
+            f1_macro=float(f1_macro),
+            std_deviation=float(std_deviation),
+            weighted_avg=float(f1_weighted),
+            roc_auc=float(roc_auc),
+            mcc=float(mcc),
+            max_length=max_length,
+        )
 
     return {
         "status": "ok",
@@ -640,6 +688,266 @@ def test_indobert_model(
         "dataset_name": dataset_name,
         "model_id": model_id,
         "model_name": model_name,
+        "total_data": total_data,
+        "accuracy": accuracy,
+        "precision_macro": float(precision_macro),
+        "recall_macro": float(recall_macro),
+        "f1_macro": float(f1_macro),
+        "std_deviation": float(std_deviation),
+        "weighted_avg": float(f1_weighted),
+        "roc_auc": float(roc_auc),
+        "mcc": float(mcc),
+        "results": sample_results,
+    }
+
+
+def _apply_testing_subset(
+    valid_rows: list[dict],
+    *,
+    model_name: str,
+    model_id: int | None,
+    dataset_id: int,
+) -> tuple[list[dict], str]:
+    """
+    mBERT / XLM-R (alur folder referensi): pakai holdout hanya jika file holdout ada & cocok.
+    Jika tidak, subset test mengikuti split_ratio + seed model (tanpa holdout).
+    """
+    holdout_row_ids = _load_model_holdout_row_ids(
+        model_name=model_name,
+        dataset_id=dataset_id,
+    )
+    if holdout_row_ids:
+        holdout_rows: list[dict] = []
+        for item in valid_rows:
+            row = item.get("row") or {}
+            row_key = str(row.get("id_kata") or row.get("id") or "").strip()
+            if row_key and row_key in holdout_row_ids:
+                holdout_rows.append(item)
+        if holdout_rows:
+            return holdout_rows, "holdout"
+
+    split_ratio = _get_model_split_ratio(model_id=model_id, model_name=model_name)
+    seed = _get_model_seed(model_id=model_id, model_name=model_name)
+    ratio_rows = _select_testing_rows_by_model_ratio(
+        valid_rows,
+        split_ratio,
+        random_state=seed,
+    )
+    if not ratio_rows:
+        raise ValueError(
+            "No rows available for testing. Check dataset content and model split_ratio."
+        )
+    return ratio_rows, "split_ratio"
+
+
+def _evaluate_transformer_model(
+    *,
+    dataset_id: int,
+    model_name: str,
+    model_id: int | None,
+    max_length: int,
+    limit: int | None,
+    save_result: bool,
+    text_fn: Callable[[dict], str],
+) -> dict:
+    """Evaluasi mBERT / XLM-R mengikuti folder referensi (IndoBERT tetap terpisah)."""
+    rows = _fetch_preprocessed_rows(dataset_id)
+    if not rows:
+        raise ValueError("Dataset not found or preprocessed_data is empty for this dataset_id.")
+
+    valid_rows: list[dict] = []
+    for row in rows:
+        label = str(row.get("jenis") or "").strip()
+        if not label:
+            continue
+        text = text_fn(row)
+        if not text:
+            continue
+        valid_rows.append({"row": row, "text": text, "actual": label})
+
+    if not valid_rows:
+        raise ValueError("No valid rows found (columns 'jenis' and text input must be filled).")
+
+    if limit:
+        valid_rows = valid_rows[:limit]
+
+    valid_rows, subset_mode = _apply_testing_subset(
+        valid_rows,
+        model_name=model_name,
+        model_id=model_id,
+        dataset_id=dataset_id,
+    )
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+    model_dir = os.path.join(model_root, _safe_name(model_name))
+    if not os.path.isdir(model_dir):
+        raise ValueError(
+            f"Model '{model_name}' was not found in trained_models. "
+            "Ensure model_name is correct and the model has been trained."
+        )
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+
+    id2label_cfg = model.config.id2label or {}
+    label2id_cfg: dict[str, Any] = dict(model.config.label2id or {})
+    if label2id_cfg:
+        aligned: list[dict] = []
+        for it in valid_rows:
+            c = _canonical_dataset_label(it["actual"], label2id_cfg)
+            if c is None:
+                continue
+            aligned.append({**it, "actual": c})
+        valid_rows = aligned
+        if not valid_rows:
+            raise ValueError(
+                "No rows left after aligning dataset labels with the model's label2id. "
+                "Check that column `jenis` matches the class names used during training."
+            )
+
+    batch_size = 64 if device.type == "cuda" else 16
+    use_amp = device.type == "cuda"
+    actual_labels: list[str] = []
+    predicted_labels: list[str] = []
+    sample_results: list[dict] = []
+    all_probs: list[np.ndarray] = []
+
+    num_labels = int(getattr(model.config, "num_labels", 0) or 0)
+    id2label_int_to_str: dict[int, str] = {}
+    for k, v in id2label_cfg.items():
+        try:
+            idx = int(k)
+        except Exception:
+            continue
+        id2label_int_to_str[idx] = str(v)
+    labels_in_order: list[str] = []
+    if num_labels > 0:
+        labels_in_order = [
+            id2label_int_to_str.get(i, str(i)) for i in range(num_labels)
+        ]
+
+    items = valid_rows
+    with torch.inference_mode():
+        for start in range(0, len(items), batch_size):
+            chunk = items[start : start + batch_size]
+            texts = [it["text"] for it in chunk]
+            enc = tokenizer(
+                texts,
+                truncation=True,
+                padding=True,
+                max_length=max_length,
+                return_tensors="pt",
+            )
+            enc = {k: v.to(device) for k, v in enc.items()}
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                logits = model(**enc).logits
+            probs = torch.softmax(logits, dim=-1)
+            pred_idx_tensor = torch.argmax(probs, dim=-1)
+            probs_cpu = probs.detach().cpu().numpy()
+
+            for i in range(len(chunk)):
+                actual = chunk[i]["actual"]
+                pred_idx = int(pred_idx_tensor[i].item())
+                pred_score = float(probs[i, pred_idx].item())
+                predicted = id2label_cfg.get(pred_idx)
+                if predicted is None:
+                    predicted = id2label_cfg.get(str(pred_idx), str(pred_idx))
+                predicted = str(predicted).strip()
+                if label2id_cfg:
+                    predicted = (
+                        _canonical_dataset_label(predicted, label2id_cfg) or predicted
+                    )
+                actual_labels.append(actual)
+                predicted_labels.append(predicted)
+                all_probs.append(probs_cpu[i])
+                if len(sample_results) < 100:
+                    row = chunk[i]["row"]
+                    rid = row.get("id")
+                    sample_results.append(
+                        {
+                            "id": int(rid) if rid is not None else 0,
+                            "id_kata": row.get("id_kata"),
+                            "text": chunk[i]["text"],
+                            "actual": actual,
+                            "predicted": predicted,
+                            "score": pred_score,
+                            "correct": predicted == actual,
+                        }
+                    )
+
+    total_data = len(actual_labels)
+    if total_data == 0:
+        raise ValueError("No valid data available for testing.")
+
+    accuracy = float(accuracy_score(actual_labels, predicted_labels))
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average="macro",
+        zero_division=0,
+    )
+    _, _, f1_weighted, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average="weighted",
+        zero_division=0,
+    )
+    _, _, f1_per_class, _ = precision_recall_fscore_support(
+        actual_labels,
+        predicted_labels,
+        average=None,
+        zero_division=0,
+    )
+    std_deviation = float(np.std(f1_per_class)) if f1_per_class is not None else 0.0
+
+    roc_auc = 0.0
+    if all_probs and labels_in_order:
+        probas_matrix = np.vstack(all_probs)
+        n_prob_cols = probas_matrix.shape[1]
+        eff_labels = labels_in_order
+        if len(eff_labels) != n_prob_cols:
+            eff_labels = [
+                id2label_int_to_str.get(i, str(i)) for i in range(n_prob_cols)
+            ]
+        if len(eff_labels) >= 2:
+            roc_auc = _multiclass_roc_auc_weighted(
+                actual_labels, probas_matrix, eff_labels
+            )
+    try:
+        mcc = float(matthews_corrcoef(actual_labels, predicted_labels))
+    except Exception:
+        mcc = 0.0
+
+    dataset_name = _get_dataset_name(dataset_id)
+    testing_result_id: int | None = None
+    if save_result:
+        testing_result_id = _save_testing_metrics_to_model(
+            model_id=model_id,
+            accuracy=accuracy,
+            precision_macro=float(precision_macro),
+            recall_macro=float(recall_macro),
+            f1_macro=float(f1_macro),
+            std_deviation=float(std_deviation),
+            weighted_avg=float(f1_weighted),
+            roc_auc=float(roc_auc),
+            mcc=float(mcc),
+            max_length=max_length,
+        )
+
+    return {
+        "status": "ok",
+        "testing_result_id": testing_result_id,
+        "dataset_id": dataset_id,
+        "dataset_name": dataset_name,
+        "model_id": model_id,
+        "model_name": model_name,
+        "test_subset": subset_mode,
         "total_data": total_data,
         "accuracy": accuracy,
         "precision_macro": float(precision_macro),
@@ -662,15 +970,35 @@ def test_mbert_model(
     limit: int | None,
     save_result: bool,
 ) -> dict:
-    # Pipeline evaluasi identik; yang membedakan adalah artifact model/tokenizer
-    # yang dipilih oleh `model_name` (mBERT dihasilkan dari endpoint train mbert).
-    return test_indobert_model(
+    return _evaluate_transformer_model(
         dataset_id=dataset_id,
         model_name=model_name,
         model_id=model_id,
         max_length=max_length,
         limit=limit,
         save_result=save_result,
+        text_fn=_build_text,
+    )
+
+
+def test_xlm_r_model(
+    *,
+    dataset_id: int,
+    model_name: str,
+    model_id: int | None,
+    max_length: int,
+    limit: int | None,
+    save_result: bool,
+) -> dict:
+    # Sama seperti referensi: teks dari final_text preprocessing XLM bila ada.
+    return _evaluate_transformer_model(
+        dataset_id=dataset_id,
+        model_name=model_name,
+        model_id=model_id,
+        max_length=max_length,
+        limit=limit,
+        save_result=save_result,
+        text_fn=_build_text_with_preprocessed_fallback,
     )
 
 
@@ -681,7 +1009,7 @@ def predict_with_testing_model(
     text: str,
     max_length: int,
 ) -> dict:
-    algorithm_norm = str(algorithm or "").strip().lower().replace("_", "-")
+    algorithm_norm = _normalize_algo_slug(algorithm)
 
     if algorithm_norm in {"indobert", "indo-bert", "indobenchmark"}:
         result = predict_indobert_softmax(
@@ -701,6 +1029,22 @@ def predict_with_testing_model(
 
     if algorithm_norm in {"mbert", "m-bert", "multilingual-bert", "bert-base-multilingual-cased"}:
         result = predict_mbert_softmax(
+            text=text,
+            model_name=model_name,
+            max_length=max_length,
+        )
+        return {
+            "status": "ok",
+            "algorithm": algorithm,
+            "model_name": model_name,
+            "text": text,
+            "label": str(result.get("label") or ""),
+            "score": float(result.get("score") or 0.0),
+            "probs": result.get("probs") or {},
+        }
+
+    if algorithm_norm == "xlm-r-2":
+        result = predict_xlm_r_softmax(
             text=text,
             model_name=model_name,
             max_length=max_length,
@@ -736,6 +1080,8 @@ def get_best_models_by_algorithm() -> list[dict]:
     for row in rows:
         algorithm = str(row.get("algoritma") or "").strip()
         if not algorithm:
+            continue
+        if algorithm.lower().replace("_", "-") == "xlm-r":
             continue
 
         model_id = row.get("id")

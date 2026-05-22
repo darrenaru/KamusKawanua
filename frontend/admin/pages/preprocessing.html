@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Preprocessing</title>
@@ -146,19 +146,19 @@
 </div>
 
 <!-- DATA COMPARISON MODAL -->
-<div id="dataComparisonModal" class="dataset-modal" style="display:none;">
-  <div class="dataset-card lexicon-card" role="dialog" aria-modal="true" style="max-width: 90vw; width: 90vw; max-height: 90vh;">
-    <button type="button" id="closeDataComparisonBtn" class="modal-close" aria-label="Close popup">×</button>
-    <h3 class="lex-title">Data Comparison (Original vs Preprocessed)</h3>
-    <p id="comparisonStatus" class="lex-status">Loading data...</p>
-    <div class="table-wrapper" style="max-height: 70vh; overflow: auto; margin-top: 15px;">
-      <table class="lex-table" id="comparisonTable">
+<div id="dataComparisonModal" class="dataset-modal data-comparison-modal" style="display:none;">
+  <div class="dataset-card data-comparison-card" role="dialog" aria-modal="true">
+    <button type="button" id="closeDataComparisonBtn" class="modal-close" aria-label="Close">×</button>
+    <h3 class="data-comparison-title">Data Comparison (Original vs Preprocessed)</h3>
+    <p id="comparisonStatus" class="data-comparison-status">Loading data...</p>
+    <div class="data-comparison-table-wrap">
+      <table class="data-comparison-table" id="comparisonTable">
         <thead>
           <tr>
-            <th style="min-width: 150px;">Original (Manado)</th>
-            <th style="min-width: 150px;">Cleaned (Manado)</th>
-            <th style="min-width: 150px;">Original (Indonesia)</th>
-            <th style="min-width: 150px;">Cleaned (Indonesia)</th>
+            <th>Original (Manado)</th>
+            <th>Cleaned (Manado)</th>
+            <th>Original (Indonesia)</th>
+            <th>Cleaned (Indonesia)</th>
           </tr>
         </thead>
         <tbody id="comparisonTableBody"></tbody>

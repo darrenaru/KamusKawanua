@@ -12,10 +12,15 @@ let activePreprocessAlgorithm = "indobert";
 
 function normalizeAlgorithmForPreprocess(raw) {
     const value = String(raw || "").toLowerCase().trim();
-    if (value === "mbert" || value === "m-bert" || value === "bert-base-multilingual-cased") {
-        return "mbert";
-    }
-    return "indobert";
+    if (value === "indobert" || value === "indo-bert") return "indobert";
+    if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r-2";
+    return "mbert";
+}
+
+function preprocessTokenizerLabel(algo) {
+    if (algo === "indobert") return "IndoBERT";
+    if (algo === "xlm-r-2") return "XLM-R";
+    return "mBERT";
 }
 
 function resolvePreprocessAlgorithm() {
@@ -220,44 +225,58 @@ function updateProgressUI(percent, text) {
 // ==============================
 // DATA COMPARISON & EXPORT
 // ==============================
+const DATA_COMPARISON_PREVIEW_LIMIT = 100;
+
+function escapeComparisonCell(value) {
+    const t = document.createElement("div");
+    t.textContent = value == null || value === "" ? "-" : String(value);
+    return t.innerHTML;
+}
+
 async function openDataComparisonModal() {
     if (!selectedDataset) return;
     const modal = document.getElementById("dataComparisonModal");
     const tbody = document.getElementById("comparisonTableBody");
     const status = document.getElementById("comparisonStatus");
-    
+
     if (modal) modal.style.display = "flex";
     if (tbody) tbody.innerHTML = "";
     if (status) status.innerText = "Loading data...";
 
     try {
-        const data = await window.KamusCsvExport.fetchAllSupabaseRows(supabaseClient, "preprocessed_data", selectedDataset.id);
-        
+        const data = await window.KamusCsvExport.fetchAllSupabaseRows(
+            supabaseClient,
+            "preprocessed_data",
+            selectedDataset.id,
+        );
+
         if (!data || data.length === 0) {
             if (status) status.innerText = "No preprocessed data found.";
             return;
         }
 
-        if (status) status.innerText = `Showing ${data.length} rows.`;
+        const displayData = data.slice(0, DATA_COMPARISON_PREVIEW_LIMIT);
+        const total = data.length;
 
-        // We show only the first 500 rows to prevent browser freeze
-        const displayData = data.slice(0, 500);
+        if (status) {
+            status.innerText =
+                total > DATA_COMPARISON_PREVIEW_LIMIT
+                    ? `Showing first ${DATA_COMPARISON_PREVIEW_LIMIT} of ${total} rows. Download CSV for the full dataset.`
+                    : `Showing ${total} row${total === 1 ? "" : "s"}.`;
+        }
 
         if (tbody) {
-            tbody.innerHTML = displayData.map(row => `
-                <tr>
-                    <td>${row.manado || "-"}</td>
-                    <td>${row.manado_clean || "-"}</td>
-                    <td>${row.indonesia || "-"}</td>
-                    <td>${row.indonesia_clean || "-"}</td>
-                </tr>
-            `).join("");
-            
-            if (data.length > 500) {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `<td colspan="4" style="text-align: center; font-style: italic;">Showing first 500 rows. Download CSV to view all ${data.length} rows.</td>`;
-                tbody.appendChild(tr);
-            }
+            tbody.innerHTML = displayData
+                .map(
+                    (row) =>
+                        "<tr>" +
+                        `<td>${escapeComparisonCell(row.manado)}</td>` +
+                        `<td>${escapeComparisonCell(row.manado_clean)}</td>` +
+                        `<td>${escapeComparisonCell(row.indonesia)}</td>` +
+                        `<td>${escapeComparisonCell(row.indonesia_clean)}</td>` +
+                        "</tr>",
+                )
+                .join("");
         }
     } catch (err) {
         console.error("Error loading comparison data:", err);

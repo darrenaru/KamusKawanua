@@ -32,6 +32,7 @@ class IndoBertEpochMetrics(BaseModel):
     recall_macro: float
     f1_macro: float
     mcc: float = 0.0
+    roc_auc: float = 0.0
     confusion_matrix: list[list[int]] | None = None
     confusion_labels: list[str] | None = None
 

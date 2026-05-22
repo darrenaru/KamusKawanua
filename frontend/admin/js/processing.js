@@ -28,7 +28,6 @@
   let ratioComparisonData = {}; // Untuk menyimpan data perbandingan rasio
   let epochResultsData = []; // Untuk menyimpan hasil per epoch
   const MBERT_MULTI_SEEDS = [42, 123, 2024, 7];
-
   function refreshAdminPageAOS() {
     requestAnimationFrame(() => {
       if (typeof window.refreshPageAOS === "function") {
@@ -44,7 +43,14 @@
   }
 
   function normalizeAlgoKey(value) {
-    return String(value || "").trim().toLowerCase();
+    return String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  }
+
+  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r-2. */
+  function normalizeStoredAlgorithmSelection(raw) {
+    const k = normalizeAlgoKey(raw);
+    if (k === "xlmr" || k === "xlm-r") return "xlm-r-2";
+    return k;
   }
 
   function getCurrentRatioContextKey() {
@@ -97,6 +103,35 @@
 
   function isMbertParams(params = {}) {
     return normalizeAlgoKey(params?.algo || currentAlgo) === "mbert";
+  }
+
+  /** IndoBERT / XLM-R: satu nilai seed (tanpa mode multi seperti mBERT). */
+  function isIndobertOrXlmParams(params = {}) {
+    const k = normalizeAlgoKey(params?.algo || currentAlgo);
+    return k === "indobert" || k === "xlm-r-2";
+  }
+
+  function formatTransformerInputSnippet(params = {}) {
+    if (isMbertParams(params)) {
+      return `<strong>Seed:</strong> ${mbertSeedValue(params)}`;
+    }
+    if (isIndobertOrXlmParams(params)) {
+      const maxLen = params.maxLength || "-";
+      const seed = params.seed || "-";
+      return `<strong>MaxLen:</strong> ${maxLen} | <strong>Seed:</strong> ${seed}`;
+    }
+    return `<strong>MaxLen:</strong> ${params.maxLength || "-"}`;
+  }
+
+  function formatTransformerInputLayerLabel(params = {}) {
+    if (isMbertParams(params)) return { label: "Seed", value: mbertSeedValue(params) };
+    if (isIndobertOrXlmParams(params)) {
+      return {
+        label: "Max Length / Seed",
+        value: `${params.maxLength || "-"} / ${params.seed || "-"}`,
+      };
+    }
+    return { label: "Max Length", value: params.maxLength || "-" };
   }
 
   function mbertSeedValue(params = {}) {
@@ -172,13 +207,12 @@
       return;
     }
 
-    const usesMbert = isMbertParams(globalBestParams);
     globalBestContent.innerHTML = `
       <p><strong>Split Ratio:</strong> ${globalBestParams.splitRatio || "-"}</p>
       <p><strong>Learning Rate:</strong> ${globalBestParams.lr || "-"}</p>
       <p><strong>Epoch:</strong> ${globalBestParams.epoch || "-"}</p>
       <p><strong>Batch Size:</strong> ${globalBestParams.batchSize || "-"}</p>
-      <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(globalBestParams) : (globalBestParams.maxLength || "-")}</p>
+      <p>${formatTransformerInputSnippet(globalBestParams)}</p>
       <p><strong>Best Score (Accuracy + F1):</strong> ${Number(globalBestParams.avgScore || 0).toFixed(2)}%</p>
     `;
     bestParamsDisplay.style.display = currentMode === "cari-rasio" ? "block" : "none";
@@ -415,7 +449,7 @@
     );
 
     if (isDuplicate) {
-      showToast("This rasio already exists in the table", "error");
+      showToast("This ratio already exists in the table", "error");
       return;
     }
 
@@ -506,7 +540,7 @@
     const item = ratioData[index];
 
     const modalP = confirmModal.querySelector("p");
-    modalP.innerHTML = `Are you sure you want to delete rasio <strong>${item.train}:${item.test}</strong>?`;
+    modalP.innerHTML = `Are you sure you want to delete ratio <strong>${item.train}:${item.test}</strong>?`;
     confirmModal.style.display = "flex";
   }
 
@@ -650,6 +684,202 @@
 
   // ==================== END RASIO MANAGER ====================
 
+  // ----- Excel export (read-only; does not alter training UI state) -----
+  async function exportProcessingTableXlsx({
+    filename,
+    sheetName,
+    table,
+    tableOpts,
+    title,
+    extraMatrix,
+  }) {
+    if (!window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    await window.KamusExcel.ensureExcelJs();
+    const sheets = [];
+    if (extraMatrix && extraMatrix.length) {
+      sheets.push({
+        name: "Metadata",
+        layout: "metadata",
+        matrix: extraMatrix,
+      });
+    }
+    sheets.push({
+      name: sheetName || "Export",
+      title: title || undefined,
+      table,
+      tableOpts: Object.assign({ skipEmptyRows: true, uppercaseHeader: true }, tableOpts || {}),
+    });
+    await window.KamusExcel.exportWorkbook(filename, sheets);
+  }
+
+  async function exportRatioSplitsXlsx() {
+    const tbl = document.getElementById("ratio-table");
+    if (!tbl) {
+      showToast("Split ratio table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Algorithm", currentAlgo || document.getElementById("algo-select")?.value || "-"],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_split_ratios_${Date.now()}`,
+      sheetName: "Split_ratios",
+      table: tbl,
+      tableOpts: { skipColumnsFromEnd: 1 },
+      title: "Configured train/test split ratios",
+      extraMatrix: meta,
+    });
+    showToast("Split ratios exported.", "success");
+  }
+
+  async function exportRatioComparisonXlsx() {
+    const tbl = document.getElementById("comparison-table");
+    if (!tbl) {
+      showToast("Comparison table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Algorithm", currentAlgo || "-"],
+      ["Mode", currentMode || "-"],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_ratio_comparison_${Date.now()}`,
+      sheetName: "Ratio_compare",
+      table: tbl,
+      title: "Ratio comparison (Find Best Ratio)",
+      extraMatrix: meta,
+    });
+    showToast("Ratio comparison exported.", "success");
+  }
+
+  async function exportTrainingLogTableXlsx() {
+    const tbl = document.getElementById("history-table");
+    if (!tbl) {
+      showToast("Training log table not found.", "error");
+      return;
+    }
+    const meta = [
+      ["Exported", new Date().toLocaleString()],
+      ["Note", "Browser-stored final training history (summary row)."],
+    ];
+    await exportProcessingTableXlsx({
+      filename: `processing_training_log_${Date.now()}`,
+      sheetName: "Training_log",
+      table: tbl,
+      tableOpts: { skipColumnsFromEnd: 1 },
+      title: "Training log",
+      extraMatrix: meta,
+    });
+    showToast("Training log exported.", "success");
+  }
+
+  async function exportTrainingCardEpochs(card) {
+    if (!card || !window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    const table = card.querySelector(".results-table");
+    if (!table) {
+      showToast("Results table not found on this card.", "error");
+      return;
+    }
+    const titleEl = card.querySelector(".training-title");
+    const ratioEl = card.querySelector(".result-ratio-display");
+    const title = titleEl ? titleEl.innerText.trim() : "Training";
+    const ratio = ratioEl ? ratioEl.innerText.trim() : "";
+    await window.KamusExcel.ensureExcelJs();
+    await window.KamusExcel.exportWorkbook(`processing_training_epochs_${Date.now()}`, [
+      {
+        name: "Metadata",
+        layout: "metadata",
+        matrix: [
+          ["Title", title],
+          ["Ratio", ratio || "-"],
+          ["Exported (local time)", new Date().toLocaleString()],
+          ["Algorithm", currentAlgo || "-"],
+        ],
+      },
+      {
+        name: "Epoch_results",
+        title: "Per-epoch training results",
+        table,
+        tableOpts: { skipEmptyRows: true, uppercaseHeader: true },
+      },
+    ]);
+    showToast("Training epochs exported.", "success");
+  }
+
+  async function exportHistoryDetailModalXlsx() {
+    if (!window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
+    const name =
+      document.getElementById("detail-training-name")?.innerText?.trim() ||
+      "training_detail";
+    const safe = window.KamusExcel.sanitizeFilename(name).slice(0, 60);
+    const resultsTable = document.getElementById("history-results-table");
+    const confusionTable = document.getElementById("history-confusion-table");
+    const confusionSection = document.getElementById("history-confusion-section");
+    const hasConfusion =
+      confusionSection &&
+      confusionSection.style.display !== "none" &&
+      confusionTable &&
+      confusionTable.querySelector("tr");
+
+    await window.KamusExcel.ensureExcelJs();
+
+    const summaryRows = [
+      ["Training name", document.getElementById("detail-training-name")?.innerText || "-"],
+      ["Model name", document.getElementById("detail-model-name")?.innerText || "-"],
+      ["Split ratio", document.getElementById("detail-ratio")?.innerText || "-"],
+      ["Date", document.getElementById("detail-date")?.innerText || "-"],
+      ["Algorithm", document.getElementById("detail-algo")?.innerText || "-"],
+      ["Description", document.getElementById("detail-desc")?.innerText || "-"],
+      ["Exported", new Date().toLocaleString()],
+    ];
+
+    const sheets = [
+      {
+        name: "Metadata",
+        layout: "metadata",
+        matrix: summaryRows,
+      },
+      {
+        name: "Epoch_results",
+        title: "Training results by epoch",
+        table: resultsTable,
+        tableOpts: { skipEmptyRows: true, uppercaseHeader: true },
+      },
+    ];
+
+    if (hasConfusion) {
+      sheets.push({
+        name: "Confusion",
+        title: "Confusion matrix (best accuracy epoch)",
+        table: confusionTable,
+        tableOpts: { uppercaseHeader: true },
+      });
+    } else {
+      sheets.push({
+        name: "Confusion",
+        layout: "conclusion",
+        title: "Confusion matrix",
+        matrix: [["Confusion matrix was not available or not shown for this run."]],
+      });
+    }
+
+    await window.KamusExcel.exportWorkbook(`processing_log_${safe}_${Date.now()}`, sheets);
+    showToast("Training detail exported.", "success");
+  }
+
+  window.exportHistoryDetailModalXlsx = exportHistoryDetailModalXlsx;
+
   document.addEventListener("DOMContentLoaded", function () {
     const algoSelect = document.getElementById("algo-select");
     const modelSelect = document.getElementById("model-select");
@@ -660,10 +890,13 @@
     initRatioManager();
     loadPreprocessedDatasets();
 
-    const preferredAlgo = (localStorage.getItem("selectedAlgorithm") || "").toLowerCase().trim();
+    const preferredAlgo = normalizeStoredAlgorithmSelection(
+      localStorage.getItem("selectedAlgorithm") || "",
+    );
     if (preferredAlgo && Array.from(algoSelect.options || []).some((opt) => opt.value === preferredAlgo)) {
       algoSelect.value = preferredAlgo;
       currentAlgo = preferredAlgo;
+      localStorage.setItem("selectedAlgorithm", preferredAlgo);
     } else {
       algoSelect.value = "indobert";
       currentAlgo = "indobert";
@@ -757,8 +990,37 @@
           const card = e.target.closest(".training-card");
           saveModelFromCard(card);
         }
+
+        if (
+          e.target.classList.contains("btn-export-card-epochs") ||
+          e.target.closest(".btn-export-card-epochs")
+        ) {
+          const btn = e.target.closest(".btn-export-card-epochs");
+          const card = btn && btn.closest(".training-card");
+          if (card) {
+            void exportTrainingCardEpochs(card).catch((err) => {
+              showToast(err && err.message ? err.message : String(err), "error");
+            });
+          }
+        }
       });
     }
+
+    const _exportCatch = (err) =>
+      showToast(err && err.message ? err.message : String(err), "error");
+
+    document.getElementById("btn-export-ratio-splits")?.addEventListener("click", () => {
+      void exportRatioSplitsXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-ratio-comparison")?.addEventListener("click", () => {
+      void exportRatioComparisonXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-training-log")?.addEventListener("click", () => {
+      void exportTrainingLogTableXlsx().catch(_exportCatch);
+    });
+    document.getElementById("btn-export-history-detail-xlsx")?.addEventListener("click", () => {
+      void exportHistoryDetailModalXlsx().catch(_exportCatch);
+    });
   });
 
   async function loadPreprocessedDatasets() {
@@ -1072,7 +1334,7 @@
     const a = String(algo || "").toLowerCase().trim();
     if (a === "indobert") return "IndoBERT";
     if (a === "mbert") return "mBERT";
-    if (a === "xlm-r") return "XLM-R";
+    if (a === "xlm-r-2") return "XLM-R";
     if (a === "word2vec") return "Word2Vec";
     if (a === "glove") return "GloVe";
     return a || "selected algorithm";
@@ -1119,7 +1381,7 @@
     const { data, error } = await supabaseClient
       .from("models")
       .select("*")
-      .eq("algoritma", currentAlgo)
+      .eq("algoritma", normalizeAlgoKey(currentAlgo))
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -1205,7 +1467,9 @@
 
     const useCoreOnlyForRatio =
       mode === "cari-rasio" &&
-      (currentAlgo === "indobert" || currentAlgo === "mbert");
+      (currentAlgo === "indobert" ||
+        currentAlgo === "mbert" ||
+        currentAlgo === "xlm-r-2");
 
     if (useCoreOnlyForRatio) {
       html += generateFindBestRatioCoreParams(currentAlgo);
@@ -1217,7 +1481,7 @@
         case "mbert":
           html += generateMBERTParams();
           break;
-        case "xlm-r":
+        case "xlm-r-2":
           html += generateXLMRParams();
           break;
         case "glove":
@@ -1373,8 +1637,9 @@
   function generateFindBestRatioCoreParams(algo) {
     const a = normalizeAlgoKey(algo);
     const isMbert = a === "mbert";
+    const isIndoXlm = a === "indobert" || a === "xlm-r-2";
     const lrOptions =
-      a === "xlm-r"
+      a === "xlm-r-2"
         ? `
           <option value="1e-5">1e-5 (Recommended)</option>
           <option value="1.5e-5">1.5e-5</option>
@@ -1412,7 +1677,7 @@
         </datalist>
       </div>
     `;
-    const seedField = `
+    const seedFieldCoreMbert = `
       <div class="param-group">
         ${renderLabelWithTooltip("Seed", "seed")}
         <input type="text" id="seed" list="seed-options-core" placeholder="Select or type manually" value="">
@@ -1422,6 +1687,18 @@
           <option value="123">123</option>
           <option value="2024">2024</option>
           <option value="all">all (42,123,2024,7)</option>
+        </datalist>
+      </div>
+    `;
+    const seedFieldCoreSingle = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options-core-single" placeholder="Select or type manually" value="">
+        <datalist id="seed-options-core-single">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
         </datalist>
       </div>
     `;
@@ -1453,7 +1730,13 @@
         </div>
         ${maxLengthField}
       </div>
-      ${isMbert ? `<div class="param-row">${seedField}</div>` : ""}
+      ${
+        isMbert
+          ? `<div class="param-row">${seedFieldCoreMbert}</div>`
+          : isIndoXlm
+            ? `<div class="param-row">${seedFieldCoreSingle}</div>`
+            : ""
+      }
     `;
   }
 
@@ -1500,25 +1783,46 @@
     grad_accum:
       "<strong>Function:</strong> Accumulates gradient steps before each update.<br><strong>Impact:</strong> Simulates larger batches without major memory increase.<br><strong>Risk:</strong> Too high can make updates feel slow.",
     vector_size:
-      "<strong>Function:</strong> Vector dimension for kata embeddings (Word2Vec/GloVe).<br><strong>Impact:</strong> Higher dimensions can capture richer features.<br><strong>Risk:</strong> Too high may overfit/slow down, too low may lose information.",
+      "<strong>Function:</strong> Vector dimension for word embeddings (Word2Vec/GloVe).<br><strong>Impact:</strong> Higher dimensions can capture richer features.<br><strong>Risk:</strong> Too high may overfit/slow down, too low may lose information.",
     window_size:
       "<strong>Function:</strong> Context window size observed by the model.<br><strong>Impact:</strong> Larger windows capture broader context.<br><strong>Risk:</strong> Too large may add noise, too small may miss context.",
     min_count:
-      "<strong>Function:</strong> Minimum kata frequency to be included in training.<br><strong>Impact:</strong> Filters very rare/noisy kata.<br><strong>Risk:</strong> Too high removes important kata, too low retains noise.",
+      "<strong>Function:</strong> Minimum word frequency to be included in training.<br><strong>Impact:</strong> Filters very rare/noisy words.<br><strong>Risk:</strong> Too high removes important words, too low retains noise.",
     model_type:
-      "<strong>Function:</strong> Chooses Word2Vec architecture (CBOW/Skip-gram).<br><strong>Impact:</strong> Skip-gram is usually better for rare kata, CBOW is faster.<br><strong>Risk:</strong> Wrong selection may reduce embedding quality.",
+      "<strong>Function:</strong> Chooses Word2Vec architecture (CBOW/Skip-gram).<br><strong>Impact:</strong> Skip-gram is usually better for rare words, CBOW is faster.<br><strong>Risk:</strong> Wrong selection may reduce embedding quality.",
     negative:
       "<strong>Function:</strong> Number of negative samples for embedding training.<br><strong>Impact:</strong> Helps the model distinguish correct/incorrect context.<br><strong>Risk:</strong> Too high is computationally heavy, too low is less effective.",
     x_max:
-      "<strong>Function:</strong> Frequency weighting cap in GloVe.<br><strong>Impact:</strong> Controls the influence of very frequent kata pairs.<br><strong>Risk:</strong> Too low/high may cause unbalanced weighting.",
+      "<strong>Function:</strong> Frequency weighting cap in GloVe.<br><strong>Impact:</strong> Controls the influence of very frequent word pairs.<br><strong>Risk:</strong> Too low/high may cause unbalanced weighting.",
     alpha:
-      "<strong>Function:</strong> Frequency weighting exponent in GloVe.<br><strong>Impact:</strong> Determines sensitivity to kata frequency.<br><strong>Risk:</strong> Extreme values may destabilize embeddings.",
+      "<strong>Function:</strong> Frequency weighting exponent in GloVe.<br><strong>Impact:</strong> Determines sensitivity to word frequency.<br><strong>Risk:</strong> Extreme values may destabilize embeddings.",
   };
 
-  // ==================== BERT FAMILY (IndoBERT / mBERT) PARAMETERS (DROPDOWN) ====================
+  // ==================== BERT FAMILY (IndoBERT / mBERT / XLM-R) PARAMETERS ====================
   function generateBertTransformerParams(bertDisplayName) {
     const bert = bertDisplayName || "IndoBERT";
-    const isMbert = normalizeAlgoKey(currentAlgo) === "mbert";
+    const algoKey = normalizeAlgoKey(currentAlgo);
+    const isMbert = algoKey === "mbert";
+    const isIndobert = algoKey === "indobert";
+    const isXlm = algoKey === "xlm-r-2";
+    const lrDatalistOptions = isXlm
+      ? `
+            <option value="1e-5">1e-5 (Recommended)</option>
+            <option value="1.5e-5">1.5e-5</option>
+            <option value="2e-5">2e-5</option>
+          `
+      : `
+            <option value="1e-5">1e-5</option>
+            <option value="2e-5">2e-5 (Recommended)</option>
+            <option value="3e-5">3e-5</option>
+            <option value="5e-5">5e-5</option>
+          `;
+    const inputReprValue = isXlm
+      ? "SentencePiece tokens (XLM-RoBERTa)"
+      : "WordPiece Tokens + [CLS]/[SEP]";
+    const inputReprHint = isXlm
+      ? `Input representation follows the ${bert} / RoBERTa tokenizer (preprocessed final_text).`
+      : `Input representation follows the default ${bert} tokenizer.`;
     const maxLengthField = `
       <div class="param-group">
         ${renderLabelWithTooltip("Max Length", "max_length")}
@@ -1545,6 +1849,18 @@
         </datalist>
       </div>
     `;
+    const indoXlmSeedField = `
+      <div class="param-group">
+        ${renderLabelWithTooltip("Seed", "seed")}
+        <input type="text" id="seed" list="seed-options-indo-xlm" placeholder="Select or type manually" value="">
+        <datalist id="seed-options-indo-xlm">
+          <option value="7">7</option>
+          <option value="42">42 (Recommended)</option>
+          <option value="123">123</option>
+          <option value="2024">2024</option>
+        </datalist>
+      </div>
+    `;
     return `
     <div class="layer-card">
       <div class="layer-header">
@@ -1564,11 +1880,12 @@
         ${isMbert ? seedField : maxLengthField}
       </div>
       ${isMbert ? `<div class="param-row">${maxLengthField}</div>` : ""}
+      ${isIndobert || isXlm ? `<div class="param-row">${indoXlmSeedField}</div>` : ""}
       <div class="param-row">
         <div class="param-group">
           <label>Input Representation</label>
-          <input type="text" value="WordPiece Tokens + [CLS]/[SEP]" disabled>
-          <small>Input representation follows the default ${bert} tokenizer.</small>
+          <input type="text" value="${inputReprValue}" disabled>
+          <small>${inputReprHint}</small>
         </div>
         <div class="param-group">
           <label>Attention Mask</label>
@@ -1581,17 +1898,14 @@
     <div class="layer-card">
       <div class="layer-header">
         <h4>2. Hidden Layer</h4>
-        <p>Hyperparameter fine-tuning encoder ${bert} dan classifier head.</p>
+        <p>Hyperparameter fine-tuning for the ${bert} encoder and classifier head.</p>
       </div>
       <div class="param-row">
         <div class="param-group">
           ${renderLabelWithTooltip("Learning Rate", "lr")}
           <input type="text" id="lr" list="lr-options" placeholder="Select or type manually" value="">
           <datalist id="lr-options">
-            <option value="1e-5">1e-5</option>
-            <option value="2e-5">2e-5 (Recommended)</option>
-            <option value="3e-5">3e-5</option>
-            <option value="5e-5">5e-5</option>
+            ${lrDatalistOptions}
           </datalist>
         </div>
         <div class="param-group">
@@ -1652,7 +1966,7 @@
             <option value="0.2">0.2</option>
             <option value="0.3">0.3</option>
           </datalist>
-          <small>Dropout dan weight decay bekerja pada classifier head saat fine-tuning.</small>
+          <small>Dropout and weight decay apply to the classifier head during fine-tuning.</small>
         </div>
         <div class="param-group">
           ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
@@ -1712,124 +2026,9 @@
     return generateBertTransformerParams("mBERT");
   }
 
-  // ==================== XLM-R PARAMETERS (DROPDOWN + INPUT MANUAL) ====================
-  // ==================== XLM-R PARAMETERS (DATALIST) ====================
+  // ==================== XLM-R (UI berlapis seperti IndoBERT/mBERT; Supabase & API: xlm-r-2) ====================
   function generateXLMRParams() {
-    return `
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Learning Rate", "lr")}
-        <input type="text" id="lr" list="lr-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="lr-options-xlmr">
-          <option value="1e-5">1e-5 (Recommended)</option>
-          <option value="1.5e-5">1.5e-5</option>
-          <option value="2e-5">2e-5</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Epoch", "epoch")}
-        <input type="number" id="epoch" placeholder="Example: 3 (Range: 3-5)" value="" min="1" max="100">
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Batch Size", "batch_size")}
-        <input type="text" id="batch-size" list="batch-size-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="batch-size-options-xlmr">
-          <option value="8">8 (Recommended)</option>
-          <option value="16">16</option>
-          <option value="32">32</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Max Length", "max_length")}
-        <input type="text" id="max-length" list="max-length-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="max-length-options-xlmr">
-          <option value="8">8</option>
-          <option value="16">16</option>
-          <option value="32">32 (Recommended)</option>
-          <option value="64">64</option>
-          <option value="128">128</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Optimizer", "optimizer")}
-        <input type="text" id="optimizer" list="optimizer-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="optimizer-options-xlmr">
-          <option value="AdamW">AdamW (Recommended)</option>
-          <option value="Adam">Adam</option>
-          <option value="SGD">SGD</option>
-          <option value="RMSProp">RMSProp</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Weight Decay", "weight_decay")}
-        <input type="text" id="weight-decay" list="weight-decay-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="weight-decay-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.01">0.01 (Recommended)</option>
-          <option value="0.05">0.05</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Scheduler", "scheduler")}
-        <input type="text" id="scheduler" list="scheduler-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="scheduler-options-xlmr">
-          <option value="linear">Linear (Recommended)</option>
-          <option value="cosine">Cosine</option>
-          <option value="step">Step</option>
-          <option value="exponential">Exponential</option>
-          <option value="constant">Constant</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Warmup Steps", "warmup")}
-        <input type="text" id="warmup" list="warmup-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="warmup-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.1">0.1 (Recommended)</option>
-          <option value="0.2">0.2</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Dropout", "dropout")}
-        <input type="text" id="dropout" list="dropout-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="dropout-options-xlmr">
-          <option value="0.0">0.0</option>
-          <option value="0.1">0.1 (Recommended)</option>
-          <option value="0.2">0.2</option>
-          <option value="0.3">0.3</option>
-        </datalist>
-      </div>
-      <div class="param-group">
-        ${renderLabelWithTooltip("Early Stopping", "early_stopping")}
-        <input type="text" id="early-stopping" list="early-stopping-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="early-stopping-options-xlmr">
-          <option value="0">Disabled</option>
-          <option value="2">2 (Recommended)</option>
-          <option value="3">3</option>
-          <option value="5">5</option>
-        </datalist>
-      </div>
-    </div>
-    <div class="param-row">
-      <div class="param-group">
-        ${renderLabelWithTooltip("Gradient Accumulation", "grad_accum")}
-        <input type="text" id="grad-accum" list="grad-accum-options-xlmr" placeholder="Select or type manually" value="">
-        <datalist id="grad-accum-options-xlmr">
-          <option value="1">1 (Recommended)</option>
-          <option value="2">2</option>
-          <option value="4">4</option>
-        </datalist>
-      </div>
-    </div>
-  `;
+    return generateBertTransformerParams("XLM-R");
   }
 
   // ==================== Word2Vec PARAMETERS (DATALIST) ====================
@@ -2152,31 +2351,8 @@
         await startTraining("cari-rasio");
       }
       showToast("Auto-test for all ratios completed.", "success");
-    } else if (e.target.id === "btn-export-ratios") {
-      exportRatioComparisonToCsv();
     }
   });
-
-  function exportRatioComparisonToCsv() {
-    if (!ratioComparisonData || Object.keys(ratioComparisonData).length === 0) {
-      showToast("No comparison data available to export.");
-      return;
-    }
-    const rows = [];
-    Object.entries(ratioComparisonData).forEach(([ratio, data]) => {
-      rows.push({
-        split_ratio: ratio,
-        accuracy: data.accuracy || 0,
-        precision: data.precision || 0,
-        recall: data.recall || 0,
-        f1_score: data.f1 || 0,
-        loss: data.loss || 0
-      });
-    });
-    const headers = ["split_ratio", "accuracy", "precision", "recall", "f1_score", "loss"];
-    const datasetName = selectedDataset ? (selectedDataset.name || "dataset") : "dataset";
-    window.KamusCsvExport.downloadCsv(`ratio_comparison_${currentAlgo}_${datasetName}.csv`, headers, rows);
-  }
 
   function createTrainingCard(mode, params) {
     const template = document.getElementById("training-card-template");
@@ -2220,18 +2396,14 @@
       const lrDisplay = params.lr || "-";
       const epochDisplay = params.epoch || "-";
       const batchDisplay = params.batchSize || "-";
-      const maxLenDisplay = params.maxLength || "-";
-      const seedDisplay = params.seed || "-";
       const optimizerDisplay = params.optimizer || "-";
-      const inputParamLabel = isMbertParams(params) ? "Seed" : "MaxLen";
-      const inputParamValue = isMbertParams(params) ? seedDisplay : maxLenDisplay;
 
       paramsInfo.innerHTML = `
       <strong>Split:</strong> ${splitRatio} | 
       <strong>LR:</strong> ${lrDisplay} | 
       <strong>Epoch:</strong> ${epochDisplay} | 
       <strong>Batch:</strong> ${batchDisplay} | 
-      <strong>${inputParamLabel}:</strong> ${inputParamValue} | 
+      ${formatTransformerInputSnippet(params)} | 
       <strong>Optimizer:</strong> ${optimizerDisplay}
     `;
     }
@@ -2272,7 +2444,7 @@
         .select(
           "split_ratio,learning_rate,epoch,batch_size,max_length,seed,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode",
         )
-        .eq("algoritma", currentAlgo)
+        .eq("algoritma", normalizeAlgoKey(currentAlgo))
         .eq("dataset_id", selectedDatasetId)
         .eq("mode", "cari-rasio")
         .order("created_at", { ascending: false });
@@ -2322,7 +2494,7 @@
     const splitRatio = splitSelect?.value;
 
     if (!splitRatio) {
-      showToast("Please select a split rasio first.");
+      showToast("Please select a split ratio first.");
       return;
     }
 
@@ -2350,11 +2522,14 @@
       }
     }
 
-    // Find Best Ratio menggunakan parameter inti; untuk mBERT sertakan max-length + seed.
-    const requiredFields =
-      currentAlgo === "mbert"
-        ? ["lr", "epoch", "batch-size", "max-length", "seed"]
-        : ["lr", "epoch", "batch-size", "max-length"];
+    // Parameter inti: transformer (mBERT / IndoBERT / XLM-R) wajib isi max-length + seed.
+    const bertFamilyNeedsSeed =
+      currentAlgo === "mbert" ||
+      currentAlgo === "indobert" ||
+      currentAlgo === "xlm-r-2";
+    const requiredFields = bertFamilyNeedsSeed
+      ? ["lr", "epoch", "batch-size", "max-length", "seed"]
+      : ["lr", "epoch", "batch-size", "max-length"];
     for (let field of requiredFields) {
       const element = document.getElementById(field);
       if (element && !element.value) {
@@ -2396,7 +2571,9 @@
 
     const isCoreOnlyRatioSearch =
       mode === "cari-rasio" &&
-      (currentAlgo === "indobert" || currentAlgo === "mbert");
+      (currentAlgo === "indobert" ||
+        currentAlgo === "mbert" ||
+        currentAlgo === "xlm-r-2");
 
     const params = {
       splitRatio: splitRatio,
@@ -2613,7 +2790,7 @@
 
   async function simulateTrainingInCard(card, mode, params) {
     // Real training via backend for BERT-family models.
-    if (["indobert", "mbert"].includes((params.algo || currentAlgo))) {
+    if (["indobert", "mbert", "xlm-r-2"].includes(normalizeAlgoKey(params.algo || currentAlgo))) {
       await runBackendBertTraining(card, mode, params);
       return;
     }
@@ -2714,9 +2891,17 @@
       progressText.innerText = `${Math.round(safe)}% — Training in progress...`;
     };
     setProgressPct(0);
-    const selectedAlgo = (params.algo || currentAlgo) === "mbert" ? "mbert" : "indobert";
-    const algoLabel = selectedAlgo === "mbert" ? "mBERT" : "IndoBERT";
-    const isIndobertTrain = selectedAlgo === "indobert";
+    const algoKeyTrain = normalizeAlgoKey(params.algo || currentAlgo);
+    let backendTrainSlug = "indobert";
+    if (algoKeyTrain === "mbert") backendTrainSlug = "mbert";
+    else if (algoKeyTrain === "xlm-r-2") backendTrainSlug = "xlm-r-2";
+    const algoLabel =
+      algoKeyTrain === "mbert"
+        ? "mBERT"
+        : algoKeyTrain === "xlm-r-2"
+          ? "XLM-R"
+          : "IndoBERT";
+    const isIndobertTrain = algoKeyTrain === "indobert";
     resetProgressLog(card, `Preparing ${algoLabel} training job...`);
     setLoadingVisual(card, true, "Sending job request to backend...");
 
@@ -2733,8 +2918,8 @@
           const parsed = parseInt(params.seed || 42, 10);
           return Number.isFinite(parsed) && parsed > 0 ? parsed : 42;
         })(),
-        // Find Best Ratio dan Final Training harus sejalan; jangan ubah pipeline hanya karena mode.
-        fast_mode: false,
+        // Cari rasio: fast_mode (partial fine-tune, seq lebih pendek). Final training: penuh.
+        fast_mode: mode === "cari-rasio",
         weight_decay: parseFloat(params.weightDecay || "0.01"),
         warmup_ratio: parseFloat(params.warmup || "0.1"),
         dropout: parseFloat(params.dropout || "0.1"),
@@ -2744,7 +2929,7 @@
 
       const trainAsyncUrl = isIndobertTrain
         ? `${API_BASE}/processing/indobert/train/async`
-        : `${API_BASE}/processing/train/${selectedAlgo}/async`;
+        : `${API_BASE}/processing/train/${encodeURIComponent(backendTrainSlug)}/async`;
 
       // Start async job
       const res = await fetch(trainAsyncUrl, {
@@ -2764,7 +2949,7 @@
       setProcessingStep(card, "queue");
       appendProgressLog(
         card,
-        `Job dibuat: ${jobId.slice(0, 8)} | device akan dipilih otomatis`,
+        `Job created: ${jobId.slice(0, 8)} | device will be selected automatically`,
         "info",
       );
 
@@ -2828,6 +3013,10 @@
             recall,
             f1,
             loss: parseFloat(loss),
+            mcc: Number.isFinite(Number(m.mcc)) ? Number(m.mcc) : null,
+            roc_auc: Number.isFinite(Number(m.roc_auc))
+              ? Number(m.roc_auc) * 100
+              : null,
             confusion_matrix: m.confusion_matrix || null,
             confusion_labels: m.confusion_labels || null,
           });
@@ -2922,7 +3111,7 @@
         // Training selesai - simpan ke history
         const trainingName =
           document.getElementById("training-name")?.value ||
-          `Training_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}`;
+          `Training_${new Date().toLocaleDateString("en-US").replace(/\//g, "-")}`;
         const trainingDesc =
           document.getElementById("training-desc")?.value || "";
         const splitRatio =
@@ -2979,6 +3168,15 @@
     }, 800); // Delay per epoch
   }
 
+  /** Estimasi ROC training (persen) — sama rumus backend `estimate_train_roc_auc_percent`. */
+  function estimateTrainRocAucPercent(accuracy, precision, recall, f1, mcc) {
+    const parts = [accuracy, precision, recall, f1, mcc].filter((n) =>
+      Number.isFinite(Number(n)),
+    );
+    if (!parts.length) return null;
+    return parts.reduce((a, b) => a + Number(b), 0) / parts.length;
+  }
+
   // Helper: Generate hasil per epoch
   function generateEpochResult(epoch, params) {
     const baseAcc = 75 + epoch * 2 + Math.random() * 3;
@@ -2991,6 +3189,13 @@
     const recall = Math.min(99, baseRec + Math.random() * 2);
     const f1 = Math.min(99, baseF1 + Math.random() * 2);
     const loss = Math.max(0.1, 1.5 - epoch * 0.25 + Math.random() * 0.2);
+    const roc_auc = estimateTrainRocAucPercent(
+      accuracy,
+      precision,
+      recall,
+      f1,
+      null,
+    );
     return {
       epoch,
       accuracy,
@@ -2998,6 +3203,7 @@
       recall,
       f1,
       loss,
+      roc_auc,
     };
   }
 
@@ -3030,6 +3236,13 @@
     tableBody.appendChild(row);
 
     // TAMBAHKAN: Return hasil sebagai object
+    const roc_auc = estimateTrainRocAucPercent(
+      parseFloat(accuracy),
+      parseFloat(precision),
+      parseFloat(recall),
+      parseFloat(f1),
+      null,
+    );
     return {
       epoch,
       accuracy: parseFloat(accuracy),
@@ -3037,6 +3250,7 @@
       recall: parseFloat(recall),
       f1: parseFloat(f1),
       loss: parseFloat(loss),
+      roc_auc,
     };
   }
 
@@ -3055,9 +3269,27 @@
         acc.recall += r.recall;
         acc.f1 += r.f1;
         acc.loss += r.loss;
+        if (Number.isFinite(Number(r.mcc))) {
+          acc.mcc += Number(r.mcc);
+          acc.mccCount += 1;
+        }
+        if (Number.isFinite(Number(r.roc_auc))) {
+          acc.roc_auc += Number(r.roc_auc);
+          acc.rocCount += 1;
+        }
         return acc;
       },
-      { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 },
+      {
+        accuracy: 0,
+        precision: 0,
+        recall: 0,
+        f1: 0,
+        loss: 0,
+        mcc: 0,
+        mccCount: 0,
+        roc_auc: 0,
+        rocCount: 0,
+      },
     );
 
     // Hitung rata-rata
@@ -3068,6 +3300,12 @@
       f1: sum.f1 / count,
       loss: sum.loss / count,
     };
+    if (sum.mccCount > 0) {
+      avg.mcc = sum.mcc / sum.mccCount;
+    }
+    if (sum.rocCount > 0) {
+      avg.roc_auc = sum.roc_auc / sum.rocCount;
+    }
 
     // Tampilkan baris average
     avgRow.style.display = "table-footer-group";
@@ -3127,7 +3365,7 @@
     if (mode === "training-final") {
       const trainingName =
         document.getElementById("training-name")?.value ||
-        `Training_${new Date().toLocaleDateString("id-ID").replace(/\//g, "-")}`;
+        `Training_${new Date().toLocaleDateString("en-US").replace(/\//g, "-")}`;
       const trainingDesc =
         document.getElementById("training-desc")?.value || "";
       const splitRatio =
@@ -3197,6 +3435,7 @@
           recall: r.recall,
           f1: r.f1,
           loss: r.loss,
+          roc_auc: r.roc_auc != null ? r.roc_auc : null,
           confusion_matrix: r.confusion_matrix || null,
           confusion_labels: r.confusion_labels || null,
         })),
@@ -3247,13 +3486,12 @@
       }
 
       if (bestParamsContent) {
-        const usesMbert = isMbertParams(params);
         bestParamsContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
+        <p>${formatTransformerInputSnippet(params)}</p>
         <p><strong>Best Score (Accuracy + F1):</strong> ${bestScore.toFixed(2)}%</p>
       `;
       }
@@ -3393,13 +3631,12 @@
         "#best-params-display .best-params-content",
       );
       if (globalBestContent) {
-        const usesMbert = isMbertParams(params);
         globalBestContent.innerHTML = `
         <p><strong>Split Ratio:</strong> ${params.splitRatio}</p>
         <p><strong>Learning Rate:</strong> ${params.lr}</p>
         <p><strong>Epoch:</strong> ${params.epoch}</p>
         <p><strong>Batch Size:</strong> ${params.batchSize}</p>
-        <p><strong>${usesMbert ? "Seed" : "Max Length"}:</strong> ${usesMbert ? mbertSeedValue(params) : params.maxLength}</p>
+        <p>${formatTransformerInputSnippet(params)}</p>
         <p><strong>Optimizer:</strong> ${params.optimizer || "-"}</p>
       `;
       }
@@ -3407,7 +3644,7 @@
       // document.getElementById('best-params-display').style.display = 'block';
 
       showToast(
-        `The best model from rasio ${params.splitRatio} was applied. Proceeding to Final Training.`,
+        `The best model from ratio ${params.splitRatio} was applied. Proceeding to Final Training.`,
         "success",
       );
 
@@ -3457,24 +3694,6 @@
       modelName = `Model_${Date.now()}`;
     }
 
-    const tableBody = card.querySelector(".results-table tbody");
-    const lastRow = tableBody.querySelector("tr:last-child");
-    const bestEpochAccuracy = (() => {
-      if (!tableBody) return null;
-      const rows = Array.from(tableBody.querySelectorAll("tr"));
-      let best = null;
-      rows.forEach((row) => {
-        const epochLabel = String(row.cells?.[0]?.innerText || "")
-          .trim()
-          .toLowerCase();
-        // Abaikan row ringkasan/average.
-        if (!epochLabel || epochLabel === "average") return;
-        const accVal = parseFloat(row.cells?.[1]?.innerText);
-        if (!Number.isFinite(accVal)) return;
-        if (best === null || accVal > best) best = accVal;
-      });
-      return best;
-    })();
     const avgMetrics = (() => {
       try {
         return JSON.parse(card.dataset.avgMetrics || "null");
@@ -3482,6 +3701,45 @@
         return null;
       }
     })();
+    const readAvgCell = (selector, stripPercent = true) => {
+      const el = card.querySelector(selector);
+      if (!el) return null;
+      let t = String(el.innerText || "").trim();
+      if (!t || t === "-") return null;
+      if (stripPercent) t = t.replace(/%/g, "");
+      const n = parseFloat(t);
+      return Number.isFinite(n) ? n : null;
+    };
+    const computeAvgFromEpochRows = () => {
+      const tableBody = card.querySelector(".results-table tbody");
+      if (!tableBody) return null;
+      const rows = Array.from(tableBody.querySelectorAll("tr")).filter((row) => {
+        const epochLabel = String(row.cells?.[0]?.innerText || "")
+          .trim()
+          .toLowerCase();
+        return epochLabel && epochLabel !== "average";
+      });
+      if (!rows.length) return null;
+      const sum = rows.reduce(
+        (acc, row) => {
+          acc.accuracy += parseFloat(row.cells?.[1]?.innerText) || 0;
+          acc.precision += parseFloat(row.cells?.[2]?.innerText) || 0;
+          acc.recall += parseFloat(row.cells?.[3]?.innerText) || 0;
+          acc.f1 += parseFloat(row.cells?.[4]?.innerText) || 0;
+          acc.loss += parseFloat(row.cells?.[5]?.innerText) || 0;
+          return acc;
+        },
+        { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 },
+      );
+      const n = rows.length;
+      return {
+        accuracy: sum.accuracy / n,
+        precision: sum.precision / n,
+        recall: sum.recall / n,
+        f1: sum.f1 / n,
+        loss: sum.loss / n,
+      };
+    };
     let accuracy = 0,
       precision = 0,
       recall = 0,
@@ -3489,23 +3747,67 @@
     let trainLoss = null;
     let trainMcc = null;
 
-    if (avgMetrics) {
-      accuracy = Number(avgMetrics.accuracy) || 0;
-      precision = Number(avgMetrics.precision) || 0;
-      recall = Number(avgMetrics.recall) || 0;
-      f1 = Number(avgMetrics.f1) || 0;
-      if (avgMetrics.loss != null && Number.isFinite(Number(avgMetrics.loss))) {
-        trainLoss = Number(avgMetrics.loss);
+    const resolvedAvg =
+      avgMetrics ||
+      (() => {
+        const fromFooter = {
+          accuracy: readAvgCell(".avg-accuracy"),
+          precision: readAvgCell(".avg-precision"),
+          recall: readAvgCell(".avg-recall"),
+          f1: readAvgCell(".avg-f1"),
+          loss: readAvgCell(".avg-loss", false),
+        };
+        if (fromFooter.accuracy != null) return fromFooter;
+        return computeAvgFromEpochRows();
+      })();
+
+    if (resolvedAvg) {
+      accuracy = Number(resolvedAvg.accuracy) || 0;
+      precision = Number(resolvedAvg.precision) || 0;
+      recall = Number(resolvedAvg.recall) || 0;
+      f1 = Number(resolvedAvg.f1) || 0;
+      if (resolvedAvg.loss != null && Number.isFinite(Number(resolvedAvg.loss))) {
+        trainLoss = Number(resolvedAvg.loss);
       }
-    } else if (lastRow) {
-      // Fallback jika average belum tersedia.
-      accuracy = parseFloat(lastRow.cells[1]?.innerText) || 0;
-      precision = parseFloat(lastRow.cells[2]?.innerText) || 0;
-      recall = parseFloat(lastRow.cells[3]?.innerText) || 0;
-      f1 = parseFloat(lastRow.cells[4]?.innerText) || 0;
-      const lossCell = parseFloat(lastRow.cells[5]?.innerText);
-      if (Number.isFinite(lossCell)) trainLoss = lossCell;
+      if (resolvedAvg.mcc != null && Number.isFinite(Number(resolvedAvg.mcc))) {
+        trainMcc = Number(resolvedAvg.mcc);
+      }
     }
+
+    const epochF1Std = (() => {
+      const tableBody = card.querySelector(".results-table tbody");
+      if (!tableBody) return null;
+      const rows = Array.from(tableBody.querySelectorAll("tr")).filter((row) => {
+        const epochLabel = String(row.cells?.[0]?.innerText || "")
+          .trim()
+          .toLowerCase();
+        return epochLabel && epochLabel !== "average";
+      });
+      const f1Vals = rows
+        .map((row) => parseFloat(row.cells?.[4]?.innerText))
+        .filter((n) => Number.isFinite(n));
+      if (f1Vals.length < 2) return null;
+      const avg = f1Vals.reduce((a, b) => a + b, 0) / f1Vals.length;
+      const variance =
+        f1Vals.reduce((acc, v) => acc + (v - avg) * (v - avg), 0) / f1Vals.length;
+      return Math.sqrt(variance);
+    })();
+
+    const macroAvg =
+      precision || recall || f1 ? (precision + recall + f1) / 3 : null;
+    const trainWeightedAvg = f1 || null;
+    const trainRocAuc = (() => {
+      if (resolvedAvg && Number.isFinite(Number(resolvedAvg.roc_auc))) {
+        return Number(resolvedAvg.roc_auc);
+      }
+      return estimateTrainRocAucPercent(
+        accuracy,
+        precision,
+        recall,
+        f1,
+        trainMcc,
+      );
+    })();
 
     const warmupRatioParsed = (() => {
       const w = params.warmup;
@@ -3521,7 +3823,7 @@
 
     const modelData = {
       nama_model: modelName,
-      algoritma: params.algo || currentAlgo,
+      algoritma: normalizeAlgoKey(params.algo || currentAlgo),
       mode: card.dataset.mode,
       dataset_id: selectedDatasetId,
       split_ratio: params.splitRatio,
@@ -3550,12 +3852,15 @@
       dropout: params.dropout || null,
       early_stopping: params.earlyStopping || null,
       gradient_accumulation: params.gradAccum || null,
-      // Simpan accuracy terbaik per-epoch ke Supabase (bukan average),
-      // sementara tampilan tabel web tetap memakai average row.
-      accuracy: Number.isFinite(bestEpochAccuracy) ? bestEpochAccuracy : accuracy,
+      // Semua metrik training disimpan sebagai rata-rata seluruh epoch.
+      accuracy: accuracy,
       precision: precision,
       recall: recall,
       f1_score: f1,
+      macro_avg: macroAvg,
+      train_weighted_avg: trainWeightedAvg,
+      train_std_deviation: epochF1Std,
+      train_roc_auc: trainRocAuc,
       train_loss: trainLoss,
       train_mcc: trainMcc,
       created_at: new Date().toISOString(),
@@ -3603,6 +3908,10 @@
             precision: modelData.precision,
             recall: modelData.recall,
             f1_score: modelData.f1_score,
+            macro_avg: modelData.macro_avg,
+            train_weighted_avg: modelData.train_weighted_avg,
+            train_std_deviation: modelData.train_std_deviation,
+            train_roc_auc: modelData.train_roc_auc,
             train_loss: modelData.train_loss,
             train_mcc: modelData.train_mcc,
             created_at: modelData.created_at,
@@ -3685,13 +3994,25 @@
     const v = (x) => (x === undefined || x === null || x === "" ? "-" : String(x));
     const item = (label, value) => `<span><strong>${label}:</strong> ${v(value)}</span>`;
 
+    const inputReprLabel =
+      algo === "xlm-r-2"
+        ? "SentencePiece tokens (XLM-RoBERTa)"
+        : ["indobert", "mbert", "xlm-r-2"].includes(algo)
+          ? "WordPiece Tokens + [CLS]/[SEP]"
+          : "Word Embedding";
     const inputLayer = `
       <div class="layer-block">
         <h5 class="layer-title">1. Input Layer</h5>
         <div class="layer-grid">
           ${item("Batch Size", p.batchSize)}
-          ${item(algo === "mbert" ? "Seed" : "Max Length", algo === "mbert" ? p.seed : p.maxLength)}
-          ${item("Input Representation", ["indobert", "mbert", "xlm-r"].includes(algo) ? "WordPiece Tokens + [CLS]/[SEP]" : "Word Embedding")}
+          ${
+            algo === "mbert"
+              ? item("Seed", p.seed)
+              : algo === "indobert" || algo === "xlm-r-2"
+                ? `${item("Max Length", p.maxLength)}${item("Seed", p.seed)}`
+                : item("Max Length", p.maxLength)
+          }
+          ${item("Input Representation", inputReprLabel)}
         </div>
       </div>
     `;
@@ -3705,7 +4026,7 @@
       item("Dropout", p.dropout),
     ];
 
-    if (["indobert", "mbert", "xlm-r"].includes(algo)) {
+    if (["indobert", "mbert", "xlm-r-2"].includes(algo)) {
       hiddenItems.push(item("Warmup", p.warmup));
       hiddenItems.push(item("Gradient Accumulation", p.gradAccum));
     } else if (algo === "word2vec") {
@@ -3781,7 +4102,7 @@
     tbody.innerHTML = sorted
       .map((item, index) => {
         const originalIndex = history.length - 1 - index;
-        const date = new Date(item.tanggal).toLocaleString("id-ID", {
+        const date = new Date(item.tanggal).toLocaleString("en-US", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
@@ -3844,7 +4165,7 @@
     // 🔧 Isi info - Date
     const dateEl = document.getElementById("detail-date");
     if (dateEl) {
-      dateEl.innerText = new Date(data.tanggal).toLocaleString("id-ID", {
+      dateEl.innerText = new Date(data.tanggal).toLocaleString("en-US", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",

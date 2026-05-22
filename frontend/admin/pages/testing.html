@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -74,10 +74,10 @@
                                 <div class="helper-text">Tip: use the same dataset used during training for more relevant testing results.</div>
                             </div>
 
-                            <!-- Panel Input Kata -->
+                            <!-- Word input panel -->
                             <div class="ds-panel" id="panelInput">
-                                <input type="text" id="inputKata" class="input-text" placeholder="Example: nda pigi torang">
-                                <span class="kata-hint" id="kataHint">0 / 2 words</span>
+                                <input type="text" id="inputKata" class="input-text" placeholder="Example: torang" maxlength="64">
+                                <span class="kata-hint" id="kataHint">Enter one word (no spaces)</span>
 
                                 <button class="btn-test-kata" id="btnTestKata" onclick="testKata()" disabled>Test Word</button>
 
@@ -126,7 +126,7 @@
                         <div class="ds-header">
                             <div>
                                 <h3 id="dsTitle">No dataset selected yet</h3>
-                                <p class="ds-subtitle" id="dsSubtitle">Upload a file or input kata to start</p>
+                                <p class="ds-subtitle" id="dsSubtitle">Upload a file or enter a word to start</p>
                             </div>
                             <span class="status-badge idle" id="statusBadge">
                                 <span class="dot"></span>
@@ -147,7 +147,7 @@
 
                         <div class="ds-divider"></div>
 
-                        <p class="ds-label">Kata Distribution by Category</p>
+                        <p class="ds-label">Word Distribution by Category</p>
                         <div class="ds-kategori">
                             <div class="kat-item verb">
                                 <div class="kat-count" id="katVerb">0</div>
@@ -226,7 +226,7 @@
                             <span>Dataset: <b id="sumDataset">—</b></span>
                             <span>Model: <b id="sumModel">—</b></span>
                             <span>Direction: <b id="sumDir">—</b></span>
-                            <span>Kata: <b id="sumKata">—</b></span>
+                            <span>Words: <b id="sumKata">—</b></span>
                         </div>
                     </div>
 
@@ -280,6 +280,7 @@
     <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <script src="../../animations.js"></script>
+    <script src="../js/metric-format.js"></script>
     <script src="../js/testing.js"></script>
 
 </body>

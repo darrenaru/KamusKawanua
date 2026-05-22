@@ -28,10 +28,46 @@ document.addEventListener("DOMContentLoaded", updateLanguageUI);
 
 
 // ==============================
+// SINGLE-WORD SEARCH (no spaces)
+// ==============================
+function parseSingleWordQuery(raw) {
+    const t = String(raw || "").trim();
+    if (!t) return { ok: false, empty: true };
+    if (/\s/.test(t)) return { ok: false, empty: false };
+    return { ok: true, word: t };
+}
+
+function bindSingleWordInput(inputEl) {
+    if (!inputEl) return;
+    inputEl.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Spacebar") e.preventDefault();
+    });
+    inputEl.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData("text");
+        const first = String(text || "").trim().split(/\s+/)[0] || "";
+        inputEl.value = first;
+        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+}
+
+function showSearchError(msg) {
+    const container = document.getElementById("results");
+    if (!container) return;
+    container.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "search-error-msg";
+    p.textContent = msg;
+    container.appendChild(p);
+}
+
+// ==============================
 // ENTER KEY SUPPORT
 // ==============================
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("query").addEventListener("keypress", function(e) {
+    const queryInput = document.getElementById("query");
+    bindSingleWordInput(queryInput);
+    queryInput.addEventListener("keypress", function(e) {
         if (e.key === "Enter") {
             search();
         }
@@ -63,9 +99,13 @@ document.addEventListener("DOMContentLoaded", () => {
 // SEARCH FUNCTION (UPDATED)
 // ==============================
 async function search() {
-    const query = document.getElementById("query").value.trim();
-
-    if (!query) return;
+    const parsed = parseSingleWordQuery(document.getElementById("query").value);
+    if (!parsed.ok) {
+        if (parsed.empty) return;
+        showSearchError("Please enter one word only (no spaces).");
+        return;
+    }
+    const query = parsed.word;
 
     try {
         setSearchLoading(true);
@@ -108,15 +148,18 @@ function formatWordTypeLabel(raw) {
         .trim()
         .replace(/\s+/g, " ");
     const map = {
-        "kata kerja": "Verb / Kata kerja",
-        kerja: "Verb / Kata kerja",
-        verb: "Verb / Kata kerja",
-        "kata benda": "Noun / Kata benda",
-        benda: "Noun / Kata benda",
-        noun: "Noun / Kata benda",
-        "kata sifat": "Adjective / Kata sifat",
-        sifat: "Adjective / Kata sifat",
-        adjective: "Adjective / Kata sifat",
+        "kata kerja": "Verb",
+        kerja: "Verb",
+        verb: "Verb",
+        "kata benda": "Noun",
+        benda: "Noun",
+        noun: "Noun",
+        "kata sifat": "Adjective",
+        sifat: "Adjective",
+        adjective: "Adjective",
+        "kata keterangan": "Adverb",
+        keterangan: "Adverb",
+        adverb: "Adverb",
     };
     return map[v] || String(raw || "");
 }
@@ -359,6 +402,14 @@ function buildConsensusStripHtml(data) {
 function displayResults(data) {
     const container = document.getElementById("results");
     container.innerHTML = "";
+
+    if (data.message && (!data.results || data.results.length === 0)) {
+        const p = document.createElement("p");
+        p.className = "search-error-msg";
+        p.textContent = data.message;
+        container.appendChild(p);
+        return;
+    }
 
     mountCollapsibleModelInsights(container, data);
 

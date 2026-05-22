@@ -32,7 +32,10 @@
         <!-- MAIN -->
         <main class="main" data-aos="fade-up" data-aos-delay="40">
 
-            <h1 class="title" data-aos="fade-up" data-aos-delay="80">MODEL PERFORMANCE EVALUATION</h1>
+            <div class="eval-page-toolbar" data-aos="fade-up" data-aos-delay="80">
+                <h1 class="title">MODEL PERFORMANCE EVALUATION</h1>
+                <button type="button" id="btn-export-evaluasi-xlsx" class="eval-export-xlsx-btn">Export Excel</button>
+            </div>
 
             <div class="eval-wrapper">
                 <div class="section-card">
@@ -77,40 +80,16 @@
                     </div>
                 </div>
 
-                <!-- ===== SECTION 2: Testing Metrics ===== -->
-                <div class="section-card" id="testing-metrics-card">
-                    <div class="section-card-header">
-                        <div class="section-card-icon">
-                            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                        </div>
-                        <span class="section-card-title">Testing Metrics Per Model</span>
-                    </div>
-                    <div class="section-card-body">
-                        <div id="testing-best-info" class="best-info-text"></div>
-                        <div style="overflow-x: auto;">
-                            <table class="data-table">
-                                <thead id="testing-metrics-thead">
-                                </thead>
-                                <tbody id="testing-metrics-tbody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ===== SECTION 3: Best Metrics Comparison ===== -->
+                <!-- ===== SECTION 2: Best Model Training vs Testing ===== -->
                 <div class="section-card" id="fitting-summary-card">
                     <div class="section-card-header">
                         <div class="section-card-icon">
                             <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M8 17V7"/><path d="M12 17v-5"/><path d="M16 17V9"/></svg>
                         </div>
-                        <span class="section-card-title">Best Metrics Comparison: Training vs Testing</span>
+                        <span class="section-card-title">Best Model: Training vs Testing Comparison</span>
                     </div>
                     <div class="section-card-body">
-                        <div class="filter-row">
-                            <label for="fitting-model-select">Select model to compare:</label>
-                            <select id="fitting-model-select"></select>
-                        </div>
+                        <div id="fitting-best-info" class="best-info-text"></div>
                         <div style="overflow-x: auto;">
                             <table class="data-table summary-table">
                                 <thead id="fitting-summary-thead">
@@ -248,6 +227,8 @@
             <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
             <script src="../../animations.js"></script>
+            <script src="../js/metric-format.js"></script>
+            <script src="../js/kamus-excel.js"></script>
             <script src="../js/evaluasi.js"></script>
         </main>
 

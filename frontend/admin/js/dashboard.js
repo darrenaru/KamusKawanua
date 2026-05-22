@@ -23,7 +23,9 @@ const nextBtn = document.getElementById("nextBtn");
 const labelMap = {
     mbert: "mBERT",
     indobert: "IndoBERT",
+    "xlm-r-2": "XLM-R",
     xlmr: "XLM-R",
+    "xlm-r": "XLM-R",
     word2vec: "Word2Vec",
     glove: "GloVe"
 };
@@ -63,8 +65,20 @@ buttons.forEach(btn => {
 // INIT LOAD
 // ==============================
 
+function normalizeStoredAlgorithmSelection(raw) {
+    const k = String(raw || "").toLowerCase().trim().replace(/_/g, "-");
+    if (k === "xlmr" || k === "xlm-r") return "xlm-r-2";
+    return k;
+}
+
 window.onload = () => {
-    const saved = localStorage.getItem("selectedAlgorithm");
+    let saved = normalizeStoredAlgorithmSelection(
+        localStorage.getItem("selectedAlgorithm")
+    );
+    if (saved === "xlmr" || saved === "xlm-r") {
+        saved = "xlm-r-2";
+        localStorage.setItem("selectedAlgorithm", saved);
+    }
 
     if (saved) {
         applySelection(saved);

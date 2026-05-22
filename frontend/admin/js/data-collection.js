@@ -252,7 +252,7 @@ async function downloadDatasetCsv(datasetId, datasetName) {
         );
     } catch (err) {
         console.error(err);
-        alert("Gagal mengunduh CSV: " + (err.message || err));
+        alert("Failed to download CSV: " + (err.message || err));
     }
 }
 
