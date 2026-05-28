@@ -416,7 +416,7 @@ def train_indobert_softmax(
 
         indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID
         xlm_fast = fast_mode and (
-            algorithm == "xlm-r-2" or _is_xlm_roberta_model_id(base_model_id)
+            algorithm in ("xlm-r", "xlm-r-2") or _is_xlm_roberta_model_id(base_model_id)
         )
         if indobert_fast:
             _apply_partial_transformer_unfreeze(model, "bert")
@@ -600,7 +600,7 @@ def train_indobert_softmax(
             if base_model_id == MBERT_MODEL_ID:
                 algo_out = "mbert"
             elif _is_xlm_roberta_model_id(base_model_id):
-                algo_out = "xlm-r-2"
+                algo_out = "xlm-r"
             else:
                 algo_out = "indobert"
 
@@ -1017,7 +1017,7 @@ def train_xlm_r_softmax(
             on_epoch_end=on_epoch_end,
             base_model_id=XLMR_MODEL_ID,
             fast_mode=fast_mode,
-            algorithm="xlm-r-2",
+            algorithm="xlm-r",
             text_extractor=_build_text_with_preprocessed_fallback,
         )
     finally:

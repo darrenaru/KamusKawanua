@@ -13,13 +13,13 @@ let activePreprocessAlgorithm = "indobert";
 function normalizeAlgorithmForPreprocess(raw) {
     const value = String(raw || "").toLowerCase().trim();
     if (value === "indobert" || value === "indo-bert") return "indobert";
-    if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r-2";
+    if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r";
     return "mbert";
 }
 
 function preprocessTokenizerLabel(algo) {
     if (algo === "indobert") return "IndoBERT";
-    if (algo === "xlm-r-2") return "XLM-R";
+    if (algo === "xlm-r") return "XLM-R";
     return "mBERT";
 }
 
@@ -172,8 +172,11 @@ async function fetchAllRawData(datasetId) {
     while (true) {
         const { data, error } = await supabaseClient
             .from("raw_data")
-            .select("*")
+            .select(
+                "id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia",
+            )
             .eq("dataset_id", datasetId)
+            .order("id_kata", { ascending: true })
             .range(from, from + limit - 1);
 
         if (error) throw error;
@@ -184,6 +187,57 @@ async function fetchAllRawData(datasetId) {
     }
 
     return allData;
+}
+
+async function fetchPreprocessedCleanMap(datasetId) {
+    const map = new Map();
+    let from = 0;
+    const limit = 1000;
+
+    while (true) {
+        const { data, error } = await supabaseClient
+            .from("preprocessed_data")
+            .select("id_kata, manado_clean, indonesia_clean")
+            .eq("dataset_id", datasetId)
+            .order("id_kata", { ascending: true })
+            .range(from, from + limit - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        data.forEach((row) => {
+            const key = String(row.id_kata || "").trim();
+            if (key) map.set(key, row);
+        });
+        from += limit;
+    }
+
+    return map;
+}
+
+function normalizeComparisonToken(value) {
+    return String(value == null ? "" : value)
+        .trim()
+        .toLowerCase();
+}
+
+function buildDataComparisonRows(rawRows, cleanMap) {
+    return (rawRows || []).map((raw) => {
+        const idKata = String(raw.id_kata || "").trim();
+        const clean = cleanMap.get(idKata) || {};
+        const manado = raw.manado;
+        const indonesia = raw.indonesia;
+        return {
+            id_kata: idKata || "-",
+            manado,
+            indonesia,
+            manado_clean: clean.manado_clean != null ? clean.manado_clean : null,
+            indonesia_clean: clean.indonesia_clean != null ? clean.indonesia_clean : null,
+            same_pair:
+                normalizeComparisonToken(manado) !== "" &&
+                normalizeComparisonToken(manado) === normalizeComparisonToken(indonesia),
+        };
+    });
 }
 
 // ==============================
@@ -244,38 +298,60 @@ async function openDataComparisonModal() {
     if (status) status.innerText = "Loading data...";
 
     try {
-        const data = await window.KamusCsvExport.fetchAllSupabaseRows(
-            supabaseClient,
-            "preprocessed_data",
-            selectedDataset.id,
-        );
-
-        if (!data || data.length === 0) {
-            if (status) status.innerText = "No preprocessed data found.";
+        const rawRows = await fetchAllRawData(selectedDataset.id);
+        if (!rawRows || rawRows.length === 0) {
+            if (status) status.innerText = "No raw data found for this dataset.";
             return;
         }
 
-        const displayData = data.slice(0, DATA_COMPARISON_PREVIEW_LIMIT);
-        const total = data.length;
+        const cleanMap = await fetchPreprocessedCleanMap(selectedDataset.id);
+        const merged = buildDataComparisonRows(rawRows, cleanMap);
+        const total = merged.length;
+        const displayData = merged.slice(0, DATA_COMPARISON_PREVIEW_LIMIT);
+        const sameInPreview = displayData.filter((r) => r.same_pair).length;
+        const missingClean = displayData.filter(
+            (r) => r.manado_clean == null && r.indonesia_clean == null,
+        ).length;
 
         if (status) {
-            status.innerText =
+            let msg =
                 total > DATA_COMPARISON_PREVIEW_LIMIT
-                    ? `Showing first ${DATA_COMPARISON_PREVIEW_LIMIT} of ${total} rows. Download CSV for the full dataset.`
-                    : `Showing ${total} row${total === 1 ? "" : "s"}.`;
+                    ? `Showing first ${DATA_COMPARISON_PREVIEW_LIMIT} of ${total} rows (sorted by id_kata). `
+                    : `Showing ${total} row${total === 1 ? "" : "s"}. `;
+            msg +=
+                "Original columns come from raw_data; cleaned columns from preprocessed_data. ";
+            if (sameInPreview > 0) {
+                msg += `${sameInPreview} row(s) in this preview have the same Manado and Indonesia word (often loanwords or shared spelling in the source CSV). `;
+            }
+            if (missingClean > 0) {
+                msg += `${missingClean} row(s) in this preview have no cleaned values yet — run preprocessing first. `;
+            }
+            if (total > DATA_COMPARISON_PREVIEW_LIMIT) {
+                msg += "Download CSV for the full dataset.";
+            }
+            status.innerText = msg.trim();
         }
 
         if (tbody) {
             tbody.innerHTML = displayData
-                .map(
-                    (row) =>
-                        "<tr>" +
+                .map((row) => {
+                    const rowClass = row.same_pair ? ' class="comparison-row-same"' : "";
+                    const manadoClean =
+                        row.manado_clean != null ? row.manado_clean : "—";
+                    const indonesiaClean =
+                        row.indonesia_clean != null ? row.indonesia_clean : "—";
+                    return (
+                        "<tr" +
+                        rowClass +
+                        ">" +
+                        `<td>${escapeComparisonCell(row.id_kata)}</td>` +
                         `<td>${escapeComparisonCell(row.manado)}</td>` +
-                        `<td>${escapeComparisonCell(row.manado_clean)}</td>` +
+                        `<td>${escapeComparisonCell(manadoClean)}</td>` +
                         `<td>${escapeComparisonCell(row.indonesia)}</td>` +
-                        `<td>${escapeComparisonCell(row.indonesia_clean)}</td>` +
-                        "</tr>",
-                )
+                        `<td>${escapeComparisonCell(indonesiaClean)}</td>` +
+                        "</tr>"
+                    );
+                })
                 .join("");
         }
     } catch (err) {

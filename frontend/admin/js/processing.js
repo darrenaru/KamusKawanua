@@ -46,10 +46,10 @@
     return String(value || "").trim().toLowerCase().replace(/_/g, "-");
   }
 
-  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r-2. */
+  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r. */
   function normalizeStoredAlgorithmSelection(raw) {
     const k = normalizeAlgoKey(raw);
-    if (k === "xlmr" || k === "xlm-r") return "xlm-r-2";
+    if (k === "xlmr" || k === "xlm-r" || k === "xlm-r-2") return "xlm-r";
     return k;
   }
 
@@ -108,7 +108,7 @@
   /** IndoBERT / XLM-R: satu nilai seed (tanpa mode multi seperti mBERT). */
   function isIndobertOrXlmParams(params = {}) {
     const k = normalizeAlgoKey(params?.algo || currentAlgo);
-    return k === "indobert" || k === "xlm-r-2";
+    return k === "indobert" || k === "xlm-r";
   }
 
   function formatTransformerInputSnippet(params = {}) {
@@ -890,6 +890,10 @@
     initRatioManager();
     loadPreprocessedDatasets();
 
+    if (typeof window.kamusInitXlmGeneration === "function") {
+      void window.kamusInitXlmGeneration();
+    }
+
     const preferredAlgo = normalizeStoredAlgorithmSelection(
       localStorage.getItem("selectedAlgorithm") || "",
     );
@@ -933,6 +937,10 @@
       applyRatioSearchContextState();
       refreshAdminPageAOS();
     });
+
+    if (isXlmAlgoKey(currentAlgo)) {
+      void syncLocalSavedXlmModelsToSupabase({ silent: false });
+    }
 
     const datasetList = document.getElementById("dataset-list");
     if (datasetList) {
@@ -1177,6 +1185,9 @@
     }
 
     applyRatioSearchContextState({ rerenderParams: true });
+    if (isXlmAlgoKey(currentAlgo)) {
+      void syncLocalSavedXlmModelsToSupabase({ silent: true });
+    }
   }
 
   function onModeChange(e) {
@@ -1334,7 +1345,7 @@
     const a = String(algo || "").toLowerCase().trim();
     if (a === "indobert") return "IndoBERT";
     if (a === "mbert") return "mBERT";
-    if (a === "xlm-r-2") return "XLM-R";
+    if (a === "xlm-r") return "XLM-R";
     if (a === "word2vec") return "Word2Vec";
     if (a === "glove") return "GloVe";
     return a || "selected algorithm";
@@ -1378,11 +1389,14 @@
 
     list.innerHTML = `<li style="opacity:.7;">Loading models...</li>`;
 
-    const { data, error } = await supabaseClient
-      .from("models")
-      .select("*")
-      .eq("algoritma", normalizeAlgoKey(currentAlgo))
-      .order("created_at", { ascending: false });
+    let query = supabaseClient.from("models").select("*");
+    const algoKey = normalizeAlgoKey(currentAlgo);
+    if (algoKey === "xlm-r") {
+      query = query.in("algoritma", ["xlm-r", "xlm-r-2", "xlmr"]);
+    } else {
+      query = query.eq("algoritma", algoKey);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) {
       console.error(error);
@@ -1390,7 +1404,12 @@
       return;
     }
 
-    if (!data || data.length === 0) {
+    let models = data || [];
+    if (algoKey === "xlm-r" && typeof window.kamusFilterXlmModelRows === "function") {
+      models = window.kamusFilterXlmModelRows(models);
+    }
+
+    if (!models || models.length === 0) {
       list.innerHTML = `<li style="opacity:.7;">No saved ${getAlgorithmLabel(currentAlgo)} model yet</li>`;
       showToast(`No saved ${getAlgorithmLabel(currentAlgo)} model yet. Create a new model first.`);
       setModelSelectionStatus(
@@ -1401,10 +1420,10 @@
     }
 
     setModelSelectionStatus(
-      `${data.length} saved ${getAlgorithmLabel(currentAlgo)} model(s) found. Pick one and click Select.`,
+      `${models.length} saved ${getAlgorithmLabel(currentAlgo)} model(s) found. Pick one and click Select.`,
     );
 
-    list.innerHTML = data
+    list.innerHTML = models
       .map((m) => {
         const modelName = m.nama_model || `Model_${m.id}`;
         const warmupForUi =
@@ -1469,7 +1488,7 @@
       mode === "cari-rasio" &&
       (currentAlgo === "indobert" ||
         currentAlgo === "mbert" ||
-        currentAlgo === "xlm-r-2");
+        currentAlgo === "xlm-r");
 
     if (useCoreOnlyForRatio) {
       html += generateFindBestRatioCoreParams(currentAlgo);
@@ -1481,7 +1500,7 @@
         case "mbert":
           html += generateMBERTParams();
           break;
-        case "xlm-r-2":
+        case "xlm-r":
           html += generateXLMRParams();
           break;
         case "glove":
@@ -1637,9 +1656,9 @@
   function generateFindBestRatioCoreParams(algo) {
     const a = normalizeAlgoKey(algo);
     const isMbert = a === "mbert";
-    const isIndoXlm = a === "indobert" || a === "xlm-r-2";
+    const isIndoXlm = a === "indobert" || a === "xlm-r";
     const lrOptions =
-      a === "xlm-r-2"
+      a === "xlm-r"
         ? `
           <option value="1e-5">1e-5 (Recommended)</option>
           <option value="1.5e-5">1.5e-5</option>
@@ -1804,7 +1823,7 @@
     const algoKey = normalizeAlgoKey(currentAlgo);
     const isMbert = algoKey === "mbert";
     const isIndobert = algoKey === "indobert";
-    const isXlm = algoKey === "xlm-r-2";
+    const isXlm = algoKey === "xlm-r";
     const lrDatalistOptions = isXlm
       ? `
             <option value="1e-5">1e-5 (Recommended)</option>
@@ -2026,7 +2045,7 @@
     return generateBertTransformerParams("mBERT");
   }
 
-  // ==================== XLM-R (UI berlapis seperti IndoBERT/mBERT; Supabase & API: xlm-r-2) ====================
+  // ==================== XLM-R (UI berlapis seperti IndoBERT/mBERT; Supabase & API: xlm-r) ====================
   function generateXLMRParams() {
     return generateBertTransformerParams("XLM-R");
   }
@@ -2439,18 +2458,32 @@
     if (!currentAlgo || !selectedDatasetId) return false;
 
     try {
-      const { data, error } = await supabaseClient
+      const algoKeyCtx = normalizeAlgoKey(currentAlgo);
+      let ratioQuery = supabaseClient
         .from("models")
         .select(
-          "split_ratio,learning_rate,epoch,batch_size,max_length,seed,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode",
+          "split_ratio,learning_rate,epoch,batch_size,max_length,seed,optimizer,weight_decay,scheduler,warmup_ratio,dropout,early_stopping,gradient_accumulation,f1_score,accuracy,precision,mode,algoritma,nama_model",
         )
-        .eq("algoritma", normalizeAlgoKey(currentAlgo))
         .eq("dataset_id", selectedDatasetId)
-        .eq("mode", "cari-rasio")
-        .order("created_at", { ascending: false });
+        .eq("mode", "cari-rasio");
+      if (algoKeyCtx === "xlm-r") {
+        ratioQuery = ratioQuery.in("algoritma", ["xlm-r", "xlm-r-2", "xlmr"]);
+      } else {
+        ratioQuery = ratioQuery.eq("algoritma", algoKeyCtx);
+      }
+      const { data, error } = await ratioQuery.order("created_at", {
+        ascending: false,
+      });
 
       if (error) return false;
-      const best = (data || []).sort((a, b) => {
+      let ratioRows = data || [];
+      if (
+        algoKeyCtx === "xlm-r" &&
+        typeof window.kamusFilterXlmModelRows === "function"
+      ) {
+        ratioRows = window.kamusFilterXlmModelRows(ratioRows);
+      }
+      const best = ratioRows.sort((a, b) => {
         const scoreA =
           ((Number(a?.accuracy) || 0) + (Number(a?.f1_score) || 0)) / 2;
         const scoreB =
@@ -2526,7 +2559,7 @@
     const bertFamilyNeedsSeed =
       currentAlgo === "mbert" ||
       currentAlgo === "indobert" ||
-      currentAlgo === "xlm-r-2";
+      currentAlgo === "xlm-r";
     const requiredFields = bertFamilyNeedsSeed
       ? ["lr", "epoch", "batch-size", "max-length", "seed"]
       : ["lr", "epoch", "batch-size", "max-length"];
@@ -2573,7 +2606,7 @@
       mode === "cari-rasio" &&
       (currentAlgo === "indobert" ||
         currentAlgo === "mbert" ||
-        currentAlgo === "xlm-r-2");
+        currentAlgo === "xlm-r");
 
     const params = {
       splitRatio: splitRatio,
@@ -2790,7 +2823,7 @@
 
   async function simulateTrainingInCard(card, mode, params) {
     // Real training via backend for BERT-family models.
-    if (["indobert", "mbert", "xlm-r-2"].includes(normalizeAlgoKey(params.algo || currentAlgo))) {
+    if (["indobert", "mbert", "xlm-r"].includes(normalizeAlgoKey(params.algo || currentAlgo))) {
       await runBackendBertTraining(card, mode, params);
       return;
     }
@@ -2894,11 +2927,11 @@
     const algoKeyTrain = normalizeAlgoKey(params.algo || currentAlgo);
     let backendTrainSlug = "indobert";
     if (algoKeyTrain === "mbert") backendTrainSlug = "mbert";
-    else if (algoKeyTrain === "xlm-r-2") backendTrainSlug = "xlm-r-2";
+    else if (algoKeyTrain === "xlm-r") backendTrainSlug = "xlm-r";
     const algoLabel =
       algoKeyTrain === "mbert"
         ? "mBERT"
-        : algoKeyTrain === "xlm-r-2"
+        : algoKeyTrain === "xlm-r"
           ? "XLM-R"
           : "IndoBERT";
     const isIndobertTrain = algoKeyTrain === "indobert";
@@ -3657,7 +3690,185 @@
     });
   }
 
-  function saveModelFromCard(card, options = {}) {
+  /** Optional `models` columns — stripped automatically when Supabase schema lacks them. */
+  const MODELS_OPTIONAL_INSERT_COLUMNS = [
+    "macro_avg",
+    "train_weighted_avg",
+    "train_std_deviation",
+    "train_roc_auc",
+    "train_loss",
+    "train_mcc",
+    "k_fold",
+    "optimizer",
+    "weight_decay",
+    "scheduler",
+    "warmup_ratio",
+    "dropout",
+    "early_stopping",
+    "gradient_accumulation",
+    "max_length",
+    "seed",
+  ];
+
+  function parseSupabaseMissingColumn(error) {
+    if (!error) return null;
+    const msg = [error.message, error.details, error.hint]
+      .filter(Boolean)
+      .join(" ");
+    let m = msg.match(/Could not find the ['"]([^'"]+)['"] column/i);
+    if (m) return m[1];
+    m = msg.match(/column ["']?([^"'\s]+)["']? (?:of relation|does not exist)/i);
+    if (m) return m[1];
+    if (/roc[\s_-]?auc/i.test(msg) && !/train_roc_auc/i.test(msg)) {
+      return "train_roc_auc";
+    }
+    return null;
+  }
+
+  function isXlmAlgoKey(value) {
+    return normalizeStoredAlgorithmSelection(value) === "xlm-r";
+  }
+
+  async function supabaseModelExists(namaModel) {
+    if (!supabaseClient || !namaModel) return false;
+    const { data, error } = await supabaseClient
+      .from("models")
+      .select("id")
+      .eq("nama_model", namaModel)
+      .limit(1);
+    if (error) return false;
+    return Array.isArray(data) && data.length > 0;
+  }
+
+  /** Push XLM-R dari saved_models + training_history ke Supabase. */
+  async function syncLocalSavedXlmModelsToSupabase(options = {}) {
+    if (typeof window.kamusSyncXlmModelsToSupabase === "function") {
+      return window.kamusSyncXlmModelsToSupabase(options);
+    }
+    if (!supabaseClient) return { synced: 0, remaining: 0 };
+    const silent = options.silent !== false;
+    let saved = [];
+    try {
+      saved = JSON.parse(localStorage.getItem("saved_models") || "[]");
+    } catch (e) {
+      return { synced: 0, remaining: 0 };
+    }
+    if (!Array.isArray(saved) || !saved.length) {
+      return { synced: 0, remaining: 0 };
+    }
+
+    const remaining = [];
+    let synced = 0;
+    for (const entry of saved) {
+      if (!isXlmAlgoKey(entry?.algoritma)) {
+        remaining.push(entry);
+        continue;
+      }
+      const nama = String(entry?.nama_model || "").trim();
+      const datasetId = Number(entry?.dataset_id);
+      if (!nama || !Number.isFinite(datasetId) || datasetId <= 0) {
+        remaining.push(entry);
+        continue;
+      }
+      if (await supabaseModelExists(nama, "xlm-r")) {
+        synced += 1;
+        continue;
+      }
+      const row = buildModelsBaseInsertRow({
+        ...entry,
+        algoritma: "xlm-r",
+        mode: entry.mode || "training-final",
+        created_at: entry.created_at || new Date().toISOString(),
+      });
+      const insertResult = await insertModelsRowWithFallback(row);
+      if (insertResult.ok) {
+        synced += 1;
+      } else {
+        remaining.push(entry);
+      }
+    }
+
+    localStorage.setItem("saved_models", JSON.stringify(remaining));
+    if (synced && !silent) {
+      showToast(
+        synced === 1
+          ? "1 XLM-R model was synced to Supabase."
+          : synced + " XLM-R models were synced to Supabase.",
+        "success",
+      );
+    }
+    return { synced, remaining: remaining.length };
+  }
+
+  function buildModelsBaseInsertRow(modelData) {
+    return {
+      nama_model: modelData.nama_model,
+      algoritma: normalizeStoredAlgorithmSelection(modelData.algoritma),
+      mode: modelData.mode,
+      dataset_id: modelData.dataset_id,
+      split_ratio: modelData.split_ratio,
+      learning_rate: modelData.learning_rate,
+      epoch: modelData.epoch,
+      batch_size: modelData.batch_size,
+      accuracy: modelData.accuracy,
+      precision: modelData.precision,
+      recall: modelData.recall,
+      f1_score: modelData.f1_score,
+      created_at: modelData.created_at,
+    };
+  }
+
+  async function insertModelsRowWithFallback(payload) {
+    let row = { ...payload };
+    const dropped = [];
+    for (let attempt = 0; attempt < 28; attempt++) {
+      const { data, error } = await supabaseClient
+        .from("models")
+        .insert([row])
+        .select("id");
+      if (!error) {
+        return {
+          ok: true,
+          id: Array.isArray(data) && data[0] ? data[0].id : null,
+          dropped,
+        };
+      }
+      const missing = parseSupabaseMissingColumn(error);
+      if (missing && Object.prototype.hasOwnProperty.call(row, missing)) {
+        delete row[missing];
+        dropped.push(missing);
+        continue;
+      }
+      const schemaLike = /schema cache|PGRST204|column/i.test(
+        String(error.message || ""),
+      );
+      if (schemaLike) {
+        const next = MODELS_OPTIONAL_INSERT_COLUMNS.find(
+          (col) =>
+            Object.prototype.hasOwnProperty.call(row, col) &&
+            !dropped.includes(col),
+        );
+        if (next) {
+          delete row[next];
+          dropped.push(next);
+          continue;
+        }
+      }
+      return { ok: false, error, dropped, lastRow: row };
+    }
+    return {
+      ok: false,
+      error: { message: "Too many schema fallback attempts" },
+      dropped,
+    };
+  }
+
+  function shouldNotifyModelSave(opts, kind) {
+    if (kind === "error") return !opts.silent || opts.auto;
+    return !opts.silent || opts.auto;
+  }
+
+  async function saveModelFromCard(card, options = {}) {
     const opts = {
       silent: false,
       auto: false,
@@ -3823,8 +4034,8 @@
 
     const modelData = {
       nama_model: modelName,
-      algoritma: normalizeAlgoKey(params.algo || currentAlgo),
-      mode: card.dataset.mode,
+      algoritma: normalizeStoredAlgorithmSelection(params.algo || currentAlgo),
+      mode: card.dataset.mode || "training-final",
       dataset_id: selectedDatasetId,
       split_ratio: params.splitRatio,
       k_fold: params.kFold || null,
@@ -3867,74 +4078,67 @@
     };
 
     if (supabaseClient) {
-      // Insert full payload dulu; jika schema tabel lebih sempit, fallback ke minimal payload.
-      supabaseClient
-        .from("models")
-        .insert([modelData])
-        .then(({ error }) => {
-          if (!error) {
-            card.dataset.savedToModels = "1";
-            if (!opts.silent) showToast("Model was saved to the database.");
-            return;
+      let insertResult = await insertModelsRowWithFallback(modelData);
+      if (!insertResult.ok) {
+        insertResult = await insertModelsRowWithFallback(
+          buildModelsBaseInsertRow(modelData),
+        );
+      }
+      if (!insertResult.ok && isXlmAlgoKey(modelData.algoritma)) {
+        insertResult = await insertModelsRowWithFallback(
+          buildModelsBaseInsertRow({
+            ...modelData,
+            algoritma: "xlm-r",
+            mode: modelData.mode || "training-final",
+          }),
+        );
+      }
+      if (insertResult.ok) {
+        card.dataset.savedToModels = "1";
+        if (shouldNotifyModelSave(opts, "success")) {
+          const dropped = insertResult.dropped || [];
+          if (dropped.length) {
+            showToast(
+              `Model saved to database (some optional columns omitted: ${dropped.join(", ")}). Run supabase/models_testing_columns.sql for full training metrics.`,
+              "warning",
+            );
+          } else {
+            showToast("Model was saved to the database.", "success");
           }
-          // Walaupun silent/auto, tetap tampilkan error supaya tidak "hilang".
-          try {
-            console.error("Supabase insert(models) failed:", error);
-          } catch (e) {}
+        }
+      } else {
+        console.error("Supabase insert(models) failed:", insertResult.error);
+        if (opts.allowLocalFallback) {
+          saveToLocalStorage(modelData);
+          card.dataset.savedToModels = "local";
+          if (isXlmAlgoKey(modelData.algoritma)) {
+            const syncRes = await syncLocalSavedXlmModelsToSupabase({
+              silent: true,
+            });
+            if (syncRes.synced > 0) {
+              card.dataset.savedToModels = "1";
+              if (shouldNotifyModelSave(opts, "success")) {
+                showToast("XLM-R model was saved to the database.", "success");
+              }
+            } else if (shouldNotifyModelSave(opts, "success")) {
+              showToast(
+                "Training checkpoint is on the server; registry saved locally only. Open Processing (XLM-R) to retry Supabase sync, or click Save.",
+                "warning",
+              );
+            }
+          } else if (shouldNotifyModelSave(opts, "success")) {
+            showToast(
+              "Training checkpoint is on the server; registry saved locally only. Run supabase/models_testing_columns.sql then save again, or use the Save button.",
+              "warning",
+            );
+          }
+        } else if (shouldNotifyModelSave(opts, "error")) {
           showToast(
-            `Failed to save to models: ${error?.message || "unknown error"}`,
+            `Failed to save model to database: ${insertResult.error?.message || "unknown error"}`,
             "error",
           );
-
-          const minimalModelData = {
-            nama_model: modelData.nama_model,
-            algoritma: modelData.algoritma,
-            mode: modelData.mode,
-            dataset_id: modelData.dataset_id,
-            split_ratio: modelData.split_ratio,
-            learning_rate: modelData.learning_rate,
-            epoch: modelData.epoch,
-            batch_size: modelData.batch_size,
-            max_length: modelData.max_length,
-            seed: modelData.seed,
-            optimizer: modelData.optimizer,
-            weight_decay: modelData.weight_decay,
-            scheduler: modelData.scheduler,
-            dropout: modelData.dropout,
-            early_stopping: modelData.early_stopping,
-            gradient_accumulation: modelData.gradient_accumulation,
-            warmup_ratio: modelData.warmup_ratio,
-            accuracy: modelData.accuracy,
-            precision: modelData.precision,
-            recall: modelData.recall,
-            f1_score: modelData.f1_score,
-            macro_avg: modelData.macro_avg,
-            train_weighted_avg: modelData.train_weighted_avg,
-            train_std_deviation: modelData.train_std_deviation,
-            train_roc_auc: modelData.train_roc_auc,
-            train_loss: modelData.train_loss,
-            train_mcc: modelData.train_mcc,
-            created_at: modelData.created_at,
-          };
-
-          supabaseClient
-            .from("models")
-            .insert([minimalModelData])
-            .then(({ error: fallbackError }) => {
-              if (fallbackError) {
-                console.error("Error saving (full + fallback):", error, fallbackError);
-                if (opts.allowLocalFallback) {
-                  if (!opts.silent) showToast("Model was saved locally.");
-                  saveToLocalStorage(modelData);
-                } else if (!opts.silent) {
-                  showToast("Failed to save model to database.", "error");
-                }
-              } else {
-                card.dataset.savedToModels = "1";
-                if (!opts.silent) showToast("Model was saved to the database.");
-              }
-            });
-        });
+        }
+      }
     } else {
       if (opts.allowLocalFallback) {
         if (!opts.silent) showToast("Model was saved successfully.");
@@ -3995,9 +4199,9 @@
     const item = (label, value) => `<span><strong>${label}:</strong> ${v(value)}</span>`;
 
     const inputReprLabel =
-      algo === "xlm-r-2"
+      algo === "xlm-r"
         ? "SentencePiece tokens (XLM-RoBERTa)"
-        : ["indobert", "mbert", "xlm-r-2"].includes(algo)
+        : ["indobert", "mbert", "xlm-r"].includes(algo)
           ? "WordPiece Tokens + [CLS]/[SEP]"
           : "Word Embedding";
     const inputLayer = `
@@ -4008,7 +4212,7 @@
           ${
             algo === "mbert"
               ? item("Seed", p.seed)
-              : algo === "indobert" || algo === "xlm-r-2"
+              : algo === "indobert" || algo === "xlm-r"
                 ? `${item("Max Length", p.maxLength)}${item("Seed", p.seed)}`
                 : item("Max Length", p.maxLength)
           }
@@ -4026,7 +4230,7 @@
       item("Dropout", p.dropout),
     ];
 
-    if (["indobert", "mbert", "xlm-r-2"].includes(algo)) {
+    if (["indobert", "mbert", "xlm-r"].includes(algo)) {
       hiddenItems.push(item("Warmup", p.warmup));
       hiddenItems.push(item("Gradient Accumulation", p.gradAccum));
     } else if (algo === "word2vec") {

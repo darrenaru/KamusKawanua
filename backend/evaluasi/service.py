@@ -6,6 +6,7 @@ from backend.model_testing_metrics import (
 )
 from backend.supabase_client import supabase
 from backend.training_metrics import enrich_training_metrics
+from backend.xlm_generation import filter_xlm_model_rows
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -74,7 +75,7 @@ def _is_final_training_mode(value: Any) -> bool:
 
 
 def _canonical_algo_key(algoritma: str) -> str | None:
-    """Match frontend column keys: indobert, mbert, xlm-r-2, word2vec, glove."""
+    """Match frontend column keys: indobert, mbert, xlm-r, word2vec, glove."""
     if not algoritma:
         return None
     k = str(algoritma).strip().lower().replace("_", "-")
@@ -82,9 +83,7 @@ def _canonical_algo_key(algoritma: str) -> str | None:
         return "indobert"
     if k in ("m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
         return "mbert"
-    if k == "xlm-r-2":
-        return "xlm-r-2"
-    if k in ("xlmr", "xlm-r"):
+    if k in ("xlm-r-2", "xlmr", "xlm-r"):
         return "xlm-r"
     if k in ("word2vec", "word-2-vec"):
         return "word2vec"
@@ -135,6 +134,7 @@ def get_best_models_by_algorithm() -> list[dict]:
 
     # Evaluasi hanya menggunakan model final-training.
     rows = [row for row in rows if _is_final_training_mode(row.get("mode"))]
+    rows = filter_xlm_model_rows(rows)
 
     best_by_algorithm: dict[str, dict] = {}
     for row in rows:
@@ -142,10 +142,6 @@ def get_best_models_by_algorithm() -> list[dict]:
         key = _canonical_algo_key(algorithm)
         if not key:
             continue
-        # Shared Supabase: situs ini memakai xlm-r-2; abaikan bucket xlm-r (mitra).
-        if key == "xlm-r":
-            continue
-
         model_id = row.get("id")
         model_name = str(row.get("nama_model") or "").strip()
         if model_id is None or not model_name:
@@ -162,7 +158,7 @@ def get_best_models_by_algorithm() -> list[dict]:
             dataset_id_int = int(dataset_id) if dataset_id is not None else None
             merged = dict(row)
             merged["id"] = int(model_id)
-            merged["algoritma"] = algorithm
+            merged["algoritma"] = key
             merged["nama_model"] = model_name
             merged["canonical_algorithm"] = key
             merged["accuracy"] = accuracy
@@ -200,6 +196,7 @@ def get_models_metrics() -> list[dict]:
             .execute()
         )
         rows = [row for row in list(res.data or []) if _is_final_training_mode(row.get("mode"))]
+        rows = filter_xlm_model_rows(rows)
     except Exception as e:
         raise ValueError(f"Failed to fetch model metrics data: {e}")
 
@@ -244,12 +241,9 @@ def get_models_metrics() -> list[dict]:
         key = _canonical_algo_key(algorithm)
         if not key:
             continue
-        if key == "xlm-r":
-            continue
-
         merged = dict(row)
         merged["id"] = int(model_id)
-        merged["algoritma"] = algorithm
+        merged["algoritma"] = key
         merged["canonical_algorithm"] = key
 
         dataset_id = row.get("dataset_id")

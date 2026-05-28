@@ -64,7 +64,8 @@ def testing_mbert(req: IndoBertTestingRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/xlm-r-2", response_model=IndoBertTestingResponse)
+@router.post("/xlm-r", response_model=IndoBertTestingResponse)
+@router.post("/xlm-r-2", response_model=IndoBertTestingResponse, include_in_schema=False)
 def testing_xlm_r(req: IndoBertTestingRequest):
     try:
         return test_xlm_r_model(

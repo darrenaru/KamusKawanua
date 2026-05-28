@@ -34,6 +34,10 @@ from backend.model_testing_metrics import (
     build_testing_result_from_model_row,
 )
 from backend.supabase_client import supabase
+from backend.xlm_generation import (
+    assert_xlm_model_allowed,
+    filter_xlm_model_rows,
+)
 
 
 def _normalize_algo_slug(algoritma: str) -> str:
@@ -41,9 +45,7 @@ def _normalize_algo_slug(algoritma: str) -> str:
     if not raw:
         return "unknown"
     k = raw.lower().replace("_", "-")
-    if k == "xlm-r-2":
-        return "xlm-r-2"
-    if k in ("xlmr", "xlm-r"):
+    if k in ("xlm-r-2", "xlmr", "xlm-r"):
         return "xlm-r"
     if k in ("indobert", "indo-bert", "indobenchmark"):
         return "indobert"
@@ -162,12 +164,12 @@ def get_available_testing_models() -> list[dict]:
 
     # Testing dropdown must only list final-training models.
     models = [row for row in raw_models if is_final_training_mode(row.get("mode"))]
-    # Shared DB: sembunyikan baris algoritma xlm-r mitra; pemilik situs memakai xlm-r-2.
-    models = [
-        row
-        for row in models
-        if str(row.get("algoritma") or "").strip().lower().replace("_", "-") != "xlm-r"
-    ]
+    models = filter_xlm_model_rows(models)
+    # Normalisasi legacy xlm-r-2 → xlm-r (nama kanonis).
+    for row in models:
+        algo = str(row.get("algoritma") or "").strip().lower().replace("_", "-")
+        if algo == "xlm-r-2":
+            row["algoritma"] = "xlm-r"
 
     dataset_ids = sorted(
         {
@@ -272,9 +274,41 @@ def _get_dataset_name(dataset_id: int) -> str | None:
         return None
 
 
+def _model_has_test_columns_saved(model_id: int) -> bool:
+    try:
+        res = (
+            supabase.table("models")
+            .select("test_accuracy")
+            .eq("id", int(model_id))
+            .limit(1)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        return row is not None and row.get("test_accuracy") is not None
+    except Exception:
+        return False
+
+
+def _insert_testing_result_legacy(payload: dict[str, Any]) -> int | None:
+    """Fallback bila kolom test_* belum ada di tabel models (Evaluasi tetap bisa baca)."""
+    try:
+        res = supabase.table("testing_results").insert(payload).execute()
+        data = res.data or []
+        if not data:
+            return None
+        rid = data[0].get("id")
+        return int(rid) if rid is not None else None
+    except Exception as e:
+        raise ValueError(f"Failed to save to testing_results: {e}") from e
+
+
 def _save_testing_metrics_to_model(
     *,
     model_id: int | None,
+    dataset_id: int | None,
+    model_name: str | None,
+    dataset_name: str | None,
+    total_data: int | None,
     accuracy: float,
     precision_macro: float,
     recall_macro: float,
@@ -285,9 +319,10 @@ def _save_testing_metrics_to_model(
     mcc: float,
     max_length: int | None = None,
 ) -> int | None:
-    """Hanya memperbarui kolom test_* & tested_at — tidak menimpa metrik training."""
+    """Simpan metrik testing ke models.test_*; fallback ke tabel testing_results."""
     if model_id is None:
         return None
+
     update_payload = build_model_update_from_testing_metrics(
         accuracy=accuracy,
         precision_macro=precision_macro,
@@ -299,20 +334,55 @@ def _save_testing_metrics_to_model(
         mcc=mcc,
         max_length=max_length,
     )
+
+    models_saved = False
     try:
-        res = (
-            supabase.table("models")
-            .update(update_payload)
-            .eq("id", int(model_id))
-            .execute()
+        from backend.supabase_schema_fallback import update_table_row_with_column_fallback
+
+        update_table_row_with_column_fallback(
+            table=supabase.table("models"),
+            payload=update_payload,
+            eq_column="id",
+            eq_value=int(model_id),
         )
-        data = res.data or []
-        saved_id = int(model_id)
-        if data and data[0].get("id") is not None:
-            saved_id = int(data[0]["id"])
-        return saved_id
-    except Exception as e:
-        raise ValueError(f"Failed to save testing metrics to models: {e}")
+        models_saved = _model_has_test_columns_saved(int(model_id))
+    except Exception:
+        models_saved = False
+
+    legacy_payload: dict[str, Any] = {
+        "dataset_id": dataset_id,
+        "model_id": int(model_id),
+        "model_name": model_name or "",
+        "dataset_name": dataset_name or "",
+        "total_data": int(total_data or 0),
+        "accuracy": float(accuracy),
+        "precision_macro": float(precision_macro),
+        "recall_macro": float(recall_macro),
+        "f1_macro": float(f1_macro),
+        "std_deviation": float(std_deviation),
+        "weighted_avg": float(weighted_avg),
+        "roc_auc": float(roc_auc),
+        "mcc": float(mcc),
+        "max_length": max_length,
+    }
+    legacy_payload = {k: v for k, v in legacy_payload.items() if v is not None}
+
+    testing_result_id: int | None = None
+    try:
+        testing_result_id = _insert_testing_result_legacy(legacy_payload)
+    except Exception as legacy_err:
+        if not models_saved:
+            raise ValueError(
+                f"Failed to save testing metrics (models + testing_results): {legacy_err}"
+            ) from legacy_err
+
+    if not models_saved and testing_result_id is None:
+        raise ValueError(
+            "Testing finished but metrics were not persisted. "
+            "Run supabase/models_testing_columns.sql or check Supabase permissions."
+        )
+
+    return testing_result_id if testing_result_id is not None else int(model_id)
 
 
 def _get_model_split_ratio(
@@ -666,10 +736,13 @@ def test_indobert_model(
 
     dataset_name = _get_dataset_name(dataset_id)
     testing_result_id: int | None = None
-    print("SAVE RESULT:", save_result)
     if save_result:
         testing_result_id = _save_testing_metrics_to_model(
             model_id=model_id,
+            dataset_id=dataset_id,
+            model_name=model_name,
+            dataset_name=dataset_name,
+            total_data=total_data,
             accuracy=accuracy,
             precision_macro=float(precision_macro),
             recall_macro=float(recall_macro),
@@ -929,6 +1002,10 @@ def _evaluate_transformer_model(
     if save_result:
         testing_result_id = _save_testing_metrics_to_model(
             model_id=model_id,
+            dataset_id=dataset_id,
+            model_name=model_name,
+            dataset_name=dataset_name,
+            total_data=total_data,
             accuracy=accuracy,
             precision_macro=float(precision_macro),
             recall_macro=float(recall_macro),
@@ -990,6 +1067,7 @@ def test_xlm_r_model(
     limit: int | None,
     save_result: bool,
 ) -> dict:
+    assert_xlm_model_allowed(model_name=model_name)
     # Sama seperti referensi: teks dari final_text preprocessing XLM bila ada.
     return _evaluate_transformer_model(
         dataset_id=dataset_id,
@@ -1043,7 +1121,8 @@ def predict_with_testing_model(
             "probs": result.get("probs") or {},
         }
 
-    if algorithm_norm == "xlm-r-2":
+    if algorithm_norm in ("xlm-r", "xlm-r-2"):
+        assert_xlm_model_allowed(model_name=model_name, algoritma=algorithm)
         result = predict_xlm_r_softmax(
             text=text,
             model_name=model_name,
@@ -1076,12 +1155,15 @@ def get_best_models_by_algorithm() -> list[dict]:
     except Exception as e:
         raise ValueError(f"Failed to fetch model evaluation data: {e}")
 
+    rows = filter_xlm_model_rows(list(rows))
+
     best_by_algorithm: dict[str, dict] = {}
     for row in rows:
         algorithm = str(row.get("algoritma") or "").strip()
         if not algorithm:
             continue
-        if algorithm.lower().replace("_", "-") == "xlm-r":
+        algo_key = _normalize_algo_slug(algorithm)
+        if algo_key not in ("indobert", "mbert", "xlm-r", "word2vec", "glove"):
             continue
 
         model_id = row.get("id")
@@ -1094,12 +1176,12 @@ def get_best_models_by_algorithm() -> list[dict]:
         except Exception:
             continue
 
-        key = algorithm.lower()
+        key = algo_key
         current = best_by_algorithm.get(key)
         if current is None or accuracy > current["accuracy"]:
             best_by_algorithm[key] = {
                 "id": int(model_id),
-                "algoritma": algorithm,
+                "algoritma": algo_key,
                 "nama_model": model_name,
                 "dataset_id": row.get("dataset_id"),
                 "split_ratio": row.get("split_ratio"),

@@ -618,6 +618,15 @@ tbody tr.selected {
   background: rgba(200, 169, 110, 0.12);
 }
 
+.data-comparison-table tbody tr.comparison-row-same td {
+  background: rgba(200, 169, 110, 0.08);
+}
+
+.data-comparison-table tbody tr.comparison-row-same td:nth-child(2),
+.data-comparison-table tbody tr.comparison-row-same td:nth-child(4) {
+  font-weight: 600;
+}
+
 .lex-footer {
   margin-top: 12px;
   display: flex;

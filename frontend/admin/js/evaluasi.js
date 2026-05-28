@@ -7,15 +7,15 @@
  *   nilai testing yang sama di kedua kolom (perilaku perbandingan selaras versi lama).
  */
 var API_BASE = 'http://127.0.0.1:8000';
-var ALGO_ORDER = ['indobert', 'mbert', 'xlm-r-2', 'word2vec', 'glove'];
+var ALGO_ORDER = ['indobert', 'mbert', 'xlm-r', 'word2vec', 'glove'];
 var ALGO_LABELS = {
-    'xlm-r-2': 'XLM-R',
+    'xlm-r': 'XLM-R',
     mbert: 'mBERT',
     indobert: 'INDOBERT',
     word2vec: 'Word2Vec',
     glove: 'GloVe',
 };
-var TRANSFORMER_KEYS = ['indobert', 'mbert', 'xlm-r-2'];
+var TRANSFORMER_KEYS = ['indobert', 'mbert', 'xlm-r'];
 var CLASSIC_KEYS = ['word2vec', 'glove'];
 var CHART_COLORS = {
     transformerDark: 'rgba(28, 20, 10, 0.9)',
@@ -60,8 +60,7 @@ function canonicalAlgoKey(raw) {
     var v = String(raw || '').toLowerCase().trim().replace(/_/g, '-');
     if (v === 'indo-bert' || v === 'indobenchmark') return 'indobert';
     if (v === 'm-bert' || v === 'multilingual-bert' || v === 'bert-base-multilingual-cased') return 'mbert';
-    if (v === 'xlm-r-2') return 'xlm-r-2';
-    if (v === 'xlmr' || v === 'xlm-r') return 'xlm-r';
+    if (v === 'xlm-r-2' || v === 'xlmr' || v === 'xlm-r') return 'xlm-r';
     if (v === 'word2vec' || v === 'word-2-vec') return 'word2vec';
     return v;
 }
@@ -241,9 +240,7 @@ function readPreferredAlgorithm() {
             var sess = sessionStorage.getItem('evaluasi_selectedTableAlgo');
             if (sess) raw = sess;
         } catch (e2) {}
-        var k = canonicalAlgoKey(raw || '');
-        if (k === 'xlm-r') return 'xlm-r-2';
-        return k;
+        return canonicalAlgoKey(raw || '');
     } catch (e) {
         return '';
     }
@@ -253,27 +250,49 @@ function groupByAlgorithm(items) {
     var out = {};
     for (var i = 0; i < items.length; i++) {
         var row = items[i];
-        var key = row.canonical_algorithm || canonicalAlgoKey(row.algoritma);
+        var key = canonicalAlgoKey(row.canonical_algorithm || row.algoritma);
         if (!key) continue;
-        if (key === 'xlm-r') continue;
+        row.canonical_algorithm = key;
+        if (key === 'xlm-r') {
+            row.algoritma = 'xlm-r';
+        }
         if (!out[key]) out[key] = [];
         out[key].push(row);
+    }
+    if (out['xlm-r-2']) {
+        out['xlm-r'] = (out['xlm-r'] || []).concat(out['xlm-r-2']);
+        delete out['xlm-r-2'];
     }
     return out;
 }
 
 function orderedAlgorithmKeys(byAlgo) {
-    var present = Object.keys(byAlgo);
-    var ordered = ALGO_ORDER.filter(function (k) {
-        return present.indexOf(k) >= 0;
+    var present = Object.keys(byAlgo).map(function (k) {
+        return canonicalAlgoKey(k);
+    }).filter(function (k) {
+        return !!k;
     });
-    for (var i = 0; i < present.length; i++) {
-        if (ordered.indexOf(present[i]) < 0) ordered.push(present[i]);
+    var unique = [];
+    for (var u = 0; u < present.length; u++) {
+        if (unique.indexOf(present[u]) < 0) unique.push(present[u]);
+    }
+    var ordered = ALGO_ORDER.filter(function (k) {
+        return unique.indexOf(k) >= 0;
+    });
+    for (var i = 0; i < unique.length; i++) {
+        if (ordered.indexOf(unique[i]) < 0) ordered.push(unique[i]);
     }
     return ordered;
 }
 
 async function fetchEvaluationItems() {
+    if (typeof window.kamusSyncXlmModelsToSupabase === 'function') {
+        try {
+            await window.kamusSyncXlmModelsToSupabase({ silent: true });
+        } catch (syncErr) {
+            console.warn('evaluasi: XLM Supabase sync skipped', syncErr);
+        }
+    }
     var res = await fetch(API_BASE + '/evaluasi/models-metrics');
     var data = await res.json();
     if (!res.ok) {
@@ -283,7 +302,13 @@ async function fetchEvaluationItems() {
                 : 'Failed to fetch evaluation data.',
         );
     }
-    return Array.isArray(data.items) ? data.items : [];
+    var items = Array.isArray(data.items) ? data.items : [];
+    if (typeof window.kamusFilterXlmModelRows === 'function') {
+        items = window.kamusFilterXlmModelRows(items);
+    } else if (typeof window.kamusFilterXlmEvaluationItems === 'function') {
+        items = window.kamusFilterXlmEvaluationItems(items);
+    }
+    return items;
 }
 
 function renderAlgoSelect(selectId, keys, selected) {
@@ -383,7 +408,7 @@ function buildLayeredParameterHtml(p) {
     function value(v) { return v == null || v === '' ? '-' : String(v); }
     function item(label, v) { return '<span><strong>' + label + ':</strong> ' + escapeHtml(value(v)) + '</span>'; }
     var inputReprLabel =
-        algo === 'xlm-r-2'
+        algo === 'xlm-r'
             ? 'SentencePiece tokens (XLM-RoBERTa)'
             : TRANSFORMER_KEYS.indexOf(algo) >= 0
               ? 'WordPiece Tokens + [CLS]/[SEP]'
@@ -392,7 +417,7 @@ function buildLayeredParameterHtml(p) {
         item('Batch Size', p.batchSize || p.batch_size) +
         (algo === 'mbert'
             ? item('Seed', p.seed)
-            : algo === 'indobert' || algo === 'xlm-r-2'
+            : algo === 'indobert' || algo === 'xlm-r'
               ? item('Max Length', p.maxLength || p.max_length) + item('Seed', p.seed)
               : item('Max Length', p.maxLength || p.max_length)) +
         item('Input Representation', inputReprLabel);
@@ -482,7 +507,12 @@ function findHistoryByModel(model) {
     var filtered = history.filter(function (h) {
         var hn = String(h.model_name || h.nama_model || '').trim().toLowerCase();
         var ha = String((h.parameter && h.parameter.algo) || '').trim().toLowerCase();
-        return hn === modelName && (!algo || !ha || ha === algo);
+        var modelCanon = canonicalAlgoKey(algo);
+        var histCanon = canonicalAlgoKey(ha);
+        return (
+            hn === modelName &&
+            (!modelCanon || !histCanon || modelCanon === histCanon)
+        );
     });
     if (!filtered.length) return null;
     filtered.sort(function (a, b) {
@@ -1681,6 +1711,9 @@ function showChartHint(message) {
 
 document.addEventListener('DOMContentLoaded', async function () {
     try {
+        if (typeof window.kamusInitXlmGeneration === 'function') {
+            await window.kamusInitXlmGeneration();
+        }
         var chartReady = await ensureChartJsLoaded();
         if (!chartReady) {
             showChartHint('Chart.js failed to load. Please check internet/CDN access.');

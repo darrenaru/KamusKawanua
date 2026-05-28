@@ -135,7 +135,7 @@ async function pollTestingPreprocessJob(jobId, onProgress) {
 /**
  * Mirrors preprocessing.js: upsert cleaned rows from raw_data, then POST /preprocess/start + poll.
  * @param {number} datasetId
- * @param {'indobert'|'mbert'|'xlm-r-2'} tokenizerKey
+ * @param {'indobert'|'mbert'|'xlm-r'} tokenizerKey
  * @param {function(number, string)=} onProgress
  */
 async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio, onProgress) {
@@ -144,7 +144,7 @@ async function runTestingPreprocessPipeline(datasetId, tokenizerKey, splitRatio,
         throw new Error('Supabase client is not available. Reload the page and try again.');
     }
     var tk = normalizeTestingAlgo(tokenizerKey);
-    if (tk !== 'indobert' && tk !== 'mbert' && tk !== 'xlm-r-2') {
+    if (tk !== 'indobert' && tk !== 'mbert' && tk !== 'xlm-r') {
         tk = 'mbert';
     }
     var algoLabel = getAlgorithmDisplayName(tk);
@@ -387,7 +387,7 @@ function normalizeAlgorithmKey(str) {
         .toLowerCase()
         .trim()
         .replace(/\s+/g, '-');
-    if (key === 'xlm-r-2' || key === 'xlmr' || key === 'xlm-r') return 'xlm-r-2';
+    if (key === 'xlm-r-2' || key === 'xlmr' || key === 'xlm-r') return 'xlm-r';
     return key;
 }
 
@@ -395,7 +395,7 @@ function normalizeTestingAlgo(value) {
     var key = normalizeAlgorithmKey(value);
     if (key === 'indobert' || key === 'indo-bert' || key === 'indobenchmark') return 'indobert';
     if (key === 'mbert' || key === 'm-bert' || key === 'bert-base-multilingual-cased') return 'mbert';
-    if (key === 'xlm-r-2') return 'xlm-r-2';
+    if (key === 'xlm-r-2' || key === 'xlmr' || key === 'xlm-r') return 'xlm-r';
     return key;
 }
 
@@ -403,7 +403,7 @@ function getAlgorithmDisplayName(key) {
     var normalized = normalizeTestingAlgo(key);
     if (normalized === 'mbert') return 'mBERT';
     if (normalized === 'indobert') return 'IndoBERT';
-    if (normalized === 'xlm-r-2') return 'XLM-R';
+    if (normalized === 'xlm-r') return 'XLM-R';
     if (normalized === 'word2vec') return 'Word2Vec';
     if (normalized === 'glove') return 'GloVe';
     return String(key || '').toUpperCase();
@@ -514,6 +514,9 @@ async function refreshSelectedModelLatestTestingFromBackend() {
         if (!res.ok || !data || !Array.isArray(data.items)) return;
 
         testingModels = data.items;
+        if (typeof window.kamusFilterXlmModelRows === 'function') {
+            testingModels = window.kamusFilterXlmModelRows(testingModels);
+        }
         var found = null;
         for (var i = 0; i < testingModels.length; i++) {
             var item = testingModels[i];
@@ -668,6 +671,9 @@ function initAlgorithmModelSelect() {
             }
 
             testingModels = data.items;
+            if (typeof window.kamusFilterXlmModelRows === 'function') {
+                testingModels = window.kamusFilterXlmModelRows(testingModels);
+            }
             var grouped = {};
             for (var i = 0; i < testingModels.length; i++) {
                 var model = testingModels[i];
@@ -1370,12 +1376,22 @@ function finishTesting(result, direction) {
     } else if (result.test_subset === 'holdout') {
         subsetNote = ' Test subset: training holdout rows.';
     }
+    var saveOk = result && (result.testing_result_id != null || result.status === 'ok');
+    if (saveOk) {
+        refreshSelectedModelLatestTestingFromBackend().catch(function(err) {
+            console.warn('testing: post-save refresh failed', err);
+        });
+    }
     showTestingInfo(
-        'Testing result saved successfully.' +
+        (saveOk
+            ? 'Testing result saved successfully.'
+            : 'Testing finished but could not be saved to the database. Check backend logs and run supabase/models_testing_columns.sql.') +
             testedRowsText +
             subsetNote +
             overfittingText +
-            ' If you run testing again, the previous result will be replaced by the new one.'
+            (saveOk
+                ? ' If you run testing again, the previous result will be replaced by the new one.'
+                : '')
     );
     setTestingUiBusy(false);
     isRunning = false;
@@ -1386,5 +1402,14 @@ function finishTesting(result, direction) {
 ============================= */
 initUpload();
 initKataInput();
-initAlgorithmModelSelect();
+(function bootstrapTesting() {
+    var boot = function () {
+        initAlgorithmModelSelect();
+    };
+    if (typeof window.kamusInitXlmGeneration === 'function') {
+        window.kamusInitXlmGeneration().then(boot).catch(boot);
+    } else {
+        boot();
+    }
+})();
 updateStartButtonState();

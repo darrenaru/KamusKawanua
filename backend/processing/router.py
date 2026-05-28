@@ -1,3 +1,4 @@
+import os
 import threading
 
 from fastapi import APIRouter, HTTPException
@@ -8,7 +9,9 @@ from backend.processing.schemas import (
     IndoBertTrainRequest,
     IndoBertTrainResponse,
 )
+from backend.checkpoint_verify import verify_trained_model_dir
 from backend.processing.service import (
+    _safe_name,
     predict_indobert_softmax,
     predict_mbert_softmax,
     predict_xlm_r_softmax,
@@ -173,7 +176,8 @@ def predict_mbert(req: IndoBertPredictRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/train/xlm-r-2", response_model=IndoBertTrainResponse)
+@router.post("/train/xlm-r", response_model=IndoBertTrainResponse)
+@router.post("/train/xlm-r-2", response_model=IndoBertTrainResponse, include_in_schema=False)
 def train_xlm_r(req: IndoBertTrainRequest):
     try:
         result = train_xlm_r_softmax(
@@ -197,7 +201,8 @@ def train_xlm_r(req: IndoBertTrainRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/train/xlm-r-2/async")
+@router.post("/train/xlm-r/async")
+@router.post("/train/xlm-r-2/async", include_in_schema=False)
 def train_xlm_r_async(req: IndoBertTrainRequest):
     job = create_job(total_epochs=req.epoch)
 
@@ -230,7 +235,8 @@ def train_xlm_r_async(req: IndoBertTrainRequest):
     return {"job_id": job.job_id, "status": job.status, "total_epochs": req.epoch}
 
 
-@router.post("/predict/xlm-r-2", response_model=IndoBertPredictResponse)
+@router.post("/predict/xlm-r", response_model=IndoBertPredictResponse)
+@router.post("/predict/xlm-r-2", response_model=IndoBertPredictResponse, include_in_schema=False)
 def predict_xlm_r(req: IndoBertPredictRequest):
     try:
         return predict_xlm_r_softmax(
@@ -238,4 +244,13 @@ def predict_xlm_r(req: IndoBertPredictRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/checkpoint/{model_name}/verify")
+def verify_checkpoint(model_name: str):
+    """Check that a trained_models folder has the files needed for predict/test."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+    model_dir = os.path.join(model_root, _safe_name(model_name))
+    return verify_trained_model_dir(model_dir)
 

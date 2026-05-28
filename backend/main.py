@@ -45,6 +45,21 @@ app.include_router(indobert_processing_router)
 app.include_router(testing_router)
 app.include_router(evaluasi_router)
 
+
+@app.on_event("startup")
+def _sync_xlm_generation_snapshot() -> None:
+    from backend.xlm_generation import export_frontend_snapshot
+
+    export_frontend_snapshot()
+
+
+@app.get("/config/xlm-generation")
+def config_xlm_generation():
+    from backend.xlm_generation import active_xlm_config
+
+    return active_xlm_config()
+
+
 # =========================
 # STEMMER (Sastrawi — dipakai untuk kolom bahasa Indonesia saat preprocess mBERT)
 # =========================
@@ -53,7 +68,7 @@ stemmer = factory.create_stemmer()
 
 
 def _preprocess_tokenizer_is_mbert(name: str) -> bool:
-    """True hanya untuk mBERT; IndoBERT & XLM-R-2 tidak di-stem."""
+    """True hanya untuk mBERT; IndoBERT & XLM-R tidak di-stem."""
     n = (name or "").lower().strip().replace("_", "-")
     if n in ("indobert", "indo-bert", "indobenchmark"):
         return False
@@ -455,8 +470,8 @@ def _algo_family_from_row(algoritma: str) -> str | None:
         return "mbert"
     if a.startswith("bert-") and "multilingual" in a:
         return "mbert"
-    if a == "xlm-r-2":
-        return "xlm-r-2"
+    if a in ("xlm-r-2", "xlm-r", "xlmr"):
+        return "xlm-r"
     return None
 
 
@@ -647,6 +662,12 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
         return bundle
 
     models_ordered = _fetch_models_ordered()
+    try:
+        from backend.xlm_generation import filter_xlm_model_rows
+
+        models_ordered = filter_xlm_model_rows(models_ordered)
+    except Exception:
+        pass
 
     def append_failure(
         family: str,
@@ -725,7 +746,7 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
                 elif family == "mbert":
                     bundle["predicted_jenis_mbert"] = label
                     bundle["model_used_mbert"] = nama
-                elif family == "xlm-r-2":
+                elif family == "xlm-r":
                     bundle["predicted_jenis_xlm"] = label
                     bundle["model_used_xlm"] = nama
                 return
@@ -745,7 +766,7 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
 
     run_one("indobert", "IndoBERT", predict_indobert_softmax)
     run_one("mbert", "mBERT", predict_mbert_softmax)
-    run_one("xlm-r-2", "XLM-R", predict_xlm_r_softmax)
+    run_one("xlm-r", "XLM-R", predict_xlm_r_softmax)
     bundle["model_consensus"] = _compute_model_consensus(bundle["model_analyses"])
     return bundle
 

@@ -1,5 +1,5 @@
--- Tambahkan kolom metrik testing di tabel `models` (ganti tabel testing_results).
--- Jalankan di Supabase SQL Editor sekali.
+-- Tambahkan kolom metrik testing/training di tabel `models`.
+-- Jalankan di Supabase SQL Editor sekali (menghindari error simpan model: train_roc_auc / test_roc_auc).
 
 alter table public.models
   add column if not exists test_accuracy double precision,
