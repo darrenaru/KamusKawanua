@@ -3468,6 +3468,7 @@
           recall: r.recall,
           f1: r.f1,
           loss: r.loss,
+          mcc: Number.isFinite(Number(r.mcc)) ? Number(r.mcc) : null,
           roc_auc: r.roc_auc != null ? r.roc_auc : null,
           confusion_matrix: r.confusion_matrix || null,
           confusion_labels: r.confusion_labels || null,
@@ -3922,6 +3923,16 @@
       return Number.isFinite(n) ? n : null;
     };
     const computeAvgFromEpochRows = () => {
+      const parsed = (() => {
+        try {
+          return JSON.parse(card.dataset.avgMetrics || "null");
+        } catch (err) {
+          return null;
+        }
+      })();
+      if (parsed && Number.isFinite(Number(parsed.mcc))) {
+        return parsed;
+      }
       const tableBody = card.querySelector(".results-table tbody");
       if (!tableBody) return null;
       const rows = Array.from(tableBody.querySelectorAll("tr")).filter((row) => {

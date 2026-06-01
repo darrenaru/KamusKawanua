@@ -162,6 +162,19 @@ function trainingStdDevFromHistory(model) {
     return stdDev(f1Vals);
 }
 
+function trainingMccFromHistory(model) {
+    var hist = findHistoryByModel(model);
+    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var mccVals = results
+        .map(function (r) {
+            return normalizeMcc(r.mcc);
+        })
+        .filter(function (v) {
+            return v != null;
+        });
+    return mean(mccVals);
+}
+
 function resolveTrainingMetricRaw(model, metricDef) {
     if (!model || !metricDef) return null;
     var raw = metricDef.trainField ? model[metricDef.trainField] : null;
@@ -186,6 +199,11 @@ function resolveTrainingMetricRaw(model, metricDef) {
         }
         if (raw === null || raw === undefined || raw === '') {
             raw = trainingRocFromHistory(model);
+        }
+    }
+    if (metricDef.key === 'mcc') {
+        if (raw === null || raw === undefined || raw === '') {
+            raw = trainingMccFromHistory(model);
         }
     }
     return raw;
@@ -877,8 +895,11 @@ function resolveSummaryComparisonValues(referenceModel, metricDef) {
             : null;
     }
 
-    if (trainValue == null && testValue != null) trainValue = testValue;
-    if (testValue == null && trainValue != null) testValue = trainValue;
+    // Jangan salin nilai testing ke training untuk MCC (hindari underfitting palsu).
+    if (metricDef.type !== 'mcc' && metricDef.key !== 'mcc') {
+        if (trainValue == null && testValue != null) trainValue = testValue;
+        if (testValue == null && trainValue != null) testValue = trainValue;
+    }
 
     var diffType =
         metricDef.key === 'loss'

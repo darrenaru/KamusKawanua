@@ -19,7 +19,7 @@ from typing import Any
 # ============================================================================
 # SATU-SATUNYA PENGATURAN — ganti nilai string di baris berikutnya:
 # ============================================================================
-ACTIVE_XLM_PROFILE: str = "xlm-r-2"
+ACTIVE_XLM_PROFILE: str = "xlm-r"
 # ============================================================================
 
 _PROFILE_GEN1 = frozenset({"xlm-r", "xlm-r-1", "gen1"})

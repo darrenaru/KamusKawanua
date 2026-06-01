@@ -40,7 +40,11 @@ def enrich_training_metrics(merged: dict[str, Any]) -> None:
     recall = _to_float(merged.get("recall"), 0.0)
     f1 = _to_float(merged.get("f1_score"), 0.0)
     accuracy = _to_float(merged.get("accuracy"), 0.0)
-    mcc = _to_float(merged.get("train_mcc"), 0.0)
+
+    train_mcc_raw = merged.get("train_mcc")
+    train_mcc: float | None = None
+    if train_mcc_raw is not None and str(train_mcc_raw).strip() != "":
+        train_mcc = _to_float(train_mcc_raw, 0.0)
 
     if merged.get("macro_avg") is None and (precision or recall or f1):
         merged["macro_avg"] = (precision + recall + f1) / 3.0
@@ -54,8 +58,15 @@ def enrich_training_metrics(merged: dict[str, Any]) -> None:
             precision=precision,
             recall=recall,
             f1_score=f1,
-            train_mcc=mcc,
+            train_mcc=train_mcc or 0.0,
         )
 
-    merged["train_loss"] = _to_float(merged.get("train_loss"), 0.0)
-    merged["train_mcc"] = mcc
+    if merged.get("train_loss") is not None and str(merged.get("train_loss")).strip() != "":
+        merged["train_loss"] = _to_float(merged.get("train_loss"), 0.0)
+    elif "train_loss" in merged and merged.get("train_loss") is None:
+        merged.pop("train_loss", None)
+
+    if train_mcc is not None:
+        merged["train_mcc"] = train_mcc
+    else:
+        merged.pop("train_mcc", None)

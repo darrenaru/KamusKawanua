@@ -1,6 +1,6 @@
 {
-  "generation": "gen2",
-  "profile": "xlm-r-2",
+  "generation": "gen1",
+  "profile": "xlm-r",
   "source": "backend/xlm_generation.py :: ACTIVE_XLM_PROFILE",
   "hint": "Ubah ACTIVE_XLM_PROFILE ke \"xlm-r\" (gen1) atau \"xlm-r-2\" (gen2), restart backend, refresh browser."
 }
