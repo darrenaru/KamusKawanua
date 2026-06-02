@@ -1272,6 +1272,7 @@
 
   function applyModeSpecificVisibility() {
     const modelSelect = document.getElementById("model-select");
+    const modelSelectWrapper = document.getElementById("model-select-wrapper") || modelSelect;
     const modelCard = document.getElementById("model-card");
     const newModelNameCard = document.getElementById("new-model-name-card");
     const btnPilihDataset = document.getElementById("btn-pilih-dataset");
@@ -1281,15 +1282,15 @@
     if (!modelSelect || !modelCard || !newModelNameCard) return;
 
     if (currentMode === "cari-rasio") {
-      modelSelect.style.display = "none";
-      modelSelect.value = "";
+      modelSelectWrapper.style.display = "none";
+      if (modelSelect) modelSelect.value = "";
       modelCard.style.display = "none";
       newModelNameCard.style.display = "none";
       modelNameSaved = false;
       if (btnPilihDataset) btnPilihDataset.style.display = "inline-block";
       if (finalRatioBadge) finalRatioBadge.style.display = "none";
     } else {
-      modelSelect.style.display = "inline-block";
+      modelSelectWrapper.style.display = "";
       if (btnPilihDataset) btnPilihDataset.style.display = "none";
       if (finalRatioBadge) {
         const bestRatio =
