@@ -109,3 +109,15 @@ nextBtn.addEventListener("click", () => {
     // Redirect to Data Collection
     window.location.href = "../pages/data-collection.html";
 });
+
+// ==============================
+// BACK TO SEARCH
+// ==============================
+
+const btnBackToSearch = document.getElementById("btnBackToSearch");
+
+if (btnBackToSearch) {
+    btnBackToSearch.addEventListener("click", () => {
+        window.location.href = "../../index.html";
+    });
+}

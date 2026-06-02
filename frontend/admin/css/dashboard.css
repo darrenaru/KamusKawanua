@@ -179,6 +179,38 @@ body::after {
   position: relative;
 }
 
+.dashboard-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.btn-small-outline {
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-small-outline:hover {
+  background: #f0f0f0;
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-small-outline:focus-visible {
+  outline: 2px solid rgba(44, 31, 14, 0.35);
+  outline-offset: 2px;
+}
+
 /* TITLE */
 .title {
   margin-bottom: 36px;
