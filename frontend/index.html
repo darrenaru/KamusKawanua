@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -52,7 +52,7 @@
 </div>
 
     <div class="search-box" data-aos="fade-up" data-aos-delay="220">
-        <input type="text" id="query" placeholder="Masukkan kata..." />
+        <input type="text" id="query" placeholder="Enter a word..." maxlength="64" autocomplete="off" />
         <button onclick="search()" class="search-btn" id="searchBtn">
             <img src="assets/images/search.png" alt="search">
         </button>
@@ -60,7 +60,7 @@
 
     <div id="searchLoading" class="search-loading" style="display:none" aria-live="polite" aria-busy="true">
         <div class="spinner" aria-hidden="true"></div>
-        <div class="search-loading-text">Mencari…</div>
+        <div class="search-loading-text">Searching…</div>
     </div>
 
     <div id="results"></div>

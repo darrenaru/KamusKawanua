@@ -1,10 +1,24 @@
 // ==============================
 // SUPABASE INIT (WAJIB GANTI)
 // ==============================
-const supabaseUrl = "https://fhpjbkelhvopvfzykjne.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTQ2NTQsImV4cCI6MjA5MDk3MDY1NH0.xSUPwXaPCcO4uDi-rH1MdeaJCeJU56pwvLDEgVT_SDQ";
+const supabaseUrl = "https://cdrabgiuvfisxntfzskd.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+function bumpPageAOS() {
+    requestAnimationFrame(() => {
+        if (typeof window.refreshPageAOS === "function") {
+            window.refreshPageAOS();
+        } else if (typeof window.AOS !== "undefined" && typeof window.AOS.refresh === "function") {
+            try {
+                window.AOS.refresh();
+            } catch (e) {
+                /* ignore */
+            }
+        }
+    });
+}
 
 // ==============================
 // DATA
@@ -132,10 +146,11 @@ function initValidation() {
 
     function validate() {
         const file = input.files[0];
-        const name = datasetName.value.trim();
-
-        uploadBtn.disabled = !(file && name);
+        // Now we don't strictly require name input if file is present (auto-naming)
+        uploadBtn.disabled = !file;
     }
+    
+    datasetName.setAttribute("maxlength", "50");
 
     input.addEventListener("change", validate);
     datasetName.addEventListener("input", validate);
@@ -153,25 +168,35 @@ function renderDatasets(list = datasets) {
 
     if (!list.length) {
         const hasSourceData = datasets.length > 0;
-        container.innerHTML = `<div class="dataset-empty">${
+        container.innerHTML = `<div class="dataset-empty" data-aos="fade-up" data-aos-delay="60">${
             hasSourceData
                 ? "No dataset matches your current search keyword."
                 : "No datasets are available yet. Upload a CSV file to get started."
         }</div>`;
         setDatasetStatus(hasSourceData ? "Search completed." : "Waiting for dataset upload.");
+        bumpPageAOS();
         return;
     }
 
     setDatasetStatus(`Showing ${list.length} dataset(s).`);
 
-    list.forEach(ds => {
+    list.forEach((ds, idx) => {
         const card = document.createElement("div");
         card.className = "dataset-card";
+        card.setAttribute("data-aos", "fade-up");
+        card.setAttribute("data-aos-delay", String(Math.min(60 + idx * 50, 320)));
 
+        const safeName = String(ds.name || "dataset").replace(/"/g, "&quot;");
         card.innerHTML = `
             <div class="card-header">
                 <h3>${ds.name}</h3>
-                <button class="delete-btn" onclick="deleteDataset(${ds.id})">Delete</button>
+                <div class="card-actions">
+                    <button type="button" class="download-btn" data-dataset-id="${ds.id}" data-dataset-name="${safeName}">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download CSV
+                    </button>
+                    <button class="delete-btn" onclick="deleteDataset(${ds.id})">Delete</button>
+                </div>
             </div>
 
             <div class="dataset-info">
@@ -185,8 +210,50 @@ function renderDatasets(list = datasets) {
             </div>
         `;
 
+        const downloadBtn = card.querySelector(".download-btn");
+        if (downloadBtn) {
+            downloadBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                downloadDatasetCsv(
+                    Number(downloadBtn.dataset.datasetId),
+                    downloadBtn.dataset.datasetName || "dataset",
+                );
+            });
+        }
+
         container.appendChild(card);
     });
+
+    bumpPageAOS();
+}
+
+async function downloadDatasetCsv(datasetId, datasetName) {
+    if (!datasetId) return;
+    try {
+        const rows = await KamusCsvExport.fetchAllSupabaseRows(
+            supabaseClient,
+            "raw_data",
+            datasetId,
+        );
+        const headers = [
+            "id_kata",
+            "jenis",
+            "manado",
+            "indonesia",
+            "inggris",
+            "kalimat_manado",
+            "kalimat_indonesia",
+            "kalimat_inggris",
+        ];
+        KamusCsvExport.downloadCsv(
+            `${datasetName || "dataset"}_upload.csv`,
+            headers,
+            rows,
+        );
+    } catch (err) {
+        console.error(err);
+        alert("Failed to download CSV: " + (err.message || err));
+    }
 }
 
 // ==============================
@@ -332,18 +399,42 @@ async function uploadDataset() {
 
     try {
 
-        // VALIDASI DULU
-        if (!file || !datasetName) {
-            alert("File and dataset name are required!");
+        if (!file) {
+            alert("Please select a CSV file.");
+            uploadBtn.disabled = false;
+            cancelBtn.disabled = false;
+            uploadBtn.innerText = "Upload to Database";
+            input.disabled = false;
+            datasetNameInput.disabled = false;
+            isUploading = false;
             return;
         }
 
-        // CEK DUPLIKAT
-        const exists = await isDatasetNameExists(datasetName);
+        let finalName = datasetName || file.name.replace(/\.[^/.]+$/, "");
+        finalName = finalName.substring(0, 50).trim();
 
-        if (exists) {
-            alert("Dataset name is already used!");
-            return;
+        let isDuplicate = await isDatasetNameExists(finalName);
+        if (isDuplicate) {
+            if (datasetName) {
+                alert("Dataset name '" + finalName + "' is already used! Please choose another name.");
+                uploadBtn.disabled = false;
+                cancelBtn.disabled = false;
+                uploadBtn.innerText = "Upload to Database";
+                input.disabled = false;
+                datasetNameInput.disabled = false;
+                isUploading = false;
+                return;
+            } else {
+                let counter = 1;
+                let newName = finalName;
+                while (isDuplicate) {
+                    const suffix = "_" + counter;
+                    newName = finalName.substring(0, 50 - suffix.length) + suffix;
+                    isDuplicate = await isDatasetNameExists(newName);
+                    counter++;
+                }
+                finalName = newName;
+            }
         }
 
         progressContainer.style.display = "block";
@@ -380,7 +471,7 @@ async function uploadDataset() {
         const { data: dataset, error: err1 } = await supabaseClient
             .from("datasets")
             .insert([{
-                name: datasetName,
+                name: finalName,
                 file_name: file.name,
                 total_data: rows.length,
                 kata_kerja: kerja,

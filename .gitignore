@@ -1,34 +1,22 @@
-# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual env
 venv/
+.venv/
 .env/
-
-# Data besar / model
 *.npy
 *.csv
-
-# OS
+backend/trained_models/
+backend/data/embeddings.npy
 .DS_Store
 Thumbs.db
-
-# VSCode
 .vscode/
-
-# Logs
 *.log
-.venv/
-__pycache__/
-*.pyc
-backend/trained_models/
-backend/data/embeddings.npy
-
-# Env examples are safe to commit
-!.env.example
 .env
-backend/trained_models/
-backend/data/embeddings.npy
+!.env.example
+scratch_*.py
+.agents/
+skills-lock.json
+*.rar
+*.zip

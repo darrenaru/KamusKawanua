@@ -1,40 +1,41 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Preprocessing</title>
   <link rel="icon" type="image/svg+xml" href="../../assets/images/logo-only-white.svg">
   <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
   <link rel="stylesheet" href="../css/preprocessing.css">
+    <link rel="stylesheet" href="../css/sidebar.css">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
 <div class="layout">
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="logo">
-      <img src="../../assets/images/logo.png" alt="logo">
-    </div>
-
-    <ul>
-      <li><a href="dashboard.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span>Home</span></a></li>
-      <li><a href="data-collection.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="20" x2="9" y2="10"/></svg></span><span>Data Collection</span></a></li>
-      <li class="active"><a href="preprocessing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span><span>Preprocessing</span></a></li>
-      <li><a href="processing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg></span><span>Processing</span></a></li>
-      <li><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v5l-4 7a4 4 0 0 0 3.5 6h5a4 4 0 0 0 3.5-6l-4-7V3"/></svg></span><span>Testing</span></a></li>
-      <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Performance Evaluation</span></a></li>
-    </ul>
-  </aside>
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="logo">
+                <img src="../../assets/images/logo.png" alt="logo">
+            </div>
+            <ul>
+                <li><a href="dashboard.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Dashboard</span></a></li>
+                <li><a href="data-collection.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg></span><span>Data Collection</span></a></li>
+                <li class="active"><a href="preprocessing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span><span>Preprocessing</span></a></li>
+                <li><a href="processing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span><span>Processing</span></a></li>
+                <li><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span><span>Testing</span></a></li>
+                <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Evaluation</span></a></li>
+            </ul>
+        </aside>
 
   <!-- MAIN -->
   <div class="main">
     <h1 class="title-with-icon" data-aos="fade-up" data-aos-delay="40">
-      <span class="title-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-      </span>
-      Preprocessing
-    </h1>
+                <span class="title-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                </span>
+                Preprocessing
+            </h1>
     <div class="lexicon-toolbar" data-aos="fade-up" data-aos-delay="90">
       <button id="openLexiconModalBtn" type="button" class="lex-btn-primary">Manage Stopword & Slang</button>
     </div>
@@ -111,33 +112,125 @@
 
 <!-- DETAIL MODAL -->
 <div id="datasetCard" class="dataset-modal" style="display:none;">
-  <div class="dataset-card" role="dialog" aria-modal="true" aria-labelledby="datasetName">
-    <button type="button" id="closeDatasetModal" class="modal-close" aria-label="Close popup">×</button>
-    <h3 id="datasetName"></h3>
+  <div class="m4-modal-overlay">
+    <!-- Modal Container -->
+    <div class="m4-modal-container" role="dialog" aria-modal="true" aria-labelledby="datasetName">
+      
+      <!-- Header -->
+      <div class="m4-modal-header">
+        <h2 id="datasetName" class="m4-headline-md"></h2>
+        <button type="button" id="closeDatasetModal" class="m4-icon-btn" aria-label="Close popup">
+          <span class="material-symbols-outlined" style="font-size: 20px;">close</span>
+        </button>
+      </div>
 
-    <div class="dataset-info">
-      <div><span class="label">File</span><span class="value" id="fileName"></span></div>
-      <div><span class="label">Data Count</span><span class="value" id="total"></span></div>
-      <div><span class="label">Verb</span><span class="value" id="kerja"></span></div>
-      <div><span class="label">Noun</span><span class="value" id="benda"></span></div>
-      <div><span class="label">Adjective</span><span class="value" id="sifat"></span></div>
-      <div><span class="label">Adverb</span><span class="value" id="keterangan"></span></div>
-      <div><span class="label">Uploader</span><span class="value" id="uploader"></span></div>
-      <div><span class="label">Date</span><span class="value" id="date"></span></div>
-    </div>
+      <!-- Content Body -->
+      <div class="m4-modal-body">
+        <div class="m4-grid">
+          
+          <!-- Data Row: File -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">description</span>File</span></span>
+            <span id="fileName" class="m4-value m4-truncate" title=""></span>
+          </div>
 
-    <!-- BUTTON -->
-    <div class="action-row">
-      <button id="processBtn" disabled>Start Preprocessing</button>
-      <button id="cancelProcessBtn" style="display:none;" disabled>Cancel Preprocessing</button>
-    </div>
-    <button id="continueBtn" style="display:none;">Continue to Processing</button>
-    
-    <div class="progress-container" id="progressContainer">
-      <div id="progressBar" class="progress-bar"></div>
-    </div>
+          <!-- Data Row: Data Count -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">format_list_numbered</span>Data Count</span></span>
+            <span id="total" class="m4-value"></span>
+          </div>
 
-    <p id="progressText" class="progress-text">Select a dataset, then click Start Preprocessing</p>
+          <!-- Data Row: Verb -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">category</span>Verb</span></span>
+            <span id="kerja" class="m4-value"></span>
+          </div>
+
+          <!-- Data Row: Noun -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">category</span>Noun</span></span>
+            <span id="benda" class="m4-value"></span>
+          </div>
+
+          <!-- Data Row: Adjective -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">category</span>Adjective</span></span>
+            <span id="sifat" class="m4-value"></span>
+          </div>
+
+          <!-- Data Row: Adverb -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">category</span>Adverb</span></span>
+            <span id="keterangan" class="m4-value"></span>
+          </div>
+
+          <!-- Data Row: Uploader -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">person</span>Uploader</span></span>
+            <span id="uploader" class="m4-value"></span>
+          </div>
+
+          <!-- Data Row: Date -->
+          <div class="m4-data-row">
+            <span class="m4-label"><span class="m4-label-flex"><span class="material-symbols-outlined m4-icon">calendar_today</span>Date</span></span>
+            <span id="date" class="m4-value"></span>
+          </div>
+          
+        </div>
+
+        <!-- Actions Container -->
+        <div class="m4-actions-container">
+          <div class="m4-actions-row">
+            <button id="processBtn" class="m4-btn-primary" disabled>Start Preprocessing</button>
+            <button id="cancelProcessBtn" class="m4-btn-error" style="display:none;" disabled>Cancel Preprocessing</button>
+          </div>
+          
+          <!-- Progress Info -->
+          <div class="progress-container" id="progressContainer" style="margin-top:16px; margin-bottom:0; width:100%; display:none;">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          
+
+          <div class="m4-actions-row">
+            <button id="viewDataBtn" class="m4-btn-secondary" style="display:none;">View Data Comparison</button>
+            <button id="downloadPreprocessedBtn" class="m4-btn-secondary" style="display:none;">Download Preprocessed Data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="m4-modal-footer">
+        <div class="m4-status">
+          <span class="m4-status-dot"></span>
+          <span id="progressText" class="m4-status-text">Select a dataset, then click Start Preprocessing</span>
+        </div>
+        <button id="continueBtn" class="m4-btn-tertiary" style="display:none;">Continue to Processing</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- DATA COMPARISON MODAL -->
+<div id="dataComparisonModal" class="dataset-modal data-comparison-modal" style="display:none;">
+  <div class="dataset-card data-comparison-card" role="dialog" aria-modal="true">
+    <button type="button" id="closeDataComparisonBtn" class="modal-close" aria-label="Close">×</button>
+    <h3 class="data-comparison-title">Data Comparison (Original vs Preprocessed)</h3>
+    <p id="comparisonStatus" class="data-comparison-status">Loading data...</p>
+    <div class="data-comparison-table-wrap">
+      <table class="data-comparison-table" id="comparisonTable">
+        <thead>
+          <tr>
+            <th>Word ID</th>
+            <th>Original (Manado)</th>
+            <th>Cleaned (Manado)</th>
+            <th>Original (Indonesia)</th>
+            <th>Cleaned (Indonesia)</th>
+          </tr>
+        </thead>
+        <tbody id="comparisonTableBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -145,6 +238,7 @@
 <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="../../animations.js"></script>
+<script src="../js/csv-export.js"></script>
 <script src="../js/preprocessing.js"></script>
 
 </body>

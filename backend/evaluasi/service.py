@@ -1,20 +1,12 @@
 from typing import Any
 
-from backend.supabase_client import supabase
-
-# Metrik testing: hanya disematkan di `testing_result` agar tidak menimpa
-# kolom training di baris `models` (train_loss, train_mcc, accuracy, dll.).
-_TESTING_NEST_KEYS = (
-    "accuracy",
-    "precision_macro",
-    "recall_macro",
-    "f1_macro",
-    "std_deviation",
-    "weighted_avg",
-    "roc_auc",
-    "mcc",
-    "max_length",
+from backend.model_testing_metrics import (
+    build_testing_result_from_legacy_row,
+    build_testing_result_from_model_row,
 )
+from backend.supabase_client import supabase
+from backend.training_metrics import enrich_training_metrics
+from backend.xlm_generation import filter_xlm_model_rows
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -24,65 +16,7 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         return float(default)
 
 
-def _to_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return int(default)
-
-
-def _build_testing_result_payload(row: dict | None) -> dict[str, Any]:
-    if not row:
-        return {}
-    payload: dict[str, Any] = {}
-    for key in _TESTING_NEST_KEYS:
-        if key == "max_length":
-            payload[key] = _to_int(row.get(key), 0)
-        else:
-            payload[key] = _to_float(row.get(key), 0.0)
-    return payload
-
-
-def _fill_training_metrics_with_fallback(
-    merged: dict[str, Any], testing_result: dict[str, Any] | None
-) -> None:
-    testing_result = testing_result or {}
-    merged["accuracy"] = _to_float(
-        merged.get("accuracy"),
-        testing_result.get("accuracy", 0.0),
-    )
-    merged["precision"] = _to_float(
-        merged.get("precision"),
-        testing_result.get("precision_macro", 0.0),
-    )
-    merged["recall"] = _to_float(
-        merged.get("recall"),
-        testing_result.get("recall_macro", 0.0),
-    )
-    merged["f1_score"] = _to_float(
-        merged.get("f1_score"),
-        testing_result.get("f1_macro", 0.0),
-    )
-    if merged.get("macro_avg") is None:
-        merged["macro_avg"] = (
-            merged["precision"] + merged["recall"] + merged["f1_score"]
-        ) / 3.0
-    else:
-        merged["macro_avg"] = _to_float(merged.get("macro_avg"), 0.0)
-    merged["train_loss"] = _to_float(merged.get("train_loss"), 0.0)
-    merged["train_mcc"] = _to_float(
-        merged.get("train_mcc"),
-        testing_result.get("mcc", 0.0),
-    )
-
-
-def _is_final_training_mode(value: Any) -> bool:
-    mode = str(value or "").strip().lower().replace("_", "-")
-    return mode in {"training-final", "final-training", "final"}
-
-
-def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
-    """Ambil baris testing_results terbaru per model_id (untuk metrik uji coba)."""
+def _fetch_legacy_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
     if not model_ids:
         return {}
     try:
@@ -96,7 +30,6 @@ def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
         rows = res.data or []
     except Exception:
         return {}
-
     by_model: dict[int, dict] = {}
     for row in rows:
         mid = row.get("model_id")
@@ -111,6 +44,36 @@ def _fetch_latest_testing_by_model_ids(model_ids: list[int]) -> dict[int, dict]:
     return by_model
 
 
+def _attach_testing_result(
+    merged: dict[str, Any], legacy_testing: dict[int, dict] | None = None
+) -> None:
+    """
+    Sematkan metrik uji hanya di `testing_result` (nested).
+    Prioritas: kolom test_* di baris model → tabel testing_results lama.
+    Kolom training (accuracy, train_roc_auc, …) tidak diubah.
+    """
+    nested = build_testing_result_from_model_row(merged)
+    if not nested and legacy_testing is not None:
+        mid = merged.get("id")
+        if mid is not None:
+            legacy_row = legacy_testing.get(int(mid))
+            nested = build_testing_result_from_legacy_row(legacy_row)
+    if nested:
+        merged["testing_result"] = nested
+
+
+def _prepare_model_row(
+    merged: dict[str, Any], legacy_testing: dict[int, dict] | None = None
+) -> None:
+    enrich_training_metrics(merged)
+    _attach_testing_result(merged, legacy_testing)
+
+
+def _is_final_training_mode(value: Any) -> bool:
+    mode = str(value or "").strip().lower().replace("_", "-")
+    return mode in {"training-final", "final-training", "final"}
+
+
 def _canonical_algo_key(algoritma: str) -> str | None:
     """Match frontend column keys: indobert, mbert, xlm-r, word2vec, glove."""
     if not algoritma:
@@ -120,7 +83,7 @@ def _canonical_algo_key(algoritma: str) -> str | None:
         return "indobert"
     if k in ("m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
         return "mbert"
-    if k in ("xlmr", "xlm-r"):
+    if k in ("xlm-r-2", "xlmr", "xlm-r"):
         return "xlm-r"
     if k in ("word2vec", "word-2-vec"):
         return "word2vec"
@@ -171,6 +134,7 @@ def get_best_models_by_algorithm() -> list[dict]:
 
     # Evaluasi hanya menggunakan model final-training.
     rows = [row for row in rows if _is_final_training_mode(row.get("mode"))]
+    rows = filter_xlm_model_rows(rows)
 
     best_by_algorithm: dict[str, dict] = {}
     for row in rows:
@@ -178,7 +142,6 @@ def get_best_models_by_algorithm() -> list[dict]:
         key = _canonical_algo_key(algorithm)
         if not key:
             continue
-
         model_id = row.get("id")
         model_name = str(row.get("nama_model") or "").strip()
         if model_id is None or not model_name:
@@ -195,7 +158,7 @@ def get_best_models_by_algorithm() -> list[dict]:
             dataset_id_int = int(dataset_id) if dataset_id is not None else None
             merged = dict(row)
             merged["id"] = int(model_id)
-            merged["algoritma"] = algorithm
+            merged["algoritma"] = key
             merged["nama_model"] = model_name
             merged["canonical_algorithm"] = key
             merged["accuracy"] = accuracy
@@ -214,22 +177,11 @@ def get_best_models_by_algorithm() -> list[dict]:
         reverse=True,
     )
 
-    model_ids = [
-        int(row["id"])
-        for row in items
-        if row.get("id") is not None
-    ]
-    testing_map = _fetch_latest_testing_by_model_ids(model_ids)
-
+    legacy_map = _fetch_legacy_testing_by_model_ids(
+        [int(row["id"]) for row in items if row.get("id") is not None]
+    )
     for row in items:
-        mid = row.get("id")
-        if mid is None:
-            continue
-        tr = testing_map.get(int(mid))
-        nested = _build_testing_result_payload(tr)
-        _fill_training_metrics_with_fallback(row, nested)
-        if nested:
-            row["testing_result"] = nested
+        _prepare_model_row(row, legacy_map)
 
     return items
 
@@ -244,6 +196,7 @@ def get_models_metrics() -> list[dict]:
             .execute()
         )
         rows = [row for row in list(res.data or []) if _is_final_training_mode(row.get("mode"))]
+        rows = filter_xlm_model_rows(rows)
     except Exception as e:
         raise ValueError(f"Failed to fetch model metrics data: {e}")
 
@@ -276,7 +229,7 @@ def get_models_metrics() -> list[dict]:
             dataset_name_map = {}
 
     model_ids = [int(r["id"]) for r in rows if r.get("id") is not None]
-    testing_map = _fetch_latest_testing_by_model_ids(model_ids)
+    legacy_map = _fetch_legacy_testing_by_model_ids(model_ids)
 
     out: list[dict] = []
     for row in rows:
@@ -288,10 +241,9 @@ def get_models_metrics() -> list[dict]:
         key = _canonical_algo_key(algorithm)
         if not key:
             continue
-
         merged = dict(row)
         merged["id"] = int(model_id)
-        merged["algoritma"] = algorithm
+        merged["algoritma"] = key
         merged["canonical_algorithm"] = key
 
         dataset_id = row.get("dataset_id")
@@ -303,12 +255,23 @@ def get_models_metrics() -> list[dict]:
             else None
         )
 
-        tr = testing_map.get(int(model_id))
-        nested = _build_testing_result_payload(tr)
-        _fill_training_metrics_with_fallback(merged, nested)
-        if nested:
-            merged["testing_result"] = nested
+        _prepare_model_row(merged, legacy_map)
 
         out.append(merged)
 
     return out
+
+
+def get_model_epochs(model_id: int) -> list[dict]:
+    """Return all epoch metrics for a specific model."""
+    try:
+        res = (
+            supabase.table("model_epoch_metrics")
+            .select("*")
+            .eq("model_id", model_id)
+            .order("epoch", desc=False)
+            .execute()
+        )
+        return list(res.data or [])
+    except Exception as e:
+        raise ValueError(f"Failed to fetch model epoch metrics: {e}")

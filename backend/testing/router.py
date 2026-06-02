@@ -14,6 +14,7 @@ from backend.testing.service import (
     predict_with_testing_model,
     test_indobert_model,
     test_mbert_model,
+    test_xlm_r_model,
 )
 
 
@@ -52,6 +53,22 @@ def testing_indobert(req: IndoBertTestingRequest):
 def testing_mbert(req: IndoBertTestingRequest):
     try:
         return test_mbert_model(
+            dataset_id=req.dataset_id,
+            model_name=req.model_name,
+            model_id=req.model_id,
+            max_length=req.max_length,
+            limit=req.limit,
+            save_result=req.save_result,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/xlm-r", response_model=IndoBertTestingResponse)
+@router.post("/xlm-r-2", response_model=IndoBertTestingResponse, include_in_schema=False)
+def testing_xlm_r(req: IndoBertTestingRequest):
+    try:
+        return test_xlm_r_model(
             dataset_id=req.dataset_id,
             model_name=req.model_name,
             model_id=req.model_id,

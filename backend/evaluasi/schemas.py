@@ -17,3 +17,11 @@ class EvaluationModelsMetricsResponse(BaseModel):
     status: str
     total: int
     items: list[dict[str, Any]]
+
+
+class ModelEpochMetricsResponse(BaseModel):
+    """Response containing epoch metrics for a specific model."""
+
+    status: str
+    total: int
+    items: list[dict[str, Any]]

@@ -1,0 +1,203 @@
+/* sidebar.css - Unified Sidebar & Layout (Loaded LAST to override page CSS) */
+
+/* ===========================
+   LAYOUT NORMALIZATION
+   Forces consistent sidebar+main layout across ALL pages
+=========================== */
+.layout {
+  display: flex !important;
+  min-height: 100vh !important;
+  height: auto !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* ===========================
+   SIDEBAR
+=========================== */
+.sidebar {
+  width: 270px !important;
+  min-width: 270px !important;
+  max-width: 270px !important;
+  background: rgba(248, 246, 242, 0.95) !important;
+  backdrop-filter: blur(10px);
+  height: 100vh !important;
+  padding: 32px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  flex-shrink: 0 !important;
+  position: sticky !important;
+  top: 0 !important;
+  box-sizing: border-box !important;
+  border-right: 1px solid rgba(44, 31, 14, 0.08) !important;
+  border-left: none !important;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+/* ===========================
+   LOGO
+=========================== */
+.sidebar .logo {
+  margin-top: 0 !important;
+  margin-bottom: 40px !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.sidebar .logo img {
+  width: 180px !important;
+  display: block !important;
+}
+
+.sidebar .logo h2 {
+  display: none !important;
+}
+
+/* ===========================
+   NAV LIST
+=========================== */
+.sidebar ul {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.sidebar li {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  font-weight: 400 !important;
+}
+
+.sidebar li a {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 13px 18px !important;
+  font-weight: 500 !important;
+  font-size: 15px !important;
+  color: #6b5e50 !important;
+  text-decoration: none !important;
+  border-radius: 12px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.sidebar li a:hover {
+  background: rgba(44, 31, 14, 0.05) !important;
+  color: var(--accent, #2c1f0e) !important;
+  transform: translateX(4px) !important;
+}
+
+/* ===========================
+   NAV ICONS
+=========================== */
+.sidebar .nav-icon {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.sidebar .nav-icon svg {
+  width: 100% !important;
+  height: 100% !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  stroke-width: 2.2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  transition: all 0.25s ease !important;
+}
+
+/* ===========================
+   ACTIVE STATE (The Pill)
+=========================== */
+.sidebar li.active a {
+  background: var(--accent, #2c1f0e) !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
+  box-shadow: 0 4px 12px rgba(44, 31, 14, 0.2) !important;
+  transform: none !important;
+}
+
+.sidebar li.active a:hover {
+  transform: none !important;
+  background: var(--accent, #2c1f0e) !important;
+}
+
+.sidebar li.active .nav-icon {
+  background: transparent !important;
+}
+
+.sidebar li.active .nav-icon svg {
+  stroke: #ffffff !important;
+}
+
+/* ===========================
+   DISABLED STATE
+=========================== */
+.sidebar li.disabled-link a {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* ===========================
+   UNIVERSAL HEADINGS
+   Forces all page headings to be centered and identical
+=========================== */
+.main h1.title-with-icon, 
+.main h1.title,
+.main h1.page-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  margin: 0 auto 36px auto !important;
+  font-weight: 600 !important;
+  font-size: 24px !important;
+  color: var(--text-primary, #2c1f0e) !important;
+  letter-spacing: -0.02em !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+.main .title-icon {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  border-radius: 8px !important;
+  background: rgba(200, 169, 110, 0.15) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.main .title-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke: var(--accent, #2c1f0e) !important;
+  fill: none !important;
+  stroke-width: 2.2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}

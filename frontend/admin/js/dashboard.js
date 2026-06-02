@@ -23,6 +23,8 @@ const nextBtn = document.getElementById("nextBtn");
 const labelMap = {
     mbert: "mBERT",
     indobert: "IndoBERT",
+    "xlm-r": "XLM-R",
+    "xlm-r-2": "XLM-R",
     xlmr: "XLM-R",
     word2vec: "Word2Vec",
     glove: "GloVe"
@@ -63,14 +65,29 @@ buttons.forEach(btn => {
 // INIT LOAD
 // ==============================
 
+function normalizeStoredAlgorithmSelection(raw) {
+    const k = String(raw || "").toLowerCase().trim().replace(/_/g, "-");
+    if (k === "xlmr" || k === "xlm-r" || k === "xlm-r-2") return "xlm-r";
+    return k;
+}
+
 window.onload = () => {
-    const saved = localStorage.getItem("selectedAlgorithm");
+    if (typeof window.kamusInitXlmGeneration === "function") {
+        void window.kamusInitXlmGeneration();
+    }
+    let saved = normalizeStoredAlgorithmSelection(
+        localStorage.getItem("selectedAlgorithm")
+    );
+    if (saved === "xlmr" || saved === "xlm-r" || saved === "xlm-r-2") {
+        saved = "xlm-r";
+        localStorage.setItem("selectedAlgorithm", saved);
+    }
 
     if (saved) {
         applySelection(saved);
     } else {
-        info.innerText = "No algorithm selected yet.";
-        nextBtn.disabled = true;
+        localStorage.setItem("selectedAlgorithm", "indobert");
+        applySelection("indobert");
     }
 };
 

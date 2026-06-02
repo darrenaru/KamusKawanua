@@ -2,18 +2,26 @@ from __future__ import annotations
 
 import json
 import os
+
+# Hindari token HF rusak di ENV (401) saat unduh model publik.
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+
 import random
 import re
 import gc
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import (
     accuracy_score,
     matthews_corrcoef,
     precision_recall_fscore_support,
 )
+
+from backend.classification_metrics import multiclass_roc_auc_weighted
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
@@ -25,13 +33,60 @@ from transformers import (
 from backend.supabase_client import supabase
 
 
+def _validation_roc_auc_score(
+    y_true: list[int],
+    all_probs: list[np.ndarray],
+    id2label: dict[int, str],
+) -> float:
+    """ROC-AUC pada subset validasi (skala 0–1, selaras metrik epoch lainnya)."""
+    if not y_true or not all_probs or len(id2label) < 2:
+        return 0.0
+    labels_order = [id2label[i] for i in range(len(id2label))]
+    y_true_str: list[str] = []
+    for yi in y_true:
+        key = int(yi)
+        if key in id2label:
+            y_true_str.append(id2label[key])
+    if len(set(y_true_str)) < 2:
+        return 0.0
+    try:
+        probas = np.vstack(all_probs)
+        roc = multiclass_roc_auc_weighted(y_true_str, probas, labels_order)
+        return float(roc)
+    except Exception:
+        return 0.0
+
+
 INDOBERT_MODEL_ID = "indobenchmark/indobert-base-p2"
 MBERT_MODEL_ID = "bert-base-multilingual-cased"
+_DEFAULT_XLMR_HUB_ID = "xlm-roberta-base"
+XLMR_MODEL_ID = (os.environ.get("KAMUS_XLMR_MODEL") or "").strip() or _DEFAULT_XLMR_HUB_ID
 
-# Internal defaults khusus mBERT
+# Internal defaults khusus mBERT / fast training
 _MBERT_LABEL_SMOOTHING = 0.05
 _MBERT_FIXED_MAX_LENGTH = 64
 _INDOBERT_FAST_MAX_LENGTH = 64
+_XLM_FAST_MAX_LENGTH = 32
+_HF_HUB_PUBLIC: dict[str, object] = {"token": False}
+
+
+def _hub_kwargs_for_pretrained(repo_or_path: str) -> dict[str, object]:
+    p = str(repo_or_path).strip()
+    if os.path.isdir(p):
+        return {}
+    if p in (INDOBERT_MODEL_ID, MBERT_MODEL_ID, _DEFAULT_XLMR_HUB_ID):
+        return _HF_HUB_PUBLIC
+    return {}
+
+
+def _is_xlm_roberta_model_id(model_id: str) -> bool:
+    p = str(model_id or "").strip()
+    if not p:
+        return False
+    if p == XLMR_MODEL_ID:
+        return True
+    low = p.replace("\\", "/").lower()
+    return "xlm-roberta" in low or low.endswith("xlm-roberta-base")
 
 
 def _set_global_seed(seed: int) -> None:
@@ -55,8 +110,13 @@ def _cleanup_torch_memory() -> None:
 
 def _safe_name(name: str) -> str:
     name = name.strip()
-    name = re.sub(r"[^a-zA-Z0-9._-]+", "_", name)
-    return name[:80] if name else "model"
+    if not name:
+        return "model"
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+        raise ValueError("Model name can only contain letters, numbers, hyphens, and underscores.")
+    if len(name) > 50:
+        raise ValueError("Model name cannot exceed 50 characters.")
+    return name
 
 
 def _parse_ratio(split_ratio: str) -> tuple[float, float]:
@@ -65,6 +125,8 @@ def _parse_ratio(split_ratio: str) -> tuple[float, float]:
     test = int(b)
     if train + test != 100:
         raise ValueError("split_ratio must total 100 (example: 80:20)")
+    if train < 50:
+        raise ValueError("Training ratio must be at least 50 (e.g., 50:50 or 80:20).")
     return train / 100.0, test / 100.0
 
 
@@ -145,7 +207,7 @@ def _fetch_preprocessed_rows(dataset_id: int) -> list[dict]:
         res = (
             supabase.table("preprocessed_data")
             .select(
-                "id, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
+                "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
                 "manado_clean, indonesia_clean, kalimat_manado_clean, kalimat_indonesia_clean, "
                 "final_text, jenis_label"
             )
@@ -197,6 +259,37 @@ def _make_label_maps(rows: list[dict]) -> tuple[dict[str, int], dict[int, str]]:
     return label2id, id2label
 
 
+def _apply_partial_transformer_unfreeze(
+    model: torch.nn.Module, backbone_attr: str, *, num_layers: int = 4
+) -> None:
+    """Freeze backbone, unfreeze top encoder layers (+ pooler) untuk cari-rasio / fast_mode."""
+    base = getattr(model, backbone_attr, None)
+    if base is None:
+        return
+    for p in base.parameters():
+        p.requires_grad = False
+    try:
+        encoder = getattr(base, "encoder", None)
+        layers = getattr(encoder, "layer", None) if encoder is not None else None
+        if layers is not None:
+            for layer in list(layers)[-num_layers:]:
+                for p in layer.parameters():
+                    p.requires_grad = True
+    except Exception:
+        pass
+    try:
+        pooler = getattr(base, "pooler", None)
+        if pooler is not None:
+            for p in pooler.parameters():
+                p.requires_grad = True
+    except Exception:
+        pass
+
+
+def _apply_bert_fast_mode_partial_unfreeze(model: torch.nn.Module) -> None:
+    _apply_partial_transformer_unfreeze(model, "bert")
+
+
 def train_indobert_softmax(
     *,
     dataset_id: int,
@@ -215,278 +308,325 @@ def train_indobert_softmax(
     fast_mode: bool = False,
     on_epoch_end=None,
     base_model_id: str = INDOBERT_MODEL_ID,
+    algorithm: str | None = None,
+    text_extractor: Callable[[dict], str] | None = None,
 ) -> dict:
+    """
+    Fine-tune IndoBERT untuk klasifikasi `jenis`.
+    Teks training memakai `final_text` dari preprocess IndoBERT bila tersedia (selaras tokenizer).
+    """
     _set_global_seed(seed)
-    rows = _fetch_preprocessed_rows(dataset_id)
-    data_source = "preprocessed_data"
-    if not rows:
-        # Fallback: tetap bisa training dari raw_data jika preprocessing belum menyimpan hasil.
-        raw_rows = _fetch_raw_rows(dataset_id)
-        if raw_rows:
-            rows = [
-                {
-                    "id": r.get("id"),
-                    "jenis": r.get("jenis"),
-                    "manado": r.get("manado"),
-                    "indonesia": r.get("indonesia"),
-                    "kalimat_manado": r.get("kalimat_manado"),
-                    "kalimat_indonesia": r.get("kalimat_indonesia"),
-                    "manado_clean": r.get("manado"),
-                    "indonesia_clean": r.get("indonesia"),
-                    "kalimat_manado_clean": r.get("kalimat_manado"),
-                    "kalimat_indonesia_clean": r.get("kalimat_indonesia"),
-                }
-                for r in raw_rows
-            ]
-            data_source = "raw_data(fallback)"
+    row_to_text = text_extractor or _build_text_with_preprocessed_fallback
 
-    if not rows:
-        raise ValueError(
-            "preprocessed_data not found or empty for the provided dataset_id. "
-            "Ensure preprocessing has completed successfully and data is stored correctly before "
-            "digunakan pada tahap processing."
+    def _train_once(force_cpu: bool = False) -> dict:
+        rows = _fetch_preprocessed_rows(dataset_id)
+        data_source = "preprocessed_data"
+        if not rows:
+            raw_rows = _fetch_raw_rows(dataset_id)
+            if raw_rows:
+                rows = [
+                    {
+                        "id": r.get("id"),
+                        "jenis": r.get("jenis"),
+                        "manado": r.get("manado"),
+                        "indonesia": r.get("indonesia"),
+                        "kalimat_manado": r.get("kalimat_manado"),
+                        "kalimat_indonesia": r.get("kalimat_indonesia"),
+                        "manado_clean": r.get("manado"),
+                        "indonesia_clean": r.get("indonesia"),
+                        "kalimat_manado_clean": r.get("kalimat_manado"),
+                        "kalimat_indonesia_clean": r.get("kalimat_indonesia"),
+                    }
+                    for r in raw_rows
+                ]
+                data_source = "raw_data(fallback)"
+
+        if not rows:
+            raise ValueError(
+                "preprocessed_data not found or empty for the provided dataset_id. "
+                "Ensure preprocessing has completed successfully and data is stored correctly before "
+                "digunakan pada tahap processing."
+            )
+
+        texts: list[str] = []
+        raw_labels: list[str] = []
+        row_keys: list[str] = []
+        for r in rows:
+            t = row_to_text(r)
+            y = str(r.get("jenis") or "").strip()
+            if t and y:
+                texts.append(t)
+                raw_labels.append(y)
+                row_key = str(r.get("id_kata") or r.get("id") or "").strip()
+                row_keys.append(row_key)
+
+        if len(texts) < 10:
+            raise ValueError("Data terlalu sedikit untuk training (min 10 baris valid).")
+
+        label2id, id2label = _make_label_maps([{"jenis": y} for y in raw_labels])
+        y_all = [label2id[y] for y in raw_labels]
+
+        label_counts: dict[str, int] = {k: 0 for k in label2id.keys()}
+        for y in raw_labels:
+            if y in label_counts:
+                label_counts[y] += 1
+
+        train_frac, _ = _parse_ratio(split_ratio)
+        idx_all = np.arange(len(texts))
+        train_idx, val_idx = train_test_split(
+            idx_all,
+            train_size=train_frac,
+            random_state=seed,
+            shuffle=True,
+            stratify=y_all if len(set(y_all)) > 1 else None,
+        )
+        train_idx = np.array(train_idx)
+        val_idx = np.array(val_idx)
+
+        hub_kw = _hub_kwargs_for_pretrained(base_model_id)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_id, **hub_kw)
+        try:
+            model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id,
+                num_labels=len(label2id),
+                id2label=id2label,
+                label2id=label2id,
+                classifier_dropout=dropout,
+                hidden_dropout_prob=dropout,
+                attention_probs_dropout_prob=dropout,
+                **hub_kw,
+            )
+        except TypeError:
+            model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id,
+                num_labels=len(label2id),
+                id2label=id2label,
+                label2id=label2id,
+                classifier_dropout=dropout,
+                **hub_kw,
+            )
+
+        if force_cpu:
+            device = torch.device("cpu")
+        else:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
+        use_amp = device.type == "cuda"
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
+        indobert_fast = fast_mode and base_model_id == INDOBERT_MODEL_ID
+        xlm_fast = fast_mode and (
+            algorithm in ("xlm-r", "xlm-r-2") or _is_xlm_roberta_model_id(base_model_id)
+        )
+        if indobert_fast:
+            _apply_partial_transformer_unfreeze(model, "bert")
+        elif xlm_fast:
+            _apply_partial_transformer_unfreeze(model, "roberta")
+
+        requested_max_length = int(max_length) if isinstance(max_length, int) else 64
+        requested_max_length = max(8, min(512, requested_max_length))
+        if indobert_fast:
+            effective_max_length = min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length)
+        elif xlm_fast:
+            effective_max_length = min(_XLM_FAST_MAX_LENGTH, requested_max_length)
+        else:
+            effective_max_length = requested_max_length
+
+        train_ds = TextClsDataset(
+            [texts[i] for i in train_idx.tolist()],
+            [y_all[i] for i in train_idx.tolist()],
+            tokenizer,
+            effective_max_length,
+        )
+        val_ds = TextClsDataset(
+            [texts[i] for i in val_idx.tolist()],
+            [y_all[i] for i in val_idx.tolist()],
+            tokenizer,
+            effective_max_length,
         )
 
-    texts: list[str] = []
-    raw_labels: list[str] = []
-    for r in rows:
-        t = _build_text(r)
-        y = str(r.get("jenis") or "").strip()
-        if t and y:
-            texts.append(t)
-            raw_labels.append(y)
+        train_loader = DataLoader(
+            train_ds,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=torch.Generator().manual_seed(seed),
+        )
+        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
-    if len(texts) < 10:
-        raise ValueError("Data terlalu sedikit untuk training (min 10 baris valid).")
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    label2id, id2label = _make_label_maps([{"jenis": y} for y in raw_labels])
-    y_all = [label2id[y] for y in raw_labels]
+        counts = np.array([label_counts[id2label[i]] for i in range(len(label2id))], dtype=np.float32)
+        counts = np.clip(counts, 1.0, None)
+        inv = 1.0 / counts
+        weights = inv / inv.mean()
+        class_weights = torch.tensor(weights, dtype=torch.float32, device=device)
 
-    # label distribution
-    label_counts: dict[str, int] = {k: 0 for k in label2id.keys()}
-    for y in raw_labels:
-        if y in label_counts:
-            label_counts[y] += 1
+        loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
 
-    # Stratified split biar distribusi kelas di train/val seimbang.
-    train_frac, _ = _parse_ratio(split_ratio)
-    idx_all = np.arange(len(texts))
-    train_idx, val_idx = train_test_split(
-        idx_all,
-        train_size=train_frac,
-        random_state=seed,
-        shuffle=True,
-        stratify=y_all if len(set(y_all)) > 1 else None,
-    )
-    train_idx = np.array(train_idx)
-    val_idx = np.array(val_idx)
+        total_steps = max(1, (len(train_loader) * epoch) // max(1, grad_accum))
+        warmup_steps = int(total_steps * warmup_ratio)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps
+        )
 
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        base_model_id,
-        num_labels=len(label2id),
-        id2label=id2label,
-        label2id=label2id,
-        classifier_dropout=dropout,
-        hidden_dropout_prob=dropout,
-        attention_probs_dropout_prob=dropout,
-    )
+        best_f1 = -1.0
+        bad_epochs = 0
+        metrics: list[dict] = []
+        for ep in range(1, epoch + 1):
+            model.train()
+            train_losses: list[float] = []
+            optimizer.zero_grad(set_to_none=True)
 
-    if fast_mode:
-        # Fast mode IndoBERT: freeze mayoritas backbone, fine-tune layer atas + head.
-        base = getattr(model, "bert", None)
-        if base is not None:
-            for p in base.parameters():
-                p.requires_grad = False
-            try:
-                encoder = getattr(base, "encoder", None)
-                layers = getattr(encoder, "layer", None) if encoder is not None else None
-                if layers is not None:
-                    for layer in list(layers)[-4:]:
-                        for p in layer.parameters():
-                            p.requires_grad = True
-            except Exception:
-                pass
-            try:
-                pooler = getattr(base, "pooler", None)
-                if pooler is not None:
-                    for p in pooler.parameters():
-                        p.requires_grad = True
-            except Exception:
-                pass
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    use_amp = device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
-
-    requested_max_length = int(max_length) if isinstance(max_length, int) else _MBERT_FIXED_MAX_LENGTH
-    requested_max_length = max(8, min(512, requested_max_length))
-    effective_max_length = (
-        min(_INDOBERT_FAST_MAX_LENGTH, requested_max_length) if fast_mode else requested_max_length
-    )
-
-    train_ds = TextClsDataset(
-        [texts[i] for i in train_idx.tolist()],
-        [y_all[i] for i in train_idx.tolist()],
-        tokenizer,
-        effective_max_length,
-    )
-    val_ds = TextClsDataset(
-        [texts[i] for i in val_idx.tolist()],
-        [y_all[i] for i in val_idx.tolist()],
-        tokenizer,
-        effective_max_length,
-    )
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=batch_size,
-        shuffle=True,
-        generator=torch.Generator().manual_seed(seed),
-    )
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-
-    # Class-weighted loss untuk mengatasi imbalance (kelas minoritas diberi bobot lebih besar).
-    counts = np.array([label_counts[id2label[i]] for i in range(len(label2id))], dtype=np.float32)
-    counts = np.clip(counts, 1.0, None)
-    inv = 1.0 / counts
-    weights = inv / inv.mean()
-    class_weights = torch.tensor(weights, dtype=torch.float32, device=device)
-
-    loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
-
-    total_steps = max(1, (len(train_loader) * epoch) // max(1, grad_accum))
-    warmup_steps = int(total_steps * warmup_ratio)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps
-    )
-
-    best_f1 = -1.0
-    bad_epochs = 0
-    metrics: list[dict] = []
-    for ep in range(1, epoch + 1):
-        model.train()
-        train_losses: list[float] = []
-        optimizer.zero_grad(set_to_none=True)
-
-        for step, batch in enumerate(train_loader, start=1):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["labels"].to(device)
-
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                out = model(input_ids=input_ids, attention_mask=attention_mask)
-                loss_raw = loss_fn(out.logits, labels)
-                loss = loss_raw / max(1, grad_accum)
-            scaler.scale(loss).backward()
-            train_losses.append(float(loss_raw.detach().cpu()))
-
-            if step % max(1, grad_accum) == 0 or step == len(train_loader):
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                scaler.step(optimizer)
-                scaler.update()
-                scheduler.step()
-                optimizer.zero_grad(set_to_none=True)
-
-        # validation
-        model.eval()
-        val_losses: list[float] = []
-        y_true: list[int] = []
-        y_pred: list[int] = []
-
-        with torch.no_grad():
-            for batch in val_loader:
+            for step, batch in enumerate(train_loader, start=1):
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
 
                 with torch.cuda.amp.autocast(enabled=use_amp):
                     out = model(input_ids=input_ids, attention_mask=attention_mask)
-                    val_loss = loss_fn(out.logits, labels)
-                val_losses.append(float(val_loss.detach().cpu()))
-                preds = torch.argmax(out.logits, dim=-1)
-                y_true.extend(labels.detach().cpu().tolist())
-                y_pred.extend(preds.detach().cpu().tolist())
+                    loss_raw = loss_fn(out.logits, labels)
+                    loss = loss_raw / max(1, grad_accum)
+                scaler.scale(loss).backward()
+                train_losses.append(float(loss_raw.detach().cpu()))
 
-        acc = accuracy_score(y_true, y_pred)
-        prec, rec, f1, _ = precision_recall_fscore_support(
-            y_true, y_pred, average="macro", zero_division=0
-        )
-        mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+                if step % max(1, grad_accum) == 0 or step == len(train_loader):
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                    scaler.step(optimizer)
+                    scaler.update()
+                    scheduler.step()
+                    optimizer.zero_grad(set_to_none=True)
 
-        # Confusion matrix untuk validasi pada epoch ini.
-        confusion_matrix = None
-        confusion_labels = None
-        if y_true and y_pred:
-            num_labels = len(label2id)
-            if num_labels > 0:
-                conf = np.zeros((num_labels, num_labels), dtype=int)
-                for t, p in zip(y_true, y_pred):
-                    ti = int(t)
-                    pi = int(p)
-                    if 0 <= ti < num_labels and 0 <= pi < num_labels:
-                        conf[ti, pi] += 1
-                confusion_matrix = conf.tolist()
-                confusion_labels = [id2label[i] for i in range(len(label2id))]
+            model.eval()
+            val_losses: list[float] = []
+            y_true: list[int] = []
+            y_pred: list[int] = []
+            val_probs: list[np.ndarray] = []
 
-        m = {
-            "epoch": ep,
-            "train_loss": float(np.mean(train_losses)) if train_losses else 0.0,
-            "val_loss": float(np.mean(val_losses)) if val_losses else 0.0,
-            "accuracy": float(acc),
-            "precision_macro": float(prec),
-            "recall_macro": float(rec),
-            "f1_macro": float(f1),
-            "mcc": float(mcc),
-            "confusion_matrix": confusion_matrix,
-            "confusion_labels": confusion_labels,
+            with torch.no_grad():
+                for batch in val_loader:
+                    input_ids = batch["input_ids"].to(device)
+                    attention_mask = batch["attention_mask"].to(device)
+                    labels = batch["labels"].to(device)
+
+                    with torch.cuda.amp.autocast(enabled=use_amp):
+                        out = model(input_ids=input_ids, attention_mask=attention_mask)
+                        val_loss = loss_fn(out.logits, labels)
+                    val_losses.append(float(val_loss.detach().cpu()))
+                    val_probs.append(
+                        F.softmax(out.logits, dim=-1).detach().cpu().numpy()
+                    )
+                    preds = torch.argmax(out.logits, dim=-1)
+                    y_true.extend(labels.detach().cpu().tolist())
+                    y_pred.extend(preds.detach().cpu().tolist())
+
+            acc = accuracy_score(y_true, y_pred)
+            prec, rec, f1, _ = precision_recall_fscore_support(
+                y_true, y_pred, average="macro", zero_division=0
+            )
+            mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+            roc_auc = _validation_roc_auc_score(y_true, val_probs, id2label)
+
+            confusion_matrix = None
+            confusion_labels = None
+            if y_true and y_pred:
+                num_labels = len(label2id)
+                if num_labels > 0:
+                    conf = np.zeros((num_labels, num_labels), dtype=int)
+                    for t, p in zip(y_true, y_pred):
+                        ti = int(t)
+                        pi = int(p)
+                        if 0 <= ti < num_labels and 0 <= pi < num_labels:
+                            conf[ti, pi] += 1
+                    confusion_matrix = conf.tolist()
+                    confusion_labels = [id2label[i] for i in range(len(label2id))]
+
+            m = {
+                "epoch": ep,
+                "train_loss": float(np.mean(train_losses)) if train_losses else 0.0,
+                "val_loss": float(np.mean(val_losses)) if val_losses else 0.0,
+                "accuracy": float(acc),
+                "precision_macro": float(prec),
+                "recall_macro": float(rec),
+                "f1_macro": float(f1),
+                "mcc": float(mcc),
+                "roc_auc": float(roc_auc),
+                "confusion_matrix": confusion_matrix,
+                "confusion_labels": confusion_labels,
+            }
+            metrics.append(m)
+            if on_epoch_end:
+                try:
+                    on_epoch_end(m)
+                except Exception:
+                    pass
+
+            if m["f1_macro"] > best_f1:
+                best_f1 = m["f1_macro"]
+                bad_epochs = 0
+            else:
+                bad_epochs += 1
+
+            if early_stopping_patience and bad_epochs >= early_stopping_patience:
+                break
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
+        os.makedirs(model_root, exist_ok=True)
+
+        safe_model_name = _safe_name(model_name)
+        model_dir = os.path.join(model_root, safe_model_name)
+        os.makedirs(model_dir, exist_ok=True)
+
+        model.save_pretrained(model_dir)
+        tokenizer.save_pretrained(model_dir)
+        with open(os.path.join(model_dir, "label_map.json"), "w", encoding="utf-8") as f:
+            json.dump({"label2id": label2id, "id2label": id2label}, f, ensure_ascii=False)
+        val_row_ids = [row_keys[i] for i in val_idx.tolist() if i < len(row_keys) and row_keys[i]]
+        with open(os.path.join(model_dir, "model_holdout.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "dataset_id": int(dataset_id),
+                    "split_ratio": str(split_ratio),
+                    "seed": int(seed),
+                    "val_row_ids": val_row_ids,
+                },
+                f,
+                ensure_ascii=False,
+            )
+
+        algo_out = algorithm
+        if algo_out is None:
+            if base_model_id == MBERT_MODEL_ID:
+                algo_out = "mbert"
+            elif _is_xlm_roberta_model_id(base_model_id):
+                algo_out = "xlm-r"
+            else:
+                algo_out = "indobert"
+
+        return {
+            "status": "ok",
+            "algorithm": algo_out,
+            "data_source": data_source,
+            "device": str(device),
+            "num_labels": len(label2id),
+            "label2id": label2id,
+            "id2label": id2label,
+            "label_counts": label_counts,
+            "metrics": metrics,
+            "model_dir": model_dir,
         }
-        metrics.append(m)
-        if on_epoch_end:
-            try:
-                on_epoch_end(m)
-            except Exception:
-                pass
 
-        if m["f1_macro"] > best_f1:
-            best_f1 = m["f1_macro"]
-            bad_epochs = 0
-        else:
-            bad_epochs += 1
-
-        if early_stopping_patience and bad_epochs >= early_stopping_patience:
-            break
-
-    # save model
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_root = os.path.abspath(os.path.join(base_dir, "..", "trained_models"))
-    os.makedirs(model_root, exist_ok=True)
-
-    safe_model_name = _safe_name(model_name)
-    model_dir = os.path.join(model_root, safe_model_name)
-    os.makedirs(model_dir, exist_ok=True)
-
-    model.save_pretrained(model_dir)
-    tokenizer.save_pretrained(model_dir)
-    with open(os.path.join(model_dir, "label_map.json"), "w", encoding="utf-8") as f:
-        json.dump({"label2id": label2id, "id2label": id2label}, f, ensure_ascii=False)
-
-    return {
-        "status": "ok",
-        "algorithm": "mbert" if base_model_id == MBERT_MODEL_ID else "indobert",
-        "data_source": data_source,
-        "device": str(device),
-        "num_labels": len(label2id),
-        "label2id": label2id,
-        "id2label": id2label,
-        "label_counts": label_counts,
-        "metrics": metrics,
-        "model_dir": model_dir,
-    }
+    try:
+        return _train_once(force_cpu=False)
+    except RuntimeError as e:
+        msg = str(e).lower()
+        if ("out of memory" in msg or "cuda error" in msg) and torch.cuda.is_available():
+            _cleanup_torch_memory()
+            return _train_once(force_cpu=True)
+        raise
+    finally:
+        _cleanup_torch_memory()
 
 
 def train_mbert_softmax(
@@ -542,12 +682,15 @@ def train_mbert_softmax(
 
         texts: list[str] = []
         raw_labels: list[str] = []
+        row_keys: list[str] = []
         for r in rows:
             t = _build_text(r)
             y = str(r.get("jenis") or "").strip()
             if t and y:
                 texts.append(t)
                 raw_labels.append(y)
+                row_key = str(r.get("id_kata") or r.get("id") or "").strip()
+                row_keys.append(row_key)
 
         if len(texts) < 10:
             raise ValueError("Data terlalu sedikit untuk training (min 10 baris valid).")
@@ -592,31 +735,7 @@ def train_mbert_softmax(
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
         if fast_mode:
-            # Fast mode untuk cari-rasio: jangan freeze total (terlalu lemah),
-            # cukup freeze sebagian dan fine-tune beberapa layer terakhir.
-            base = getattr(model, "bert", None)
-            if base is not None:
-                # Freeze semua dulu
-                for p in base.parameters():
-                    p.requires_grad = False
-                # Unfreeze last N layers (lebih representatif dari full fine-tuning)
-                try:
-                    encoder = getattr(base, "encoder", None)
-                    layers = getattr(encoder, "layer", None) if encoder is not None else None
-                    if layers is not None:
-                        for layer in list(layers)[-4:]:
-                            for p in layer.parameters():
-                                p.requires_grad = True
-                except Exception:
-                    pass
-                # Unfreeze pooler jika ada
-                try:
-                    pooler = getattr(base, "pooler", None)
-                    if pooler is not None:
-                        for p in pooler.parameters():
-                            p.requires_grad = True
-                except Exception:
-                    pass
+            _apply_bert_fast_mode_partial_unfreeze(model)
 
         requested_max_length = int(max_length) if isinstance(max_length, int) else _MBERT_FIXED_MAX_LENGTH
         requested_max_length = max(8, min(512, requested_max_length))
@@ -697,6 +816,7 @@ def train_mbert_softmax(
             val_losses: list[float] = []
             y_true: list[int] = []
             y_pred: list[int] = []
+            val_probs: list[np.ndarray] = []
 
             with torch.no_grad():
                 for batch in val_loader:
@@ -708,6 +828,9 @@ def train_mbert_softmax(
                         out = model(input_ids=input_ids, attention_mask=attention_mask)
                         val_loss = loss_fn(out.logits, labels)
                     val_losses.append(float(val_loss.detach().cpu()))
+                    val_probs.append(
+                        F.softmax(out.logits, dim=-1).detach().cpu().numpy()
+                    )
                     preds = torch.argmax(out.logits, dim=-1)
                     y_true.extend(labels.detach().cpu().tolist())
                     y_pred.extend(preds.detach().cpu().tolist())
@@ -717,6 +840,7 @@ def train_mbert_softmax(
                 y_true, y_pred, average="macro", zero_division=0
             )
             mcc = matthews_corrcoef(y_true, y_pred) if y_true and y_pred else 0.0
+            roc_auc = _validation_roc_auc_score(y_true, val_probs, id2label)
 
             confusion_matrix = None
             confusion_labels = None
@@ -741,6 +865,7 @@ def train_mbert_softmax(
                 "recall_macro": float(rec),
                 "f1_macro": float(f1),
                 "mcc": float(mcc),
+                "roc_auc": float(roc_auc),
                 "confusion_matrix": confusion_matrix,
                 "confusion_labels": confusion_labels,
             }
@@ -776,6 +901,18 @@ def train_mbert_softmax(
         tokenizer.save_pretrained(model_dir)
         with open(os.path.join(model_dir, "label_map.json"), "w", encoding="utf-8") as f:
             json.dump({"label2id": label2id, "id2label": id2label}, f, ensure_ascii=False)
+        val_row_ids = [row_keys[i] for i in val_idx.tolist() if i < len(row_keys) and row_keys[i]]
+        with open(os.path.join(model_dir, "model_holdout.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "dataset_id": int(dataset_id),
+                    "split_ratio": str(split_ratio),
+                    "seed": int(seed),
+                    "val_row_ids": val_row_ids,
+                },
+                f,
+                ensure_ascii=False,
+            )
 
         return {
             "status": "ok",
@@ -839,5 +976,54 @@ def predict_indobert_softmax(*, text: str, model_name: str, max_length: int) -> 
 def predict_mbert_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     # Model mBERT dan IndoBERT sama-sama disimpan dalam folder trained_models;
     # tokenizer + config dibaca langsung dari model artifact saat prediksi.
+    return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
+
+
+def train_xlm_r_softmax(
+    *,
+    dataset_id: int,
+    model_name: str,
+    split_ratio: str,
+    lr: float,
+    epoch: int,
+    batch_size: int,
+    max_length: int,
+    weight_decay: float,
+    warmup_ratio: float,
+    dropout: float,
+    grad_accum: int,
+    early_stopping_patience: int,
+    seed: int = 42,
+    on_epoch_end=None,
+    fast_mode: bool = False,
+) -> dict:
+    """Fine-tune XLM-R; teks training memakai final_text dari preprocessing XLM."""
+    _cleanup_torch_memory()
+    try:
+        return train_indobert_softmax(
+            dataset_id=dataset_id,
+            model_name=model_name,
+            split_ratio=split_ratio,
+            lr=lr,
+            epoch=epoch,
+            batch_size=batch_size,
+            max_length=max_length,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            dropout=dropout,
+            grad_accum=grad_accum,
+            early_stopping_patience=early_stopping_patience,
+            seed=seed,
+            on_epoch_end=on_epoch_end,
+            base_model_id=XLMR_MODEL_ID,
+            fast_mode=fast_mode,
+            algorithm="xlm-r",
+            text_extractor=_build_text_with_preprocessed_fallback,
+        )
+    finally:
+        _cleanup_torch_memory()
+
+
+def predict_xlm_r_softmax(*, text: str, model_name: str, max_length: int) -> dict:
     return predict_indobert_softmax(text=text, model_name=model_name, max_length=max_length)
 

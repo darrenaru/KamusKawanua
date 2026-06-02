@@ -8,12 +8,16 @@ import torch
 from fastapi import FastAPI, Query
 from transformers import AutoTokenizer
 
-from backend.main import clean_basic, get_preprocess_tokenizer
+from backend.main import (
+    clean_basic,
+    get_preprocess_tokenizer,
+    _maybe_stem_indonesian_for_preprocess,
+)
 from backend.supabase_client import supabase
 
 app = FastAPI()
 
-TokenizerName = Literal["mbert", "indobert"]
+TokenizerName = Literal["mbert", "indobert", "xlm-r", "xlm-r-2"]
 
 
 def _build_text(row: dict) -> str:
@@ -34,7 +38,7 @@ def _needs_tokenize(row: dict) -> bool:
 
 
 @app.post("/preprocess/{dataset_id}")
-def preprocess(dataset_id: int, tokenizer: TokenizerName = Query("mbert")):
+def preprocess(dataset_id: int, tokenizer: TokenizerName = Query("indobert")):
     """
     Legacy compatibility endpoint.
 
@@ -102,6 +106,12 @@ def preprocess(dataset_id: int, tokenizer: TokenizerName = Query("mbert")):
             )
             kalimat_indonesia_clean = clean_basic(
                 row.get("kalimat_indonesia_clean") or row.get("kalimat_indonesia")
+            )
+            indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                indonesia_clean, tokenizer
+            )
+            kalimat_indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                kalimat_indonesia_clean, tokenizer
             )
 
             manado_tokens = tok.tokenize(manado_clean)

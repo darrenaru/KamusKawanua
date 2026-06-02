@@ -9,25 +9,85 @@
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  let aosInitialized = false;
+
+  function refreshPageAOS() {
+    if (!window.AOS || typeof window.AOS.refresh !== "function") return;
+    try {
+      window.AOS.refresh();
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  /** Untuk halaman admin yang mengisi DOM dinamis (kartu dataset, dll.). */
+  window.refreshPageAOS = refreshPageAOS;
+
   function initAOS() {
     if (prefersReducedMotion) return;
     if (!window.AOS || typeof window.AOS.init !== "function") return;
+    if (aosInitialized) {
+      refreshPageAOS();
+      return;
+    }
 
     window.AOS.init({
       duration: 700,
       easing: "ease-out-cubic",
       once: true,
-      offset: 80,
+      offset: 100,
     });
+    aosInitialized = true;
+    refreshPageAOS();
   }
 
-  function initGSAP() {
-    if (prefersReducedMotion) return;
-    if (!window.gsap) return;
+  /**
+   * @returns {boolean} true jika AOS akan di-init setelah GSAP (layout admin), false jika bisa init AOS segera setelah fungsi ini.
+   */
+  function runGSAP() {
+    if (prefersReducedMotion) return false;
+    if (!window.gsap) return false;
+
+    const sidebar = document.querySelector(".sidebar");
+    const main = document.querySelector(".main");
+
+    if (sidebar && main) {
+      window.gsap
+        .timeline({ defaults: { ease: "power2.out" } })
+        .fromTo(
+          sidebar,
+          { x: -14, opacity: 0 },
+          { x: 0, opacity: 1, duration: 0.45 },
+          0,
+        )
+        .fromTo(
+          main,
+          { y: 10, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.48,
+            onComplete: () => {
+              initAOS();
+              refreshPageAOS();
+              requestAnimationFrame(refreshPageAOS);
+            },
+          },
+          0.05,
+        );
+
+      window.setTimeout(() => {
+        if (!aosInitialized) {
+          initAOS();
+          refreshPageAOS();
+        }
+      }, 900);
+
+      return true;
+    }
 
     const tl = window.gsap.timeline({ defaults: { ease: "power2.out" } });
 
-    // Landing page (index)
     const brandLogo = document.querySelector(".brand-logo");
     const languageTitle = document.querySelector(".language-title");
     const languageRow = document.querySelector(".language-row");
@@ -41,7 +101,6 @@
       );
     }
 
-    // Login page
     const loginCard = document.querySelector(".login-card");
     if (loginCard) {
       tl.fromTo(
@@ -52,27 +111,21 @@
       );
     }
 
-    // Admin layout pages
-    const sidebar = document.querySelector(".sidebar");
-    const main = document.querySelector(".main");
-    if (sidebar && main) {
-      tl.fromTo(
-        sidebar,
-        { x: -14, opacity: 0 },
-        { x: 0, opacity: 1, duration: 0.45 },
-        0,
-      ).fromTo(
-        main,
-        { y: 10, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.45 },
-        0.05,
-      );
-    }
+    return false;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    initAOS();
-    initGSAP();
+    const deferAOS = runGSAP();
+    if (!deferAOS) {
+      initAOS();
+      requestAnimationFrame(refreshPageAOS);
+    }
+  });
+
+  window.addEventListener("load", () => {
+    refreshPageAOS();
+    if (!aosInitialized && document.querySelector("[data-aos]")) {
+      initAOS();
+    }
   });
 })();
-

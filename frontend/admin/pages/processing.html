@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,46 +7,56 @@
     <link rel="icon" type="image/svg+xml" href="../../assets/images/logo-only-white.svg">
     <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="../css/processing.css" />
+    <link rel="stylesheet" href="../css/sidebar.css">
   </head>
   <body>
     <div class="layout">
-      <!-- SIDEBAR -->
-      <aside class="sidebar">
-        <div class="logo">
-          <img src="../../assets/images/logo.png" alt="Logo" />
-        </div>
-
-        <ul>
-          <li><a href="dashboard.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span><span>Home</span></a></li>
-          <li><a href="data-collection.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="20" x2="9" y2="10"/></svg></span><span>Data Collection</span></a></li>
-          <li><a href="preprocessing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span><span>Preprocessing</span></a></li>
-          <li class="active"><a href="processing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg></span><span>Processing</span></a></li>
-          <li><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v5l-4 7a4 4 0 0 0 3.5 6h5a4 4 0 0 0 3.5-6l-4-7V3"/></svg></span><span>Testing</span></a></li>
-          <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Performance Evaluation</span></a></li>
-        </ul>
-      </aside>
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="logo">
+                <img src="../../assets/images/logo.png" alt="logo">
+            </div>
+            <ul>
+                <li><a href="dashboard.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Dashboard</span></a></li>
+                <li><a href="data-collection.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg></span><span>Data Collection</span></a></li>
+                <li><a href="preprocessing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span><span>Preprocessing</span></a></li>
+                <li class="active"><a href="processing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span><span>Processing</span></a></li>
+                <li><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span><span>Testing</span></a></li>
+                <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Evaluation</span></a></li>
+            </ul>
+        </aside>
 
       <!-- MAIN -->
       <main class="main">
-        <div class="main-header" data-aos="fade-up" data-aos-delay="40">
-          <h1 class="title-with-icon" data-aos="fade-up" data-aos-delay="80">
-            <span class="title-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M6 4h12"/><path d="M6 12h12"/><path d="M6 20h12"/><circle cx="8" cy="4" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="11" cy="20" r="1.5"/></svg>
-            </span>
-            Processing
-          </h1>
-        </div>
+            <h1 class="title-with-icon" data-aos="fade-up" data-aos-delay="40">
+          <span class="title-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+          </span>
+          Processing
+        </h1>
 
         <div class="processing-container">
           <!-- SECTION RASIO DATA SPLIT -->
-          <div class="ratio-section">
-            <div class="ratio-header">
-              <h3 class="section-heading-with-icon">
+          <div class="ratio-section" data-aos="fade-up" data-aos-delay="60">
+            <div
+              class="ratio-header"
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                flex-wrap: wrap;
+              "
+            >
+              <h3 class="section-heading-with-icon" style="margin: 0">
                 <span class="section-heading-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="10" y1="20" x2="10" y2="10"/></svg>
                 </span>
                 Split Data Ratio
               </h3>
+              <button type="button" id="btn-export-ratio-splits" class="btn-small-outline">
+                Export Excel
+              </button>
             </div>
 
             <div class="ratio-input-group">
@@ -114,27 +124,33 @@
           </div>
 
           <!-- TOP CONTROLS -->
-          <div class="top-controls">
-            <select id="algo-select">
-              <option value="" disabled selected>Select Algorithm</option>
-              <option value="indobert">IndoBERT</option>
-              <option value="mbert">mBERT</option>
-              <option value="xlm-r">XLM-R</option>
-              <option value="glove">GloVe</option>
-              <option value="word2vec">Word2Vec</option>
-            </select>
+          <div class="top-controls" data-aos="fade-up" data-aos-delay="100">
+            <div class="custom-select-wrapper">
+              <select id="algo-select">
+                <option value="" disabled>Select Algorithm</option>
+                <option value="indobert" selected>IndoBERT</option>
+                <option value="mbert">mBERT</option>
+                <option value="xlm-r">XLM-R</option>
+                <option value="glove">GloVe</option>
+                <option value="word2vec">Word2Vec</option>
+              </select>
+              <svg class="custom-select-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2c1f0e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
 
             <button class="btn-secondary" id="btn-pilih-dataset" type="button">
               Select Dataset
             </button>
 
-            <select id="model-select">
-              <option value="" disabled selected>Select Model</option>
-              <option value="baru">Create a New Model</option>
-              <option value="lama">Select Old Model</option>
-            </select>
+            <div class="custom-select-wrapper" style="width: 100%; max-width: 250px;">
+              <select id="model-select">
+                <option value="" disabled selected>Select Model</option>
+                <option value="baru">Create a New Model</option>
+                <option value="lama">Use Existing Model</option>
+              </select>
+              <svg class="custom-select-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2c1f0e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
             <p class="model-select-help" id="model-select-help">
-              Select model mode for final training: create a new model name, or load an old model to reuse its setup.
+              Select model mode for final training: create a new model name, or load an existing model to reuse its setup.
             </p>
 
             <div class="mode-selection">
@@ -185,6 +201,7 @@
               type="text"
               id="new-model-name"
               placeholder="Enter new model name"
+              maxlength="50"
               style="
                 flex: 1;
                 padding: 8px;
@@ -202,7 +219,7 @@
           </div>
 
           <!-- PARAMETER CARD - Mode Cari Rasio Terbaik -->
-          <div class="parameter-card" id="param-card-cari-rasio">
+          <div class="parameter-card" id="param-card-cari-rasio" data-aos="fade-up" data-aos-delay="140">
             <h3 style="margin-bottom: 20px">Find the Best Ratio</h3>
 
             <div id="dynamic-params-cari-rasio"></div>
@@ -215,6 +232,9 @@
                 margin-top: 20px;
               "
             >
+              <button class="btn-secondary" id="btn-auto-test-all">
+                Auto-Test All Ratios
+              </button>
               <button class="btn-mulai" id="btn-mulai-cari">
                 Start Searching
               </button>
@@ -225,6 +245,8 @@
           <div
             class="parameter-card"
             id="param-card-training-final"
+            data-aos="fade-up"
+            data-aos-delay="160"
             style="display: none"
           >
             <h3 style="margin-bottom: 20px">
@@ -243,7 +265,7 @@
               <div class="param-row">
                 <div class="param-group">
                   <label class="label-with-help">
-                    <span>Training Name</span>
+                    <span>Training Name<span style="color:red">*</span></span>
                     <span class="param-help-icon">i
                       <span class="param-help-tooltip">
                         <strong>Function:</strong> Identifier name for the training experiment.<br />
@@ -282,19 +304,26 @@
 
             <!-- 🔧 TAMBAHAN: RIWAYAT TRAINING -->
             <div class="history-section" style="margin-bottom: 25px">
-              <h4
+              <div
                 style="
-                  margin-bottom: 15px;
                   display: flex;
                   align-items: center;
-                  gap: 8px;
+                  justify-content: space-between;
+                  gap: 10px;
+                  flex-wrap: wrap;
+                  margin-bottom: 15px;
                 "
               >
-                Training Log
-                <span style="font-size: 12px; font-weight: normal; color: #888"
-                  >(Data stored in browser)</span
-                >
-              </h4>
+                <h4 style="margin: 0; display: flex; align-items: center; gap: 8px">
+                  Training Log
+                  <span style="font-size: 12px; font-weight: normal; color: #888"
+                    >(Data stored in database)</span
+                  >
+                </h4>
+                <button type="button" id="btn-export-training-log" class="btn-small-outline">
+                  Export Excel
+                </button>
+              </div>
               <div
                 class="table-container"
                 style="max-height: 200px; overflow-y: auto"
@@ -344,7 +373,21 @@
             id="ratio-comparison-section"
             style="display: none; margin-top: 30px"
           >
-            <h3 style="margin-bottom: 15px">Ratio Comparison</h3>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-bottom: 15px;
+              "
+            >
+              <h3 style="margin: 0">Ratio Comparison</h3>
+              <button type="button" id="btn-export-ratio-comparison" class="btn-small-outline">
+                Export Excel
+              </button>
+            </div>
             <div class="table-container">
               <table class="comparison-table" id="comparison-table">
                 <thead>
@@ -468,8 +511,9 @@
                 <div
                   style="
                     display: flex;
-                    align-items: baseline;
-                    gap: 15px;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
                     margin: 20px 0 15px;
                   "
                 >
@@ -481,6 +525,9 @@
                       >—</span
                     >
                   </h4>
+                  <button type="button" class="btn-small-outline btn-export-card-epochs">
+                    Export Excel
+                  </button>
                 </div>
 
                 <div class="table-container">
@@ -721,7 +768,19 @@
             </p>
           </div>
         </div>
-        <div class="modal-footer" style="margin-top: 20px">
+        <div
+          class="modal-footer"
+          style="
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+          "
+        >
+          <button type="button" id="btn-export-history-detail-xlsx" class="btn-small">
+            Export Excel
+          </button>
           <button onclick="closeHistoryDetailModal()" class="btn-close-outline">
             Close
           </button>
@@ -737,6 +796,8 @@
     <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <script src="../../animations.js"></script>
+    <script src="../js/kamus-excel.js"></script>
+    <script src="../js/xlm-registry-sync.js"></script>
     <script src="../js/processing.js"></script>
   </body>
 </html>

@@ -1,5 +1,13 @@
+/**
+ * Kontrak data evaluasi (hindari konflik training vs testing):
+ * - Kolom training di `models`: accuracy, precision, recall, f1_score, train_*.
+ * - Kolom testing di `models`: test_* (+ nested `testing_result` dari API).
+ * - Tabel training metrics: hanya sumber training (tanpa fallback testing).
+ * - Tabel Training vs Testing: metrik testing untuk std/weighted/roc/loss memakai
+ *   nilai testing yang sama di kedua kolom (perilaku perbandingan selaras versi lama).
+ */
 var API_BASE = 'http://127.0.0.1:8000';
-var ALGO_ORDER = ['xlm-r', 'mbert', 'indobert', 'word2vec', 'glove'];
+var ALGO_ORDER = ['indobert', 'mbert', 'xlm-r', 'word2vec', 'glove'];
 var ALGO_LABELS = {
     'xlm-r': 'XLM-R',
     mbert: 'mBERT',
@@ -7,7 +15,7 @@ var ALGO_LABELS = {
     word2vec: 'Word2Vec',
     glove: 'GloVe',
 };
-var TRANSFORMER_KEYS = ['xlm-r', 'mbert', 'indobert'];
+var TRANSFORMER_KEYS = ['indobert', 'mbert', 'xlm-r'];
 var CLASSIC_KEYS = ['word2vec', 'glove'];
 var CHART_COLORS = {
     transformerDark: 'rgba(28, 20, 10, 0.9)',
@@ -23,7 +31,7 @@ var CHART_METRIC_DEFS = [
     { key: 'f1', label: 'F1', testField: 'f1_macro', asPercent: true },
     { key: 'weighted', label: 'Weighted Avg', testField: 'weighted_avg', asPercent: true },
     { key: 'std_dev', label: 'Std Dev', testField: 'std_deviation', asPercent: false },
-    { key: 'mcc', label: 'MCC', testField: 'mcc', asPercent: true },
+    { key: 'mcc', label: 'MCC', testField: 'mcc', asPercent: false },
     { key: 'roc_auc', label: 'ROC-AUC', testField: 'roc_auc', asPercent: true },
 ];
 var TABLE_METRIC_DEFS = [
@@ -32,11 +40,11 @@ var TABLE_METRIC_DEFS = [
     { key: 'recall', label: 'Recall', trainField: 'recall', testField: 'recall_macro', type: 'percent' },
     { key: 'f1', label: 'F1', trainField: 'f1_score', testField: 'f1_macro', type: 'percent' },
     { key: 'macro_avg', label: 'Macro Avg', trainField: 'macro_avg', testField: null, type: 'percent' },
-    { key: 'weighted_avg', label: 'Weighted Avg', trainField: null, testField: 'weighted_avg', type: 'percent' },
-    { key: 'std_dev', label: 'Std Dev', trainField: null, testField: 'std_deviation', type: 'float2' },
+    { key: 'weighted_avg', label: 'Weighted Avg', trainField: 'train_weighted_avg', testField: 'weighted_avg', type: 'percent' },
+    { key: 'std_dev', label: 'Std Dev', trainField: 'train_std_deviation', testField: 'std_deviation', type: 'float2' },
     { key: 'loss', label: 'Loss', trainField: 'train_loss', testField: null, type: 'float4' },
-    { key: 'mcc', label: 'MCC', trainField: 'train_mcc', testField: 'mcc', type: 'percent' },
-    { key: 'roc_auc', label: 'ROC-AUC', trainField: null, testField: 'roc_auc', type: 'percent' },
+    { key: 'mcc', label: 'MCC', trainField: 'train_mcc', testField: 'mcc', type: 'mcc' },
+    { key: 'roc_auc', label: 'ROC-AUC', trainField: 'train_roc_auc', testField: 'roc_auc', type: 'percent' },
 ];
 
 var state = {
@@ -52,7 +60,7 @@ function canonicalAlgoKey(raw) {
     var v = String(raw || '').toLowerCase().trim().replace(/_/g, '-');
     if (v === 'indo-bert' || v === 'indobenchmark') return 'indobert';
     if (v === 'm-bert' || v === 'multilingual-bert' || v === 'bert-base-multilingual-cased') return 'mbert';
-    if (v === 'xlmr' || v === 'xlm-r') return 'xlm-r';
+    if (v === 'xlm-r-2' || v === 'xlmr' || v === 'xlm-r') return 'xlm-r';
     if (v === 'word2vec' || v === 'word-2-vec') return 'word2vec';
     return v;
 }
@@ -63,17 +71,26 @@ function escapeHtml(s) {
     return t.innerHTML;
 }
 
-function normalizePercent(raw) {
+function normalizeLossPercent(raw) {
     if (raw === undefined || raw === null || raw === '') return null;
     var n = Number(raw);
     if (!Number.isFinite(n)) return null;
-    return n >= 0 && n <= 1 ? n * 100 : n;
+    if (n >= 0 && n <= 1) return n * 100;
+    return n;
+}
+
+function formatLossPct(raw) {
+    var n = normalizeLossPercent(raw);
+    if (n == null) return '—';
+    return (Math.round(n * 100) / 100).toFixed(2) + '%';
 }
 
 function formatPercent(raw) {
-    var n = normalizePercent(raw);
-    if (n == null) return '—';
-    return (Math.round(n * 10) / 10).toFixed(1) + '%';
+    return formatPercentDisplay(raw);
+}
+
+function formatMcc(raw) {
+    return formatMccDisplay(raw);
 }
 
 function formatFloatOrDash(raw, decimals) {
@@ -85,6 +102,8 @@ function formatFloatOrDash(raw, decimals) {
 
 function formatByType(raw, type) {
     if (type === 'percent') return formatPercent(raw);
+    if (type === 'mcc') return formatMcc(raw);
+    if (type === 'loss_pct') return formatLossPct(raw);
     if (type === 'float4') return formatFloatOrDash(raw, 4);
     if (type === 'float2') return formatFloatOrDash(raw, 2);
     return raw == null ? '—' : String(raw);
@@ -96,6 +115,101 @@ function mean(values) {
         return a + b;
     }, 0);
     return sum / values.length;
+}
+
+function stdDev(values) {
+    if (!values || values.length < 2) return null;
+    var m = mean(values);
+    if (m == null) return null;
+    var variance = values.reduce(function (acc, v) {
+        var d = v - m;
+        return acc + d * d;
+    }, 0) / values.length;
+    return Math.sqrt(variance);
+}
+
+function trainingMacroAvg(model) {
+    var p = normalizePercent(model.precision);
+    var r = normalizePercent(model.recall);
+    var f = normalizePercent(model.f1_score);
+    if (p == null || r == null || f == null) return null;
+    return (p + r + f) / 3;
+}
+
+function trainingRocFromHistory(model) {
+    var hist = findHistoryByModel(model);
+    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var rocVals = results
+        .map(function (r) {
+            return normalizePercent(r.roc_auc);
+        })
+        .filter(function (v) {
+            return v != null;
+        });
+    return mean(rocVals);
+}
+
+function trainingStdDevFromHistory(model) {
+    var hist = findHistoryByModel(model);
+    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var f1Vals = results
+        .map(function (r) {
+            return normalizePercent(r.f1);
+        })
+        .filter(function (v) {
+            return v != null;
+        });
+    return stdDev(f1Vals);
+}
+
+function trainingMccFromHistory(model) {
+    var hist = findHistoryByModel(model);
+    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var mccVals = results
+        .map(function (r) {
+            var v = r.mcc;
+            if (v === null || v === undefined || v === '') return null;
+            var n = Number(v);
+            return Number.isFinite(n) ? n : null;
+        })
+        .filter(function (v) {
+            return v != null;
+        });
+    return mean(mccVals);
+}
+
+function resolveTrainingMetricRaw(model, metricDef) {
+    if (!model || !metricDef) return null;
+    var raw = metricDef.trainField ? model[metricDef.trainField] : null;
+    if (raw !== null && raw !== undefined && raw !== '') return raw;
+
+    if (metricDef.key === 'macro_avg') {
+        raw = trainingMacroAvg(model);
+        if (raw != null) return raw;
+    }
+    if (metricDef.key === 'weighted_avg') {
+        raw = model.train_weighted_avg != null ? model.train_weighted_avg : model.f1_score;
+    }
+    if (metricDef.key === 'std_dev') {
+        raw = model.train_std_deviation;
+        if (raw === null || raw === undefined || raw === '') {
+            raw = trainingStdDevFromHistory(model);
+        }
+    }
+    if (metricDef.key === 'roc_auc') {
+        if (raw === null || raw === undefined || raw === '') {
+            raw = model.train_roc_auc;
+        }
+        if (raw === null || raw === undefined || raw === '') {
+            raw = trainingRocFromHistory(model);
+        }
+    }
+    if (metricDef.key === 'mcc') {
+        if (raw === null || raw === undefined || raw === '') {
+            raw = trainingMccFromHistory(model);
+        }
+    }
+    return raw;
 }
 
 function loadScript(url) {
@@ -139,7 +253,15 @@ function formatPercentOrDash(value) {
 
 function readPreferredAlgorithm() {
     try {
-        return canonicalAlgoKey(localStorage.getItem('selectedAlgorithm') || '');
+        var raw =
+            localStorage.getItem('kamusWorkflowAlgorithm') ||
+            localStorage.getItem('selectedAlgorithm') ||
+            '';
+        try {
+            var sess = sessionStorage.getItem('evaluasi_selectedTableAlgo');
+            if (sess) raw = sess;
+        } catch (e2) {}
+        return canonicalAlgoKey(raw || '');
     } catch (e) {
         return '';
     }
@@ -149,26 +271,49 @@ function groupByAlgorithm(items) {
     var out = {};
     for (var i = 0; i < items.length; i++) {
         var row = items[i];
-        var key = row.canonical_algorithm || canonicalAlgoKey(row.algoritma);
+        var key = canonicalAlgoKey(row.canonical_algorithm || row.algoritma);
         if (!key) continue;
+        row.canonical_algorithm = key;
+        if (key === 'xlm-r') {
+            row.algoritma = 'xlm-r';
+        }
         if (!out[key]) out[key] = [];
         out[key].push(row);
+    }
+    if (out['xlm-r-2']) {
+        out['xlm-r'] = (out['xlm-r'] || []).concat(out['xlm-r-2']);
+        delete out['xlm-r-2'];
     }
     return out;
 }
 
 function orderedAlgorithmKeys(byAlgo) {
-    var present = Object.keys(byAlgo);
-    var ordered = ALGO_ORDER.filter(function (k) {
-        return present.indexOf(k) >= 0;
+    var present = Object.keys(byAlgo).map(function (k) {
+        return canonicalAlgoKey(k);
+    }).filter(function (k) {
+        return !!k;
     });
-    for (var i = 0; i < present.length; i++) {
-        if (ordered.indexOf(present[i]) < 0) ordered.push(present[i]);
+    var unique = [];
+    for (var u = 0; u < present.length; u++) {
+        if (unique.indexOf(present[u]) < 0) unique.push(present[u]);
+    }
+    var ordered = ALGO_ORDER.filter(function (k) {
+        return unique.indexOf(k) >= 0;
+    });
+    for (var i = 0; i < unique.length; i++) {
+        if (ordered.indexOf(unique[i]) < 0) ordered.push(unique[i]);
     }
     return ordered;
 }
 
 async function fetchEvaluationItems() {
+    if (typeof window.kamusSyncXlmModelsToSupabase === 'function') {
+        try {
+            await window.kamusSyncXlmModelsToSupabase({ silent: true });
+        } catch (syncErr) {
+            console.warn('evaluasi: XLM Supabase sync skipped', syncErr);
+        }
+    }
     var res = await fetch(API_BASE + '/evaluasi/models-metrics');
     var data = await res.json();
     if (!res.ok) {
@@ -178,7 +323,13 @@ async function fetchEvaluationItems() {
                 : 'Failed to fetch evaluation data.',
         );
     }
-    return Array.isArray(data.items) ? data.items : [];
+    var items = Array.isArray(data.items) ? data.items : [];
+    if (typeof window.kamusFilterXlmModelRows === 'function') {
+        items = window.kamusFilterXlmModelRows(items);
+    } else if (typeof window.kamusFilterXlmEvaluationItems === 'function') {
+        items = window.kamusFilterXlmEvaluationItems(items);
+    }
+    return items;
 }
 
 function renderAlgoSelect(selectId, keys, selected) {
@@ -215,13 +366,13 @@ function renderTrainingTable(algoKey) {
     }
 
     var bestTraining = getBestTrainingModel(rows);
-    renderBestInfo(algoKey, bestTraining, getBestTestingModel(rows));
+    renderTrainingBestInfo(algoKey, bestTraining);
 
     var bodyRows = rows
         .map(function (m) {
             var trClass = bestTraining && m === bestTraining ? ' class="row-best-training"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
-                var raw = d.trainField ? m[d.trainField] : null;
+                var raw = resolveTrainingMetricRaw(m, d);
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
@@ -235,6 +386,37 @@ function renderTrainingTable(algoKey) {
     tbody.innerHTML = bodyRows;
 }
 
+/** Export-only: Testing metrics sheet (no on-page testing table). */
+function buildTestingMetricsExportMatrix(algoKey) {
+    var rows = state.byAlgo[algoKey] || [];
+    if (!rows.length) return null;
+    var header = ['MODEL'].concat(
+        TABLE_METRIC_DEFS.map(function (d) {
+            return String(d.label || '').toUpperCase();
+        }),
+    );
+    var body = rows.map(function (m) {
+        var t = m.testing_result || {};
+        var cells = TABLE_METRIC_DEFS.map(function (d) {
+            var raw = d.testField ? t[d.testField] : null;
+            if ((raw === null || raw === undefined || raw === '') && d.key === 'macro_avg') {
+                var p = normalizePercent(t.precision_macro);
+                var r = normalizePercent(t.recall_macro);
+                var f = normalizePercent(t.f1_macro);
+                if (p != null && r != null && f != null) {
+                    raw = (p + r + f) / 3;
+                }
+            }
+            if ((raw === null || raw === undefined || raw === '') && d.key === 'loss') {
+                raw = m.train_loss;
+            }
+            return formatByType(raw, d.type);
+        });
+        return [m.nama_model || '-'].concat(cells);
+    });
+    return [header].concat(body);
+}
+
 function buildLayeredParameterHtml(p) {
     if (!p) return '<p style="color:#999;">Parameter not available</p>';
     var algo = String(p.algo || p.canonical_algorithm || p.algoritma || '').toLowerCase();
@@ -246,13 +428,23 @@ function buildLayeredParameterHtml(p) {
 
     function value(v) { return v == null || v === '' ? '-' : String(v); }
     function item(label, v) { return '<span><strong>' + label + ':</strong> ' + escapeHtml(value(v)) + '</span>'; }
-    var inputLabel = algo === 'mbert' ? 'Seed' : 'Max Length';
-    var inputValue = algo === 'mbert' ? (p.seed) : (p.maxLength || p.max_length);
+    var inputReprLabel =
+        algo === 'xlm-r'
+            ? 'SentencePiece tokens (XLM-RoBERTa)'
+            : TRANSFORMER_KEYS.indexOf(algo) >= 0
+              ? 'WordPiece Tokens + [CLS]/[SEP]'
+              : 'Word Embedding';
+    var inputLayerItems =
+        item('Batch Size', p.batchSize || p.batch_size) +
+        (algo === 'mbert'
+            ? item('Seed', p.seed)
+            : algo === 'indobert' || algo === 'xlm-r'
+              ? item('Max Length', p.maxLength || p.max_length) + item('Seed', p.seed)
+              : item('Max Length', p.maxLength || p.max_length)) +
+        item('Input Representation', inputReprLabel);
 
     var inputLayer = sectionWrapStart + '1. Input Layer' + sectionMid + gridStart +
-        item('Batch Size', p.batchSize || p.batch_size) +
-        item(inputLabel, inputValue) +
-        item('Input Representation', TRANSFORMER_KEYS.indexOf(algo) >= 0 ? 'WordPiece Tokens + [CLS]/[SEP]' : 'Word Embedding') +
+        inputLayerItems +
         gridEnd + sectionWrapEnd;
 
     var hiddenLayerItems = [
@@ -291,7 +483,7 @@ function buildLayeredParameterHtml(p) {
     return inputLayer + hiddenLayer + outputLayer;
 }
 
-function openEvaluationModelDetail(model) {
+async function openEvaluationModelDetail(model) {
     var modal = document.getElementById('eval-model-detail-modal');
     if (!modal || !model) return;
     var testing = model.testing_result || {};
@@ -314,8 +506,34 @@ function openEvaluationModelDetail(model) {
     if (datasetEl) datasetEl.textContent = model.dataset_name || '-';
     if (dateEl) dateEl.textContent = model.created_at ? new Date(model.created_at).toLocaleString('en-US') : '-';
     if (paramsEl) paramsEl.innerHTML = buildLayeredParameterHtml(model);
-    renderEvaluationEpochMetrics(model, resultsBody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty);
+    
+    if (resultsBody) resultsBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Loading...</td></tr>';
+    if (avgFoot) avgFoot.innerHTML = '';
+    if (confusionSection) confusionSection.style.display = 'none';
     modal.style.display = 'flex';
+    
+    let results = [];
+    try {
+        const res = await fetch(API_BASE + '/evaluasi/model-epochs/' + model.id);
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.items)) {
+            results = data.items;
+        } else if (!res.ok && data.detail) {
+            console.error("Failed to fetch model epochs:", data.detail);
+        }
+    } catch (e) {
+        console.error("Failed to fetch model epochs:", e);
+    }
+    
+    // Fallback to local history if API returned nothing (for backward compatibility if needed, though mostly superseded by DB)
+    if (!results.length) {
+        var hist = findHistoryByModel(model);
+        if (hist && Array.isArray(hist.hasil)) {
+            results = hist.hasil;
+        }
+    }
+    
+    renderEvaluationEpochMetrics(results, resultsBody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty);
 }
 
 function loadTrainingHistoryItems() {
@@ -336,7 +554,12 @@ function findHistoryByModel(model) {
     var filtered = history.filter(function (h) {
         var hn = String(h.model_name || h.nama_model || '').trim().toLowerCase();
         var ha = String((h.parameter && h.parameter.algo) || '').trim().toLowerCase();
-        return hn === modelName && (!algo || !ha || ha === algo);
+        var modelCanon = canonicalAlgoKey(algo);
+        var histCanon = canonicalAlgoKey(ha);
+        return (
+            hn === modelName &&
+            (!modelCanon || !histCanon || modelCanon === histCanon)
+        );
     });
     if (!filtered.length) return null;
     filtered.sort(function (a, b) {
@@ -350,11 +573,9 @@ function confusionMatrixLabelAsStored(raw) {
     return String(raw == null ? '' : raw).trim();
 }
 
-function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
+function renderEvaluationEpochMetrics(results, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
     if (!tbody || !avgFoot) return;
-    var hist = findHistoryByModel(model);
-    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
-    if (!results.length) {
+    if (!results || !results.length) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Result data not available</td></tr>';
         avgFoot.innerHTML = '';
         if (confusionSection) confusionSection.style.display = 'none';
@@ -436,50 +657,6 @@ function closeEvaluationModelDetail() {
     if (modal) modal.style.display = 'none';
 }
 
-function renderTestingTable(algoKey) {
-    var rows = state.byAlgo[algoKey] || [];
-    var thead = document.getElementById('testing-metrics-thead');
-    var tbody = document.getElementById('testing-metrics-tbody');
-    if (!thead || !tbody) return;
-
-    thead.innerHTML =
-        '<tr><th>Model</th>' +
-        TABLE_METRIC_DEFS.map(function (d) {
-            return '<th>' + d.label + '</th>';
-        }).join('') +
-        '</tr>';
-    if (!rows.length) {
-        tbody.innerHTML =
-            '<tr><td colspan="' +
-            String(TABLE_METRIC_DEFS.length + 1) +
-            '" class="empty-row">No testing data available.</td></tr>';
-        return;
-    }
-
-    var bestTraining = getBestTrainingModel(rows);
-    var bestTesting = getBestTestingModel(rows);
-    var bodyRows = rows
-        .map(function (m) {
-            var t = m.testing_result || {};
-            var classes = [];
-            if (bestTraining && m === bestTraining) classes.push('row-best-training-ref');
-            if (bestTesting && m === bestTesting) classes.push('row-best-testing');
-            var trClass = classes.length ? ' class="' + classes.join(' ') + '"' : '';
-            var metricCells = TABLE_METRIC_DEFS.map(function (d) {
-                var raw = d.testField ? t[d.testField] : null;
-                return '<td>' + formatByType(raw, d.type) + '</td>';
-            }).join('');
-            return (
-                '<tr' + trClass + '>' +
-                '<td>' + escapeHtml(m.nama_model || '-') + '</td>' +
-                metricCells +
-                '</tr>'
-            );
-        })
-        .join('');
-    tbody.innerHTML = bodyRows;
-}
-
 function averageMetric(rows, trainField, testField) {
     var trVals = [];
     var teVals = [];
@@ -499,10 +676,25 @@ function averageMetric(rows, trainField, testField) {
 function fittingStatus(trainValue, testValue, type) {
     if (trainValue == null || testValue == null) return '—';
     var diff = Math.abs(trainValue - testValue);
-    var txt = type === 'percent' ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
-    if (trainValue > testValue) return '<span class="fit over">Overfitting ' + txt + '</span>';
-    if (testValue > trainValue) return '<span class="fit under">Underfitting ' + txt + '</span>';
-    return '<span class="fit good">Balanced</span>';
+    var pctLike = type === 'percent' || type === 'loss_pct';
+    var mccLike = type === 'mcc';
+    var rawText = pctLike ? diff.toFixed(4) + '%' : diff.toFixed(6);
+    var txt = pctLike ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
+    // Metrik persen: gap < 2% dianggap seimbang (sama seperti sebelum perbaikan format).
+    if (pctLike && diff < 2) {
+        return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
+    }
+    // MCC pada skala [-1, 1]: gap kecil (mis. 0.80 vs 0.82) bukan under/overfitting.
+    if (mccLike && diff < 0.05) {
+        return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
+    }
+    if (trainValue > testValue) {
+        return '<span class="fit over">Overfitting ' + txt + ' <small>(raw ' + rawText + ')</small></span>';
+    }
+    if (testValue > trainValue) {
+        return '<span class="fit under">Underfitting ' + txt + ' <small>(raw ' + rawText + ')</small></span>';
+    }
+    return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
 }
 
 function renderSummaryTable(algoKey) {
@@ -514,31 +706,38 @@ function renderSummaryTable(algoKey) {
     thead.innerHTML = '<tr><th>Metrics</th><th>Training</th><th>Testing</th><th>Difference</th></tr>';
     if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No data available for fitting summary.</td></tr>';
+        renderFittingBestInfo(algoKey, null);
         return;
     }
 
-    var bestTraining = getBestTrainingModel(rows);
+    var referenceModel = getBestTrainingModel(rows);
+    renderFittingBestInfo(algoKey, referenceModel);
+
     var rowsSummary = TABLE_METRIC_DEFS.map(function (d) {
-        var t = bestTraining ? bestTraining.testing_result || {} : {};
-        var trainValue = d.trainField ? normalizeMetricValue(bestTraining ? bestTraining[d.trainField] : null, d.type) : null;
-        var testValue = d.testField ? normalizeMetricValue(t[d.testField], d.type) : null;
+        var resolved = resolveSummaryComparisonValues(referenceModel, d);
         return {
             label: d.label,
-            train: trainValue,
-            test: testValue,
-            type: d.type,
-            diff: d.trainField && d.testField ? fittingStatus(trainValue, testValue, d.type) : '—',
+            train: resolved.train,
+            test: resolved.test,
+            type: resolved.type,
+            diff:
+                resolved.train != null && resolved.test != null
+                    ? fittingStatus(resolved.train, resolved.test, resolved.type)
+                    : '—',
         };
     });
 
     var modelReferenceRow = '';
-    if (bestTraining) {
-        var modelName = bestTraining.nama_model || '-';
+    if (referenceModel) {
+        var modelName = referenceModel.nama_model || '-';
+        var hasTesting = referenceModel.testing_result && referenceModel.testing_result.accuracy != null;
         modelReferenceRow =
             '<tr class="row-model-reference">' +
             '<td><strong>Model Used</strong></td>' +
             '<td colspan="2"><strong>' + escapeHtml(modelName) + '</strong></td>' +
-            '<td><span class="fit good">Best training reference</span></td>' +
+            '<td><span class="fit good">Best training model' +
+            (hasTesting ? ' (tested)' : ' (not tested yet)') +
+            '</span></td>' +
             '</tr>';
     }
 
@@ -557,43 +756,28 @@ function renderSummaryTable(algoKey) {
         .join('');
 }
 
-function avgTestingByAlgo(algoKey, testField, asPercent) {
-    var rows = state.byAlgo[algoKey] || [];
-    var vals = rows
-        .map(function (r) {
-            var t = r.testing_result || {};
-            if (!asPercent) {
-                var n = Number(t[testField]);
-                return Number.isFinite(n) ? n : null;
-            }
-            return normalizePercent(t[testField]);
-        })
-        .filter(function (v) {
-            return v != null;
-        });
-    return mean(vals);
-}
-
-function normalizeMetricValue(raw, type) {
-    if (raw === undefined || raw === null || raw === '') return null;
-    if (type === 'percent') return normalizePercent(raw);
-    var n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-}
-
-function getBestTrainingModel(rows) {
+function getLeastOverfittingModel(rows) {
     var best = null;
     for (var i = 0; i < rows.length; i++) {
         var row = rows[i];
-        var acc = normalizePercent(row.accuracy);
-        var f1 = normalizePercent(row.f1_score);
-        if (acc == null) continue;
-        var f1Score = f1 == null ? -Infinity : f1;
-        if (!best || acc > best.acc || (acc === best.acc && f1Score > best.f1)) {
-            best = { row: row, acc: acc, f1: f1Score };
+        var trainAcc = normalizePercent(row.accuracy);
+        var testAcc = normalizePercent((row.testing_result || {}).accuracy);
+        if (trainAcc == null || testAcc == null) continue;
+        var gap = Math.abs(trainAcc - testAcc);
+        if (!best || gap < best.gap || (gap === best.gap && testAcc > best.testAcc)) {
+            best = { row: row, gap: gap, testAcc: testAcc };
         }
     }
     return best ? best.row : null;
+}
+
+function getAlgoReferenceModelForComparison(algoKey, rows) {
+    var items = rows || [];
+    // Special rule requested: only mBERT uses least-overfitting reference.
+    if (algoKey === 'mbert') {
+        return getLeastOverfittingModel(items) || getBestTrainingModel(items);
+    }
+    return getBestTrainingModel(items);
 }
 
 function getBestTestingModel(rows) {
@@ -612,51 +796,202 @@ function getBestTestingModel(rows) {
     return best ? best.row : null;
 }
 
-function renderBestInfo(algoKey, bestTraining, bestTesting) {
+function getAlgoComparisonValue(algoKey, metricDef) {
+    var rows = state.byAlgo[algoKey] || [];
+    var bestTraining = getAlgoReferenceModelForComparison(algoKey, rows);
+    var bestTesting = getBestTestingModel(rows);
+    var tTrain = bestTraining ? bestTraining.testing_result || {} : {};
+    var tTest = bestTesting ? bestTesting.testing_result || {} : {};
+
+    var value = null;
+    if (metricDef.testField) {
+        value = normalizeMetricValue(tTrain[metricDef.testField], metricDef.type);
+    }
+    if (value == null && metricDef.key === 'macro_avg') {
+        var p = normalizePercent(tTrain.precision_macro);
+        var r = normalizePercent(tTrain.recall_macro);
+        var f = normalizePercent(tTrain.f1_macro);
+        if (p != null && r != null && f != null) value = (p + r + f) / 3;
+    }
+    if (value == null && metricDef.key === 'loss' && bestTraining) {
+        value = normalizeMetricValue(bestTraining.train_loss, metricDef.type);
+    }
+    if (value == null && metricDef.testField) {
+        value = normalizeMetricValue(tTest[metricDef.testField], metricDef.type);
+    }
+    if (value == null && metricDef.key === 'macro_avg') {
+        var p2 = normalizePercent(tTest.precision_macro);
+        var r2 = normalizePercent(tTest.recall_macro);
+        var f2 = normalizePercent(tTest.f1_macro);
+        if (p2 != null && r2 != null && f2 != null) value = (p2 + r2 + f2) / 3;
+    }
+    if (value == null && bestTraining) {
+        value = normalizeMetricValue(resolveTrainingMetricRaw(bestTraining, metricDef), metricDef.type);
+    }
+    return value;
+}
+
+function testingMetricFromBestModel(algoKey, testField, asPercent) {
+    var best = getBestTrainingModel(state.byAlgo[algoKey] || []);
+    if (!best) return null;
+    var t = best.testing_result || {};
+    if (testField === 'mcc') return normalizeMcc(t[testField]);
+    if (!asPercent) {
+        var n = Number(t[testField]);
+        return Number.isFinite(n) ? n : null;
+    }
+    return normalizePercent(t[testField]);
+}
+
+function metricValueFromReferenceModel(algoKey, metricKey, testField, asPercent) {
+    var refModel = getBestTrainingModel(state.byAlgo[algoKey] || []);
+    if (!refModel) return null;
+    var t = refModel.testing_result || {};
+
+    var value = null;
+    if (testField) {
+        if (testField === 'mcc') {
+            value = normalizeMcc(t[testField]);
+        } else if (asPercent) {
+            value = normalizePercent(t[testField]);
+        } else {
+            value = normalizeMetricValue(t[testField], 'float2');
+        }
+    }
+
+    if (value == null && metricKey === 'macro_avg') {
+        var p = normalizePercent(t.precision_macro);
+        var r = normalizePercent(t.recall_macro);
+        var f = normalizePercent(t.f1_macro);
+        if (p != null && r != null && f != null) {
+            value = (p + r + f) / 3;
+        }
+    }
+
+    if (value == null && metricKey === 'loss') {
+        value = normalizeMetricValue(refModel.train_loss, 'float4');
+    }
+
+    return value;
+}
+
+function normalizeMetricValue(raw, type) {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (type === 'percent') return normalizePercent(raw);
+    if (type === 'mcc') return normalizeMcc(raw);
+    if (type === 'loss_pct') return normalizeLossPercent(raw);
+    var n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+}
+
+/** Nilai untuk tabel Training vs Testing — selaras perilaku sebelum tabel testing dihapus. */
+function resolveSummaryComparisonValues(referenceModel, metricDef) {
+    var t = referenceModel ? referenceModel.testing_result || {} : {};
+    var trainValue = null;
+    var testValue = metricDef.testField
+        ? normalizeMetricValue(t[metricDef.testField], metricDef.type)
+        : null;
+
+    if (metricDef.key === 'macro_avg') {
+        if (testValue == null) {
+            var p = normalizePercent(t.precision_macro);
+            var r = normalizePercent(t.recall_macro);
+            var f = normalizePercent(t.f1_macro);
+            if (p != null && r != null && f != null) testValue = (p + r + f) / 3;
+        }
+        trainValue = normalizeMetricValue(resolveTrainingMetricRaw(referenceModel, metricDef), 'percent');
+    } else if (
+        metricDef.key === 'std_dev' ||
+        metricDef.key === 'weighted_avg' ||
+        metricDef.key === 'roc_auc'
+    ) {
+        // Dulu hanya ada di metrik testing → bandingkan nilai testing di kedua kolom.
+        var summaryType = metricDef.key === 'std_dev' ? 'percent' : 'percent';
+        testValue = metricDef.testField
+            ? normalizeMetricValue(t[metricDef.testField], summaryType)
+            : null;
+        trainValue = testValue;
+    } else if (metricDef.key === 'loss') {
+        trainValue = referenceModel
+            ? normalizeMetricValue(referenceModel.train_loss, 'loss_pct')
+            : null;
+        testValue = trainValue;
+    } else if (metricDef.trainField) {
+        trainValue = referenceModel
+            ? normalizeMetricValue(resolveTrainingMetricRaw(referenceModel, metricDef), metricDef.type)
+            : null;
+    }
+
+    if (trainValue == null && testValue != null) trainValue = testValue;
+    if (testValue == null && trainValue != null) testValue = trainValue;
+
+    var diffType =
+        metricDef.key === 'loss'
+            ? 'loss_pct'
+            : metricDef.key === 'std_dev'
+              ? 'percent'
+              : metricDef.type;
+
+    return { train: trainValue, test: testValue, type: diffType };
+}
+
+function getBestTrainingModel(rows) {
+    var best = null;
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var acc = normalizePercent(row.accuracy);
+        var f1 = normalizePercent(row.f1_score);
+        if (acc == null) continue;
+        var f1Score = f1 == null ? -Infinity : f1;
+        if (!best || acc > best.acc || (acc === best.acc && f1Score > best.f1)) {
+            best = { row: row, acc: acc, f1: f1Score };
+        }
+    }
+    return best ? best.row : null;
+}
+
+function renderTrainingBestInfo(algoKey, bestTraining) {
     var trainEl = document.getElementById('training-best-info');
-    var testEl = document.getElementById('testing-best-info');
     var algoLabel = escapeHtml(ALGO_LABELS[algoKey] || algoKey || '-');
-    if (trainEl) {
-        trainEl.innerHTML = bestTraining
-            ? 'Best training metrics (' +
-              algoLabel +
-              '): <strong>' +
-              escapeHtml(bestTraining.nama_model || '-') +
-              '</strong> (Accuracy ' +
-              formatPercent(bestTraining.accuracy) +
-              ', F1 ' +
-              formatPercent(bestTraining.f1_score) +
-              ').'
-            : 'Best training metrics (' + algoLabel + '): no data available.';
+    if (!trainEl) return;
+    trainEl.innerHTML = bestTraining
+        ? 'Best training model (' +
+          algoLabel +
+          '): <strong>' +
+          escapeHtml(bestTraining.nama_model || '-') +
+          '</strong> (Accuracy ' +
+          formatPercent(bestTraining.accuracy) +
+          ', F1 ' +
+          formatPercent(bestTraining.f1_score) +
+          '). This model is used for testing and comparison below.'
+        : 'Best training model (' + algoLabel + '): no data available.';
+}
+
+function renderFittingBestInfo(algoKey, bestModel) {
+    var el = document.getElementById('fitting-best-info');
+    var algoLabel = escapeHtml(ALGO_LABELS[algoKey] || algoKey || '-');
+    if (!el) return;
+    if (!bestModel) {
+        el.innerHTML = 'Training vs testing comparison (' + algoLabel + '): no model available.';
+        return;
     }
-    if (testEl) {
-        var testBestText = bestTesting
-            ? '<strong>' +
-              escapeHtml(bestTesting.nama_model || '-') +
-              '</strong> (Accuracy ' +
-              formatPercent((bestTesting.testing_result || {}).accuracy) +
-              ', F1 ' +
-              formatPercent((bestTesting.testing_result || {}).f1_macro) +
-              ')'
-            : 'no data available';
-        var trainRefText = bestTraining
-            ? '<strong>' +
-              escapeHtml(bestTraining.nama_model || '-') +
-              '</strong> (Accuracy ' +
-              formatPercent((bestTraining.testing_result || {}).accuracy) +
-              ', F1 ' +
-              formatPercent((bestTraining.testing_result || {}).f1_macro) +
-              ')'
-            : 'no data available';
-        testEl.innerHTML =
-            'Testing metrics for the best training reference model (' +
-            algoLabel +
-            '): ' +
-            trainRefText +
-            '. Best testing metrics: ' +
-            testBestText +
-            '.';
-    }
+    var t = bestModel.testing_result || {};
+    var tested = t.accuracy != null;
+    el.innerHTML = tested
+        ? 'Comparing training vs testing for best model (' +
+          algoLabel +
+          '): <strong>' +
+          escapeHtml(bestModel.nama_model || '-') +
+          '</strong> (test Accuracy ' +
+          formatPercent(t.accuracy) +
+          ', test F1 ' +
+          formatPercent(t.f1_macro) +
+          ').'
+        : 'Best model <strong>' +
+          escapeHtml(bestModel.nama_model || '-') +
+          '</strong> (' +
+          algoLabel +
+          ') has not been tested yet. Run Testing on this model to fill the testing column.';
 }
 
 function renderAlgoComparisonTable() {
@@ -693,7 +1028,7 @@ function renderAlgoComparisonTable() {
         '<tr><th>Model Used</th>' +
         cols
             .map(function (k) {
-                var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
+                var bestTraining = getAlgoReferenceModelForComparison(k, state.byAlgo[k] || []);
                 var modelName = bestTraining ? bestTraining.nama_model || '-' : '-';
                 return '<th class="model-ref-cell">' + escapeHtml(modelName) + '</th>';
             })
@@ -702,26 +1037,35 @@ function renderAlgoComparisonTable() {
 
     var rows = TABLE_METRIC_DEFS.map(function (d) {
         return {
+            key: d.key,
             label: d.label,
-            field: d.testField,
+            testField: d.testField,
+            trainField: d.trainField,
             type: d.type,
         };
     });
 
     tbody.innerHTML = rows
         .map(function (r) {
+            var highlightMetrics = ['accuracy', 'f1', 'mcc'];
+            var values = cols.map(function (k) {
+                return getAlgoComparisonValue(k, r);
+            });
+            var maxVal = -Infinity;
+            if (highlightMetrics.indexOf(r.key) >= 0) {
+                for (var i = 0; i < values.length; i++) {
+                    if (values[i] != null && values[i] > maxVal) maxVal = values[i];
+                }
+            }
+
             return (
                 '<tr><td>' +
                 r.label +
                 '</td>' +
-                cols
-                    .map(function (k) {
-                        if (!r.field) return '<td>—</td>';
-                        if (!r.field) return '<td>—</td>';
-                        var bestTraining = getBestTrainingModel(state.byAlgo[k] || []);
-                        var t = bestTraining ? bestTraining.testing_result || {} : {};
-                        var value = normalizeMetricValue(t[r.field], r.type);
-                        return '<td>' + (value == null ? '—' : formatByType(value, r.type)) + '</td>';
+                values
+                    .map(function (value) {
+                        var klass = (value != null && value === maxVal && highlightMetrics.indexOf(r.key) >= 0) ? ' class="highlight-best"' : '';
+                        return '<td' + klass + '>' + (value == null ? '—' : formatByType(value, r.type)) + '</td>';
                     })
                     .join('') +
                 '</tr>'
@@ -847,7 +1191,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: tf.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.transformerDark,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -855,7 +1199,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: tf.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: tf.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.transformerDarkSoft,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -870,7 +1214,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: cl.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.classicLight,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -878,7 +1222,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: cl.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: cl.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: CHART_COLORS.classicLightSoft,
                     borderRadius: 5,
                     barPercentage: 0.62,
@@ -893,7 +1237,7 @@ function renderCharts(metricKey) {
             [
                 {
                     label: 'Accuracy',
-                    data: all.map(function (k) { return avgTestingByAlgo(k, 'accuracy', true) || 0; }),
+                    data: all.map(function (k) { return getAlgoComparisonValue(k, { key: 'accuracy', testField: 'accuracy', trainField: 'accuracy', type: 'percent' }); }),
                     backgroundColor: all.map(function (k) {
                         return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
                     }),
@@ -903,7 +1247,7 @@ function renderCharts(metricKey) {
                 },
                 {
                     label: 'F1',
-                    data: all.map(function (k) { return avgTestingByAlgo(k, 'f1_macro', true) || 0; }),
+                    data: all.map(function (k) { return getAlgoComparisonValue(k, { key: 'f1', testField: 'f1_macro', trainField: 'f1_score', type: 'percent' }); }),
                     backgroundColor: all.map(function (k) {
                         return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDarkSoft : CHART_COLORS.classicLightSoft;
                     }),
@@ -919,7 +1263,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartTransformer', tfLabels, [{
         label: def.label,
-        data: tf.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: tf.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: CHART_COLORS.transformerDark,
         borderRadius: 5,
         barPercentage: 0.62,
@@ -928,7 +1275,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartClassic', clLabels, [{
         label: def.label,
-        data: cl.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: cl.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: CHART_COLORS.classicLight,
         borderRadius: 5,
         barPercentage: 0.62,
@@ -937,7 +1287,10 @@ function renderCharts(metricKey) {
 
     makeChart('chartCombined', allLabels, [{
         label: def.label,
-        data: all.map(function (k) { return avgTestingByAlgo(k, def.testField, asPercent) || 0; }),
+        data: all.map(function (k) {
+            var metricDef = TABLE_METRIC_DEFS.find(function (d) { return d.key === def.key; }) || { key: def.key, testField: def.testField, trainField: null, type: asPercent ? 'percent' : 'float2' };
+            return getAlgoComparisonValue(k, metricDef);
+        }),
         backgroundColor: all.map(function (k) {
             return TRANSFORMER_KEYS.indexOf(k) >= 0 ? CHART_COLORS.transformerDark : CHART_COLORS.classicLight;
         }),
@@ -984,22 +1337,22 @@ function bestAlgorithmInFamily(keys, testField) {
     for (var i = 0; i < keys.length; i++) {
         var k = keys[i];
         if (state.orderedAlgos.indexOf(k) < 0) continue;
-        var avg = avgTestingByAlgo(k, testField);
-        if (avg == null) continue;
-        if (!best || avg > best.avg) best = { key: k, avg: avg };
+        var val = testingMetricFromBestModel(k, testField, true);
+        if (val == null) continue;
+        if (!best || val > best.avg) best = { key: k, avg: val };
     }
     return best;
 }
 
 function overallTestingScoreByAlgo(algoKey) {
     var metrics = [
-        avgTestingByAlgo(algoKey, 'accuracy'),
-        avgTestingByAlgo(algoKey, 'precision_macro'),
-        avgTestingByAlgo(algoKey, 'recall_macro'),
-        avgTestingByAlgo(algoKey, 'f1_macro'),
-        avgTestingByAlgo(algoKey, 'weighted_avg'),
-        avgTestingByAlgo(algoKey, 'mcc'),
-        avgTestingByAlgo(algoKey, 'roc_auc'),
+        testingMetricFromBestModel(algoKey, 'accuracy', true),
+        testingMetricFromBestModel(algoKey, 'precision_macro', true),
+        testingMetricFromBestModel(algoKey, 'recall_macro', true),
+        testingMetricFromBestModel(algoKey, 'f1_macro', true),
+        testingMetricFromBestModel(algoKey, 'weighted_avg', true),
+        testingMetricFromBestModel(algoKey, 'mcc', true),
+        testingMetricFromBestModel(algoKey, 'roc_auc', true),
     ].filter(function (v) {
         return v != null;
     });
@@ -1075,16 +1428,25 @@ function renderEvaluationConclusion(items) {
 
     var bestModelBlock = '';
     if (bestModel) {
+        var trainAcc = normalizePercent(bestModel.accuracy);
+        var testAcc = normalizePercent((bestModel.testing_result || {}).accuracy);
+        var fStatus = "Normal";
+        if (trainAcc != null && testAcc != null) {
+            var diff = Math.abs(trainAcc - testAcc);
+            if (diff >= 2) {
+                if (trainAcc > testAcc) fStatus = "Overfitting";
+                else fStatus = "Underfitting";
+            }
+        }
+        var statusColor = fStatus === "Normal" ? "var(--success)" : (fStatus === "Overfitting" ? "#b33a2f" : "#1e6da5");
+
         bestModelBlock =
-            '<p class="conclusion-prose"><strong>Best Overall Model (training-final):</strong> ' +
-            escapeHtml(bestModel.nama_model || '-') +
-            ' (' +
-            escapeHtml(ALGO_LABELS[bestModel.canonical_algorithm] || bestModel.algoritma || '-') +
-            ') with Accuracy <strong>' +
-            escapeHtml(formatPercent(bestModel.accuracy)) +
-            '</strong> and F1 <strong>' +
-            escapeHtml(formatPercent(bestModel.f1_score)) +
-            '</strong>.</p>';
+            '<div style="margin-top: 16px; padding: 16px; background: rgba(200, 169, 110, 0.1); border-left: 4px solid rgba(200, 169, 110, 0.9); border-radius: 8px;">' +
+            '<p class="conclusion-prose" style="margin: 0; font-size: 14.5px;">' +
+            '<strong>Interpretation:</strong> ' + escapeHtml(ALGO_LABELS[bestModel.canonical_algorithm] || bestModel.algoritma || '-') + ' (' + escapeHtml(bestModel.nama_model || '-') + ') ' +
+            'achieved the best performance with the highest F1-score (<strong>' + escapeHtml(formatPercent(bestModel.f1_score)) + '</strong>) ' +
+            'and Accuracy (<strong>' + escapeHtml(formatPercent(bestModel.accuracy)) + '</strong>).<br>' +
+            '<span style="display:inline-block; margin-top:8px;">Model fitting status: <strong style="color: ' + statusColor + ';">' + fStatus + '</strong>.</span></p></div>';
     }
 
     el.innerHTML =
@@ -1093,8 +1455,8 @@ function renderEvaluationConclusion(items) {
         '<li>' + transformerConclusion + '</li>' +
         '<li>' + classicConclusion + '</li>' +
         '<li><p class="conclusion-prose"><strong>Transformer vs Classic Comparison:</strong> ' + compareText + '</p></li>' +
-        (bestModel ? '<li>' + bestModelBlock + '</li>' : '') +
         '</ol>' +
+        (bestModel ? bestModelBlock : '') +
         '</div>';
     } catch (err) {
         el.innerHTML =
@@ -1103,6 +1465,217 @@ function renderEvaluationConclusion(items) {
             escapeHtml(err && err.message ? err.message : 'unknown error') +
             '</p>' +
             '</div>';
+    }
+}
+
+function findChartForCanvasId(canvasId) {
+    for (var i = 0; i < state.charts.length; i++) {
+        var ch = state.charts[i];
+        if (ch && ch.canvas && ch.canvas.id === canvasId) return ch;
+    }
+    return null;
+}
+
+function exportChartDataUrlHiRes(chart, targetW, targetH) {
+    return new Promise(function (resolve) {
+        if (!chart || !chart.canvas) {
+            resolve('');
+            return;
+        }
+        var prevW = chart.width;
+        var prevH = chart.height;
+        if (!prevW || !prevH) {
+            prevW = chart.canvas.clientWidth || 640;
+            prevH = chart.canvas.clientHeight || 360;
+        }
+        var tw = Math.max(480, Math.floor(targetW));
+        var th = Math.max(280, Math.floor(targetH));
+        try {
+            chart.resize(tw, th);
+            chart.update('none');
+        } catch (e) {
+            resolve('');
+            return;
+        }
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                var url = '';
+                try {
+                    url = chart.canvas.toDataURL('image/png', 1.0);
+                } catch (e2) {
+                    url = '';
+                }
+                try {
+                    if (prevW >= 16 && prevH >= 16) {
+                        chart.resize(prevW, prevH);
+                    } else {
+                        chart.resize();
+                    }
+                    chart.update('none');
+                } catch (e3) {}
+                resolve(url || '');
+            });
+        });
+    });
+}
+
+function scaledCanvasDataUrlFromElement(canvasEl, targetW, targetH) {
+    if (!canvasEl || typeof canvasEl.toDataURL !== 'function') return '';
+    var tw = Math.max(480, Math.floor(targetW));
+    var th = Math.max(280, Math.floor(targetH));
+    var tmp = document.createElement('canvas');
+    tmp.width = tw;
+    tmp.height = th;
+    var ctx = tmp.getContext('2d');
+    if (!ctx) return '';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tw, th);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    try {
+        ctx.drawImage(canvasEl, 0, 0, tw, th);
+        return tmp.toDataURL('image/png', 1.0);
+    } catch (e) {
+        return '';
+    }
+}
+
+async function buildEvalChartExportImages(chartLabel) {
+    var specs = [
+        { id: 'chartTransformer', title: 'Transformer models', expW: 1040, expH: 540, excelW: 780, excelH: 405 },
+        { id: 'chartClassic', title: 'Classic models', expW: 1040, expH: 540, excelW: 780, excelH: 405 },
+        { id: 'chartCombined', title: 'Transformer vs classic (combined)', expW: 1280, expH: 560, excelW: 820, excelH: 359 },
+    ];
+    var imgs = [];
+    for (var i = 0; i < specs.length; i++) {
+        var spec = specs[i];
+        var ch = findChartForCanvasId(spec.id);
+        var dataUrl = '';
+        if (ch) {
+            dataUrl = await exportChartDataUrlHiRes(ch, spec.expW, spec.expH);
+        }
+        if (!dataUrl || dataUrl.length < 64) {
+            var el = document.getElementById(spec.id);
+            dataUrl = scaledCanvasDataUrlFromElement(el, spec.expW, spec.expH);
+        }
+        if (dataUrl && dataUrl.length > 64) {
+            imgs.push({
+                title: spec.title + ' — ' + chartLabel,
+                base64: dataUrl,
+                width: spec.excelW,
+                height: spec.excelH,
+            });
+        }
+    }
+    return imgs;
+}
+
+function matrixFromElementPlainLines(el) {
+    if (!el) return [['(empty)']];
+    var text = String(el.innerText || '')
+        .split(/\r?\n/)
+        .map(function (s) {
+            return s.trim();
+        })
+        .filter(Boolean);
+    if (!text.length) return [['(empty)']];
+    return text.map(function (line) {
+        return [line];
+    });
+}
+
+async function exportEvaluasiWorkbook() {
+    if (!window.KamusExcel) {
+        alert('Excel export module is not loaded.');
+        return;
+    }
+    var btn = document.getElementById('btn-export-evaluasi-xlsx');
+    var orig = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Exporting…';
+    }
+    try {
+        await window.KamusExcel.ensureExcelJs();
+        var algo = state.selectedTableAlgo;
+        var algoLabel = ALGO_LABELS[algo] || algo || '-';
+        var chartDef = CHART_METRIC_DEFS.find(function (d) {
+            return d.key === state.selectedChartMetric;
+        });
+        var chartLabel = chartDef ? chartDef.label : state.selectedChartMetric;
+        var ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+
+        var trainingTable = document.querySelector('#training-metrics-card table.data-table');
+        var testingExportMatrix = buildTestingMetricsExportMatrix(algo);
+        var fittingTable = document.querySelector('#fitting-summary-card table.summary-table');
+        var algoTable = document.querySelector('#algo-compare-card table.comp-table');
+        var conclusionEl = document.getElementById('eval-conclusion-content');
+
+        var sheets = [
+            {
+                name: 'Metadata',
+                layout: 'metadata',
+                matrix: [
+                    ['Exported (local time)', new Date().toLocaleString()],
+                    ['Table algorithm', algoLabel],
+                    ['Chart metric (images)', chartLabel],
+                ],
+            },
+            {
+                name: 'Training metrics',
+                title: 'Training metrics — ' + algoLabel,
+                table: trainingTable,
+                tableOpts: { skipEmptyRows: true, uppercaseHeader: true },
+            },
+        ];
+
+        if (testingExportMatrix && testingExportMatrix.length) {
+            sheets.push({
+                name: 'Testing metrics',
+                title: 'Testing metrics — ' + algoLabel,
+                matrix: testingExportMatrix,
+                tableOpts: { uppercaseHeaderRows: 1 },
+            });
+        }
+
+        sheets.push(
+            {
+                name: 'Train vs test',
+                title: 'Best metrics comparison (selected model)',
+                table: fittingTable,
+                tableOpts: { skipEmptyRows: true, uppercaseHeader: true },
+            },
+            {
+                name: 'Algo comparison',
+                title: 'Algorithm comparison (all algos)',
+                table: algoTable,
+                tableOpts: { skipEmptyRows: true, uppercaseHeaderRows: 3 },
+            },
+            {
+                name: 'Conclusion',
+                layout: 'conclusion',
+                title: 'Evaluation conclusion',
+                matrix: matrixFromElementPlainLines(conclusionEl),
+            },
+        );
+
+        var imgs = await buildEvalChartExportImages(chartLabel);
+        if (imgs.length) {
+            sheets.push({
+                name: 'Charts',
+                title: 'Comparison charts (high-resolution images)',
+                images: imgs,
+            });
+        }
+
+        await window.KamusExcel.exportWorkbook('evaluasi_' + algo + '_' + ts, sheets);
+    } catch (err) {
+        alert(err && err.message ? err.message : String(err));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = orig || 'Export Excel';
+        }
     }
 }
 
@@ -1118,7 +1691,6 @@ function bindEvents() {
             } catch (err) {}
             renderTableAlgoButtons();
             renderTrainingTable(state.selectedTableAlgo);
-            renderTestingTable(state.selectedTableAlgo);
             renderSummaryTable(state.selectedTableAlgo);
         });
     }
@@ -1154,6 +1726,12 @@ function bindEvents() {
             renderCharts(state.selectedChartMetric);
         });
     }
+    var exportEvalBtn = document.getElementById('btn-export-evaluasi-xlsx');
+    if (exportEvalBtn) {
+        exportEvalBtn.addEventListener('click', function () {
+            void exportEvaluasiWorkbook();
+        });
+    }
 }
 
 function showError(message) {
@@ -1178,6 +1756,9 @@ function showChartHint(message) {
 
 document.addEventListener('DOMContentLoaded', async function () {
     try {
+        if (typeof window.kamusInitXlmGeneration === 'function') {
+            await window.kamusInitXlmGeneration();
+        }
         var chartReady = await ensureChartJsLoaded();
         if (!chartReady) {
             showChartHint('Chart.js failed to load. Please check internet/CDN access.');
@@ -1203,7 +1784,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         try {
             renderTrainingTable(state.selectedTableAlgo);
-            renderTestingTable(state.selectedTableAlgo);
             renderSummaryTable(state.selectedTableAlgo);
             renderAlgoComparisonTable();
         } catch (tableErr) {

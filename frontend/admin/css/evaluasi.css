@@ -78,67 +78,14 @@ body::after {
    SIDEBAR
 ========================= */
 
-.sidebar {
-    width: 250px;
-    min-width: 250px;
-    background: rgba(241, 231, 216, 0.85);
-    backdrop-filter: blur(6px);
-    height: 100vh;
-    padding: 20px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex-shrink: 0;
-    position: sticky;
-    top: 0;
-    box-sizing: border-box;
-}
-
-.logo { margin-top: 20px; }
-.logo { margin-bottom: 20px; }
-.logo img { width: 220px; }
-.logo img { display: block; }
-.logo h2 { display: none; }
-
-.sidebar ul { list-style: none; padding: 0; margin: 0; width: 100%; }
-
-.sidebar li {
-    padding: 0;
-    width: 100%;
-    box-sizing: border-box;
-    transition: 0.2s;
-}
-
-.sidebar li a {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 20px;
-    font-weight: 400;
-    color: inherit;
-    text-decoration: none;
-}
 
 
-.nav-icon {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.nav-icon svg {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 
-.sidebar li.active { background: rgba(200, 169, 110, 0.4); font-weight: 400; }
+
+
+
+
 
 /* =========================
    MAIN
@@ -151,6 +98,44 @@ body::after {
     padding: 40px 60px 60px;
     position: relative;
     text-align: left;
+}
+
+.eval-page-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 28px;
+    max-width: 100%;
+}
+
+.eval-page-toolbar .title {
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    min-width: 200px;
+}
+
+.eval-export-xlsx-btn {
+    flex-shrink: 0;
+    border: 1px solid var(--border-strong);
+    background: #f8f6f2;
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.eval-export-xlsx-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.eval-export-xlsx-btn:disabled {
+    opacity: 0.65;
+    cursor: wait;
 }
 
 .title {
@@ -655,6 +640,12 @@ body::after {
     color: var(--text-muted);
     font-weight: 400;
 }
+
+.highlight-best {
+    background: rgba(90, 122, 58, 0.15) !important;
+    font-weight: 700 !important;
+    color: #4f6f32 !important;
+}
 /* =========================
    CHART
 ========================= */
@@ -1054,12 +1045,10 @@ body::after {
 ========================= */
 
 @media (max-width: 900px) {
-    .sidebar { width: 200px; min-width: 200px; }
     .main { padding: 30px 30px 50px; }
 }
 
 @media (max-width: 700px) {
-    .sidebar { display: none; }
     .main { padding: 20px 16px 40px; }
     .page-title { font-size: 20px; }
     .data-table { font-size: 12px; }

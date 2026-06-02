@@ -36,18 +36,84 @@ app.add_middleware(
 # ROUTERS
 # =========================
 from backend.processing.router import router as processing_router
+from backend.processing.indobert_routes import router as indobert_processing_router
 from backend.testing.router import router as testing_router
 from backend.evaluasi.router import router as evaluasi_router
 
 app.include_router(processing_router)
+app.include_router(indobert_processing_router)
 app.include_router(testing_router)
 app.include_router(evaluasi_router)
 
+
+@app.on_event("startup")
+def _sync_xlm_generation_snapshot() -> None:
+    from backend.xlm_generation import export_frontend_snapshot
+
+    export_frontend_snapshot()
+
+
+@app.get("/config/xlm-generation")
+def config_xlm_generation():
+    from backend.xlm_generation import active_xlm_config
+
+    return active_xlm_config()
+
+
 # =========================
-# STEMMER
+# STEMMER (Sastrawi — dipakai untuk kolom bahasa Indonesia saat preprocess mBERT)
 # =========================
 factory = StemmerFactory()
 stemmer = factory.create_stemmer()
+
+
+def _preprocess_tokenizer_is_mbert(name: str) -> bool:
+    """True hanya untuk mBERT; IndoBERT & XLM-R tidak di-stem."""
+    n = (name or "").lower().strip().replace("_", "-")
+    if n in ("indobert", "indo-bert", "indobenchmark"):
+        return False
+    if n in ("xlm-r-2", "xlm-r", "xlmr", "xlm-roberta-base", "xlm-roberta"):
+        return False
+    return True
+
+
+def _maybe_stem_indonesian_for_preprocess(text: str, tokenizer_mode: str) -> str:
+    """
+    Stemming Sastrawi untuk teks Indonesia bila tokenizer preprocess = mBERT.
+    IndoBERT tidak di-stem (konsisten dengan catatan README / subword tokenizer).
+    """
+    if not text or not str(text).strip():
+        return text or ""
+    if not _preprocess_tokenizer_is_mbert(tokenizer_mode):
+        return text
+    try:
+        return stemmer.stem(str(text).strip()).strip()
+    except Exception:
+        return str(text).strip()
+
+
+def pipeline_sentence_from_clean(
+    text_clean: str,
+    slang_dict: dict,
+    stopwords: set,
+    tok,
+) -> list:
+    """Kalimat sudah clean_basic (+ stem jika mBERT). Tokenize BERT + slang + stopword."""
+    text = (text_clean or "").strip()
+    if not text:
+        return []
+    tokens = tok.tokenize(text)
+    clean_tokens: list[str] = []
+    for t in tokens:
+        if t in ["[CLS]", "[SEP]", "[PAD]"]:
+            continue
+        t = t.replace("##", "")
+        if t in slang_dict:
+            t = slang_dict[t]
+        if t in stopwords:
+            continue
+        clean_tokens.append(t)
+    return clean_tokens
 
 # =========================
 # STOPWORD & SLANG
@@ -328,7 +394,7 @@ except:
 tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
 model = BertModel.from_pretrained("bert-base-multilingual-cased")
 
-# Preprocess tokenizer bisa dipilih via query param (mbert/indobert)
+# Preprocess tokenizer via query param (default: indobert; alternatif: mbert)
 tokenizer_pre_mbert = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
 tokenizer_pre_indobert = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p2")
 
@@ -337,8 +403,9 @@ PREPROCESS_JOBS_LOCK = threading.Lock()
 
 
 def get_preprocess_tokenizer(name: str):
+    """Default: IndoBERT. Nilai lain yang jelas memakai mBERT tetap ke tokenizer multilingual."""
     name = (name or "").lower().strip()
-    if name in ("indobert", "indo-bert", "indobenchmark"):
+    if not name or name in ("indobert", "indo-bert", "indobenchmark"):
         return tokenizer_pre_indobert
     return tokenizer_pre_mbert
 
@@ -391,8 +458,20 @@ def _algo_family_from_row(algoritma: str) -> str | None:
     a = _normalize_algo_name(algoritma)
     if a in ("indobert", "indo-bert", "indobenchmark"):
         return "indobert"
-    if a in ("mbert", "m-bert", "multilingual-bert", "bert-base-multilingual-cased"):
+    # Sertakan variasi umum nama HF / label UI supaya baris Supabase tetap terdeteksi.
+    if a in (
+        "mbert",
+        "m-bert",
+        "multilingual-bert",
+        "bert-base-multilingual-cased",
+        "bert-multilingual-cased",
+        "bert-multilingual",
+    ):
         return "mbert"
+    if a.startswith("bert-") and "multilingual" in a:
+        return "mbert"
+    if a in ("xlm-r-2", "xlm-r", "xlmr"):
+        return "xlm-r"
     return None
 
 
@@ -408,13 +487,6 @@ def _fetch_models_ordered() -> list[dict]:
         return list(res.data or [])
     except Exception:
         return []
-
-
-def _get_best_model_row_for_family(family: str) -> dict | None:
-    for row in _fetch_models_ordered():
-        if _algo_family_from_row(str(row.get("algoritma") or "")) == family:
-            return row
-    return None
 
 
 def _params_from_model_row(row: dict | None) -> dict | None:
@@ -581,9 +653,21 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
         return bundle
 
     try:
-        from backend.processing.service import predict_indobert_softmax, predict_mbert_softmax
+        from backend.processing.service import (
+            predict_indobert_softmax,
+            predict_mbert_softmax,
+            predict_xlm_r_softmax,
+        )
     except Exception:
         return bundle
+
+    models_ordered = _fetch_models_ordered()
+    try:
+        from backend.xlm_generation import filter_xlm_model_rows
+
+        models_ordered = filter_xlm_model_rows(models_ordered)
+    except Exception:
+        pass
 
     def append_failure(
         family: str,
@@ -609,8 +693,12 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
         )
 
     def run_one(family: str, display_name: str, predict_fn):
-        row = _get_best_model_row_for_family(family)
-        if not row:
+        rows = [
+            row
+            for row in models_ordered
+            if _algo_family_from_row(str(row.get("algoritma") or "")) == family
+        ]
+        if not rows:
             append_failure(
                 family,
                 display_name,
@@ -618,55 +706,67 @@ def _run_dual_model_analysis(query_original: str, use_model: bool) -> dict:
             )
             return
 
-        nama = str(row.get("nama_model") or "").strip()
-        ml = _max_length_from_model_row(row)
-        params = _params_from_model_row(row)
+        last_err: str | None = None
+        last_nama: str | None = None
+        last_params: dict | None = None
+        last_ml: int | None = None
 
-        if not nama:
-            append_failure(
-                family,
-                display_name,
-                error="Model row has empty nama_model.",
-                params=params,
-                ml=ml,
-            )
-            return
+        for row in rows:
+            nama = str(row.get("nama_model") or "").strip()
+            ml = _max_length_from_model_row(row)
+            params = _params_from_model_row(row)
+            last_nama = nama or last_nama
+            last_params = params
+            last_ml = ml
 
-        try:
-            pred = predict_fn(text=query_original, model_name=nama, max_length=ml)
-            label = str(pred.get("label") or "").strip() or None
-            conf = pred.get("score")
-            bundle["model_analyses"].append(
-                {
-                    "algorithm": family,
-                    "display_name": display_name,
-                    "available": True,
-                    "error": None,
-                    "label": label,
-                    "confidence": round(float(conf), 6) if conf is not None else None,
-                    "model_name": nama,
-                    "parameters": params,
-                    "max_length_used": ml,
-                }
-            )
-            if family == "indobert":
-                bundle["predicted_jenis"] = label
-                bundle["model_used"] = nama
-            elif family == "mbert":
-                bundle["predicted_jenis_mbert"] = label
-                bundle["model_used_mbert"] = nama
-        except Exception as e:
-            append_failure(
-                family,
-                display_name,
-                error=str(e),
-                nama=nama,
-                params=params,
-                ml=ml,
-            )
+            if not nama:
+                last_err = "Model row has empty nama_model."
+                continue
+
+            try:
+                pred = predict_fn(text=query_original, model_name=nama, max_length=ml)
+                label = str(pred.get("label") or "").strip() or None
+                conf = pred.get("score")
+                bundle["model_analyses"].append(
+                    {
+                        "algorithm": family,
+                        "display_name": display_name,
+                        "available": True,
+                        "error": None,
+                        "label": label,
+                        "confidence": round(float(conf), 6) if conf is not None else None,
+                        "model_name": nama,
+                        "parameters": params,
+                        "max_length_used": ml,
+                    }
+                )
+                if family == "indobert":
+                    bundle["predicted_jenis"] = label
+                    bundle["model_used"] = nama
+                elif family == "mbert":
+                    bundle["predicted_jenis_mbert"] = label
+                    bundle["model_used_mbert"] = nama
+                elif family == "xlm-r":
+                    bundle["predicted_jenis_xlm"] = label
+                    bundle["model_used_xlm"] = nama
+                return
+            except Exception as e:
+                last_err = str(e)
+                continue
+
+        append_failure(
+            family,
+            display_name,
+            error=last_err
+            or f"Could not load any saved {display_name} checkpoint (check trained_models folder).",
+            nama=last_nama,
+            params=last_params,
+            ml=last_ml,
+        )
 
     run_one("indobert", "IndoBERT", predict_indobert_softmax)
     run_one("mbert", "mBERT", predict_mbert_softmax)
+    run_one("xlm-r", "XLM-R", predict_xlm_r_softmax)
     bundle["model_consensus"] = _compute_model_consensus(bundle["model_analyses"])
     return bundle
 
@@ -736,13 +836,51 @@ def _is_preprocess_cancelled(job_id: str | None) -> bool:
     return bool(job and job.get("cancel_requested"))
 
 
-def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | None = None):
+def _invalidate_preprocess_output_columns(
+    dataset_id: int, id_kata_filter: list[str] | None = None
+) -> None:
+    """
+    Kosongkan kolom keluaran tokenizer agar semua baris masuk antrian preprocess lagi
+    (Sastrawi + subword tokenizer, final_text, input_ids, dll.).
+    """
+    payload = {
+        "input_ids": None,
+        "attention_mask": None,
+        "bert_tokens": None,
+        "manado_tokens": None,
+        "indonesia_tokens": None,
+        "kalimat_manado_tokens": None,
+        "kalimat_indonesia_tokens": None,
+        "final_text": None,
+        "jenis_label": None,
+    }
+    query = supabase.table("preprocessed_data").update(payload).eq("dataset_id", dataset_id)
+    if id_kata_filter:
+        query = query.in_("id_kata", id_kata_filter)
+    query.execute()
+
+
+def _run_preprocess(
+    dataset_id: int,
+    tokenizer: str = "indobert",
+    job_id: str | None = None,
+    force_retokenize: bool = False,
+    id_kata_filter: list[str] | None = None,
+):
 
     stopwords = load_stopwords()
     slang_dict = load_slang()
     tok = get_preprocess_tokenizer(tokenizer)
     if job_id:
         _update_preprocess_job(job_id, status="running", message="seeding data")
+
+    if force_retokenize:
+        if job_id:
+            _update_preprocess_job(
+                job_id,
+                message="mereset token; memproses ulang (stem Indonesia jika mBERT)",
+            )
+        _invalidate_preprocess_output_columns(dataset_id, id_kata_filter=id_kata_filter)
 
     # Seed preprocessed_data dari raw_data untuk dataset baru (jika belum ada baris).
     existing_res = (
@@ -784,6 +922,12 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                 indonesia_clean = clean_basic(r.get("indonesia"))
                 kal_manado_clean = clean_basic(r.get("kalimat_manado"))
                 kal_indonesia_clean = clean_basic(r.get("kalimat_indonesia"))
+                indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                    indonesia_clean, tokenizer
+                )
+                kal_indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                    kal_indonesia_clean, tokenizer
+                )
 
                 combined = " ".join(
                     [manado_clean, indonesia_clean, kal_manado_clean, kal_indonesia_clean]
@@ -849,7 +993,7 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
         # Ambil baris yang belum benar-benar diproses.
         # Catatan: beberapa dataset lama menyimpan kolom text ini sebagai '' atau '[]',
         # sehingga tidak terjaring kalau hanya filter IS NULL.
-        res = (
+        query = (
             supabase.table("preprocessed_data")
             .select(
                 "id, id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia, "
@@ -866,9 +1010,10 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
                 "kalimat_indonesia_tokens.is.null,kalimat_indonesia_tokens.eq.[],kalimat_indonesia_tokens.eq.\"\","
                 "final_text.is.null,final_text.eq.\"\",jenis_label.is.null"
             )
-            .range(from_idx, from_idx + limit - 1)
-            .execute()
         )
+        if id_kata_filter:
+            query = query.in_("id_kata", id_kata_filter)
+        res = query.range(from_idx, from_idx + limit - 1).execute()
 
         data = res.data
 
@@ -931,6 +1076,12 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             kalimat_indonesia_clean = clean_basic(
                 row.get("kalimat_indonesia_clean") or row.get("kalimat_indonesia")
             )
+            indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                indonesia_clean, tokenizer
+            )
+            kalimat_indonesia_clean = _maybe_stem_indonesian_for_preprocess(
+                kalimat_indonesia_clean, tokenizer
+            )
             # =========================
             # WORD TOKEN
             # =========================
@@ -940,33 +1091,12 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
             # =========================
             # SENTENCE PIPELINE (FULL NLP)
             # =========================
-            def pipeline_sentence(text):
-                text = clean_basic(text)
-
-                tokens = tok.tokenize(text)
-
-                clean_tokens = []
-
-                for t in tokens:
-                    if t in ["[CLS]", "[SEP]", "[PAD]"]:
-                        continue
-
-                    t = t.replace("##", "")
-
-                    # slang normalize
-                    if t in slang_dict:
-                        t = slang_dict[t]
-
-                    # stopword remove
-                    if t in stopwords:
-                        continue
-
-                    clean_tokens.append(t)
-
-                return clean_tokens
-
-            kal_manado = pipeline_sentence(row.get("kalimat_manado"))
-            kal_indo = pipeline_sentence(row.get("kalimat_indonesia"))
+            kal_manado = pipeline_sentence_from_clean(
+                kalimat_manado_clean, slang_dict, stopwords, tok
+            )
+            kal_indo = pipeline_sentence_from_clean(
+                kalimat_indonesia_clean, slang_dict, stopwords, tok
+            )
 
             # =========================
             # FINAL TEXT FOR BERT
@@ -1092,17 +1222,49 @@ def _run_preprocess(dataset_id: int, tokenizer: str = "mbert", job_id: str | Non
 
 
 @app.post("/preprocess/{dataset_id}")
-def preprocess(dataset_id: int, tokenizer: str = Query("mbert")):
-    return _run_preprocess(dataset_id=dataset_id, tokenizer=tokenizer, job_id=None)
+def preprocess(
+    dataset_id: int,
+    tokenizer: str = Query("indobert"),
+    force_retokenize: bool = Query(False),
+    id_kata_filter: str | None = Query(None),
+):
+    parsed_id_kata_filter = None
+    if id_kata_filter:
+        parsed_id_kata_filter = [
+            str(x).strip() for x in id_kata_filter.split(",") if str(x).strip()
+        ]
+    return _run_preprocess(
+        dataset_id=dataset_id,
+        tokenizer=tokenizer,
+        job_id=None,
+        force_retokenize=force_retokenize,
+        id_kata_filter=parsed_id_kata_filter,
+    )
 
 
 @app.post("/preprocess/start/{dataset_id}")
-def start_preprocess(dataset_id: int, tokenizer: str = Query("mbert")):
+def start_preprocess(
+    dataset_id: int,
+    tokenizer: str = Query("indobert"),
+    force_retokenize: bool = Query(False),
+    id_kata_filter: str | None = Query(None),
+):
+    parsed_id_kata_filter = None
+    if id_kata_filter:
+        parsed_id_kata_filter = [
+            str(x).strip() for x in id_kata_filter.split(",") if str(x).strip()
+        ]
     job = _create_preprocess_job(dataset_id=dataset_id, tokenizer_name=tokenizer)
 
     def _worker():
         try:
-            _run_preprocess(dataset_id=dataset_id, tokenizer=tokenizer, job_id=job["job_id"])
+            _run_preprocess(
+                dataset_id=dataset_id,
+                tokenizer=tokenizer,
+                job_id=job["job_id"],
+                force_retokenize=force_retokenize,
+                id_kata_filter=parsed_id_kata_filter,
+            )
         except Exception as e:
             _update_preprocess_job(
                 job["job_id"],
@@ -1119,6 +1281,68 @@ def start_preprocess(dataset_id: int, tokenizer: str = Query("mbert")):
         "dataset_id": dataset_id,
         "tokenizer": tokenizer,
     }
+
+
+@app.post("/preprocess/indobert/start/{dataset_id}")
+def start_preprocess_indobert(
+    dataset_id: int,
+    force_retokenize: bool = Query(False),
+    id_kata_filter: str | None = Query(None),
+):
+    """Preprocess async dengan tokenizer IndoBERT (tanpa query ``tokenizer=``)."""
+    parsed_id_kata_filter = None
+    if id_kata_filter:
+        parsed_id_kata_filter = [
+            str(x).strip() for x in id_kata_filter.split(",") if str(x).strip()
+        ]
+    job = _create_preprocess_job(dataset_id=dataset_id, tokenizer_name="indobert")
+
+    def _worker():
+        try:
+            _run_preprocess(
+                dataset_id=dataset_id,
+                tokenizer="indobert",
+                job_id=job["job_id"],
+                force_retokenize=force_retokenize,
+                id_kata_filter=parsed_id_kata_filter,
+            )
+        except Exception as e:
+            _update_preprocess_job(
+                job["job_id"],
+                status="error",
+                message="error",
+                error=str(e),
+            )
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return {
+        "job_id": job["job_id"],
+        "status": "queued",
+        "dataset_id": dataset_id,
+        "tokenizer": "indobert",
+    }
+
+
+@app.post("/preprocess/indobert/{dataset_id}")
+def preprocess_indobert_sync(
+    dataset_id: int,
+    force_retokenize: bool = Query(False),
+    id_kata_filter: str | None = Query(None),
+):
+    """Preprocess sinkron khusus IndoBERT."""
+    parsed_id_kata_filter = None
+    if id_kata_filter:
+        parsed_id_kata_filter = [
+            str(x).strip() for x in id_kata_filter.split(",") if str(x).strip()
+        ]
+    return _run_preprocess(
+        dataset_id=dataset_id,
+        tokenizer="indobert",
+        job_id=None,
+        force_retokenize=force_retokenize,
+        id_kata_filter=parsed_id_kata_filter,
+    )
 
 
 @app.get("/preprocess/status/{job_id}")
@@ -1170,6 +1394,13 @@ def search(query: str, lang: str, use_model: bool = True):
             "query": query_original,
             "results": [],
             "message": "Query cannot be empty.",
+            **_empty_search_model_bundle(),
+        }
+    if len(query_original.strip().split()) > 1:
+        return {
+            "query": query_original,
+            "results": [],
+            "message": "Please enter a single word only (no spaces).",
             **_empty_search_model_bundle(),
         }
     if lang not in ("manado", "indonesia", "inggris"):

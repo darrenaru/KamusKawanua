@@ -1,5 +1,5 @@
-const supabaseUrl = "https://fhpjbkelhvopvfzykjne.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZocGpia2VsaHZvcHZmenlram5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzOTQ2NTQsImV4cCI6MjA5MDk3MDY1NH0.xSUPwXaPCcO4uDi-rH1MdeaJCeJU56pwvLDEgVT_SDQ";
+const supabaseUrl = "https://cdrabgiuvfisxntfzskd.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
@@ -8,12 +8,19 @@ let selectedDataset = null;
 let isProcessing = false;
 let preprocessJobId = null;
 let cancelRequested = false;
-let activePreprocessAlgorithm = "mbert";
+let activePreprocessAlgorithm = "indobert";
 
 function normalizeAlgorithmForPreprocess(raw) {
     const value = String(raw || "").toLowerCase().trim();
     if (value === "indobert" || value === "indo-bert") return "indobert";
+    if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r";
     return "mbert";
+}
+
+function preprocessTokenizerLabel(algo) {
+    if (algo === "indobert") return "IndoBERT";
+    if (algo === "xlm-r") return "XLM-R";
+    return "mBERT";
 }
 
 function resolvePreprocessAlgorithm() {
@@ -126,6 +133,11 @@ function selectDataset(ds) {
     const continueBtn = document.getElementById("continueBtn");
     continueBtn.style.display = ds.is_preprocessed ? "block" : "none";
 
+    const viewDataBtn = document.getElementById("viewDataBtn");
+    const downloadPreprocessedBtn = document.getElementById("downloadPreprocessedBtn");
+    if (viewDataBtn) viewDataBtn.style.display = ds.is_preprocessed ? "inline-flex" : "none";
+    if (downloadPreprocessedBtn) downloadPreprocessedBtn.style.display = ds.is_preprocessed ? "inline-flex" : "none";
+
     openDatasetModal();
 
     document.getElementById("fileName").innerText = ds.file_name || "-";
@@ -138,7 +150,11 @@ function selectDataset(ds) {
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
     const algoLabel = activePreprocessAlgorithm === "indobert" ? "IndoBERT" : "mBERT";
-    updateProgressUI(0, `Ready to process (${algoLabel})`);
+    if (ds.is_preprocessed) {
+        updateProgressUI(100, `Completed`);
+    } else {
+        updateProgressUI(0, `Ready to process (${algoLabel})`);
+    }
 }
 
 function goToProcessing() {
@@ -160,8 +176,11 @@ async function fetchAllRawData(datasetId) {
     while (true) {
         const { data, error } = await supabaseClient
             .from("raw_data")
-            .select("*")
+            .select(
+                "id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia",
+            )
             .eq("dataset_id", datasetId)
+            .order("id_kata", { ascending: true })
             .range(from, from + limit - 1);
 
         if (error) throw error;
@@ -174,6 +193,57 @@ async function fetchAllRawData(datasetId) {
     return allData;
 }
 
+async function fetchPreprocessedCleanMap(datasetId) {
+    const map = new Map();
+    let from = 0;
+    const limit = 1000;
+
+    while (true) {
+        const { data, error } = await supabaseClient
+            .from("preprocessed_data")
+            .select("id_kata, manado_clean, indonesia_clean")
+            .eq("dataset_id", datasetId)
+            .order("id_kata", { ascending: true })
+            .range(from, from + limit - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        data.forEach((row) => {
+            const key = String(row.id_kata || "").trim();
+            if (key) map.set(key, row);
+        });
+        from += limit;
+    }
+
+    return map;
+}
+
+function normalizeComparisonToken(value) {
+    return String(value == null ? "" : value)
+        .trim()
+        .toLowerCase();
+}
+
+function buildDataComparisonRows(rawRows, cleanMap) {
+    return (rawRows || []).map((raw) => {
+        const idKata = String(raw.id_kata || "").trim();
+        const clean = cleanMap.get(idKata) || {};
+        const manado = raw.manado;
+        const indonesia = raw.indonesia;
+        return {
+            id_kata: idKata || "-",
+            manado,
+            indonesia,
+            manado_clean: clean.manado_clean != null ? clean.manado_clean : null,
+            indonesia_clean: clean.indonesia_clean != null ? clean.indonesia_clean : null,
+            same_pair:
+                normalizeComparisonToken(manado) !== "" &&
+                normalizeComparisonToken(manado) === normalizeComparisonToken(indonesia),
+        };
+    });
+}
+
 // ==============================
 // START PREPROCESSING
 // ==============================
@@ -181,6 +251,19 @@ document.getElementById("processBtn").addEventListener("click", startPreprocessi
 document.getElementById("cancelProcessBtn").addEventListener("click", cancelPreprocessing);
 document.getElementById("continueBtn").addEventListener("click", goToProcessing);
 document.getElementById("closeDatasetModal").addEventListener("click", closeDatasetModal);
+
+const viewDataBtn = document.getElementById("viewDataBtn");
+if (viewDataBtn) viewDataBtn.addEventListener("click", openDataComparisonModal);
+
+const downloadPreprocessedBtn = document.getElementById("downloadPreprocessedBtn");
+if (downloadPreprocessedBtn) downloadPreprocessedBtn.addEventListener("click", downloadPreprocessedCsv);
+
+const closeDataComparisonBtn = document.getElementById("closeDataComparisonBtn");
+if (closeDataComparisonBtn) {
+    closeDataComparisonBtn.addEventListener("click", () => {
+        document.getElementById("dataComparisonModal").style.display = "none";
+    });
+}
 
 document.getElementById("datasetCard").addEventListener("click", function(e) {
     if (e.target.id === "datasetCard") closeDatasetModal();
@@ -195,6 +278,107 @@ function updateProgressUI(percent, text) {
     const progressText = document.getElementById("progressText");
     progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
     progressText.innerText = text;
+}
+
+// ==============================
+// DATA COMPARISON & EXPORT
+// ==============================
+const DATA_COMPARISON_PREVIEW_LIMIT = 100;
+
+function escapeComparisonCell(value) {
+    const t = document.createElement("div");
+    t.textContent = value == null || value === "" ? "-" : String(value);
+    return t.innerHTML;
+}
+
+async function openDataComparisonModal() {
+    if (!selectedDataset) return;
+    const modal = document.getElementById("dataComparisonModal");
+    const tbody = document.getElementById("comparisonTableBody");
+    const status = document.getElementById("comparisonStatus");
+
+    if (modal) modal.style.display = "flex";
+    if (tbody) tbody.innerHTML = "";
+    if (status) status.innerText = "Loading data...";
+
+    try {
+        const rawRows = await fetchAllRawData(selectedDataset.id);
+        if (!rawRows || rawRows.length === 0) {
+            if (status) status.innerText = "No raw data found for this dataset.";
+            return;
+        }
+
+        const cleanMap = await fetchPreprocessedCleanMap(selectedDataset.id);
+        const merged = buildDataComparisonRows(rawRows, cleanMap);
+        const total = merged.length;
+        const displayData = merged.slice(0, DATA_COMPARISON_PREVIEW_LIMIT);
+        const sameInPreview = displayData.filter((r) => r.same_pair).length;
+        const missingClean = displayData.filter(
+            (r) => r.manado_clean == null && r.indonesia_clean == null,
+        ).length;
+
+        if (status) {
+            let msg =
+                total > DATA_COMPARISON_PREVIEW_LIMIT
+                    ? `Showing first ${DATA_COMPARISON_PREVIEW_LIMIT} of ${total} rows (sorted by id_kata). `
+                    : `Showing ${total} row${total === 1 ? "" : "s"}. `;
+            msg +=
+                "Original columns come from raw_data; cleaned columns from preprocessed_data. ";
+            if (sameInPreview > 0) {
+                msg += `${sameInPreview} row(s) in this preview have the same Manado and Indonesia word (often loanwords or shared spelling in the source CSV). `;
+            }
+            if (missingClean > 0) {
+                msg += `${missingClean} row(s) in this preview have no cleaned values yet — run preprocessing first. `;
+            }
+            if (total > DATA_COMPARISON_PREVIEW_LIMIT) {
+                msg += "Download CSV for the full dataset.";
+            }
+            status.innerText = msg.trim();
+        }
+
+        if (tbody) {
+            tbody.innerHTML = displayData
+                .map((row) => {
+                    const rowClass = row.same_pair ? ' class="comparison-row-same"' : "";
+                    const manadoClean =
+                        row.manado_clean != null ? row.manado_clean : "—";
+                    const indonesiaClean =
+                        row.indonesia_clean != null ? row.indonesia_clean : "—";
+                    return (
+                        "<tr" +
+                        rowClass +
+                        ">" +
+                        `<td>${escapeComparisonCell(row.id_kata)}</td>` +
+                        `<td>${escapeComparisonCell(row.manado)}</td>` +
+                        `<td>${escapeComparisonCell(manadoClean)}</td>` +
+                        `<td>${escapeComparisonCell(row.indonesia)}</td>` +
+                        `<td>${escapeComparisonCell(indonesiaClean)}</td>` +
+                        "</tr>"
+                    );
+                })
+                .join("");
+        }
+    } catch (err) {
+        console.error("Error loading comparison data:", err);
+        if (status) status.innerText = "Failed to load data.";
+    }
+}
+
+async function downloadPreprocessedCsv() {
+    if (!selectedDataset) return;
+    try {
+        const rows = await window.KamusCsvExport.fetchAllSupabaseRows(supabaseClient, "preprocessed_data", selectedDataset.id);
+        const headers = [
+            "id_kata", "jenis",
+            "manado", "indonesia", "kalimat_manado", "kalimat_indonesia",
+            "manado_clean", "indonesia_clean", "kalimat_manado_clean", "kalimat_indonesia_clean",
+            "manado_tokens", "indonesia_tokens"
+        ];
+        window.KamusCsvExport.downloadCsv(`${selectedDataset.name || "dataset"}_preprocessed.csv`, headers, rows);
+    } catch (err) {
+        console.error(err);
+        alert("Failed to download CSV: " + (err.message || err));
+    }
 }
 
 async function pollPreprocessStatus(jobId) {
@@ -285,7 +469,7 @@ async function startPreprocessing() {
             const chunk = allData.slice(i, i + chunkSize);
 
             const processed = chunk.map(row => ({
-                dataset_id: row.dataset_id,
+                dataset_id: selectedDataset.id,
                 id_kata: row.id_kata,
                 jenis: row.jenis,
 
@@ -325,10 +509,11 @@ async function startPreprocessing() {
         const algoLabel = selectedAlgo === "indobert" ? "IndoBERT" : "mBERT";
 
         // Jalankan tokenizer backend secara async + polling progres real.
-        const startRes = await fetch(
-            `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=${selectedAlgo}`,
-            { method: "POST" },
-        );
+        const preprocessStartUrl =
+            selectedAlgo === "indobert"
+                ? `http://127.0.0.1:8000/preprocess/indobert/start/${selectedDataset.id}`
+                : `http://127.0.0.1:8000/preprocess/start/${selectedDataset.id}?tokenizer=${encodeURIComponent(selectedAlgo)}`;
+        const startRes = await fetch(preprocessStartUrl, { method: "POST" });
         const startData = await startRes.json();
         if (!startRes.ok || !startData?.job_id) {
             throw new Error(startData?.message || "Failed to start backend tokenizer");

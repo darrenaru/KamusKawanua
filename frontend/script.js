@@ -28,10 +28,46 @@ document.addEventListener("DOMContentLoaded", updateLanguageUI);
 
 
 // ==============================
+// SINGLE-WORD SEARCH (no spaces)
+// ==============================
+function parseSingleWordQuery(raw) {
+    const t = String(raw || "").trim();
+    if (!t) return { ok: false, empty: true };
+    if (/\s/.test(t)) return { ok: false, empty: false };
+    return { ok: true, word: t };
+}
+
+function bindSingleWordInput(inputEl) {
+    if (!inputEl) return;
+    inputEl.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Spacebar") e.preventDefault();
+    });
+    inputEl.addEventListener("paste", (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData("text");
+        const first = String(text || "").trim().split(/\s+/)[0] || "";
+        inputEl.value = first;
+        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+}
+
+function showSearchError(msg) {
+    const container = document.getElementById("results");
+    if (!container) return;
+    container.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "search-error-msg";
+    p.textContent = msg;
+    container.appendChild(p);
+}
+
+// ==============================
 // ENTER KEY SUPPORT
 // ==============================
 document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("query").addEventListener("keypress", function(e) {
+    const queryInput = document.getElementById("query");
+    bindSingleWordInput(queryInput);
+    queryInput.addEventListener("keypress", function(e) {
         if (e.key === "Enter") {
             search();
         }
@@ -63,9 +99,13 @@ document.addEventListener("DOMContentLoaded", () => {
 // SEARCH FUNCTION (UPDATED)
 // ==============================
 async function search() {
-    const query = document.getElementById("query").value.trim();
-
-    if (!query) return;
+    const parsed = parseSingleWordQuery(document.getElementById("query").value);
+    if (!parsed.ok) {
+        if (parsed.empty) return;
+        showSearchError("Please enter one word only (no spaces).");
+        return;
+    }
+    const query = parsed.word;
 
     try {
         setSearchLoading(true);
@@ -108,15 +148,18 @@ function formatWordTypeLabel(raw) {
         .trim()
         .replace(/\s+/g, " ");
     const map = {
-        "kata kerja": "Verb / Kata kerja",
-        kerja: "Verb / Kata kerja",
-        verb: "Verb / Kata kerja",
-        "kata benda": "Noun / Kata benda",
-        benda: "Noun / Kata benda",
-        noun: "Noun / Kata benda",
-        "kata sifat": "Adjective / Kata sifat",
-        sifat: "Adjective / Kata sifat",
-        adjective: "Adjective / Kata sifat",
+        "kata kerja": "Verb",
+        kerja: "Verb",
+        verb: "Verb",
+        "kata benda": "Noun",
+        benda: "Noun",
+        noun: "Noun",
+        "kata sifat": "Adjective",
+        sifat: "Adjective",
+        adjective: "Adjective",
+        "kata keterangan": "Adverb",
+        keterangan: "Adverb",
+        adverb: "Adverb",
     };
     return map[v] || String(raw || "");
 }
@@ -130,6 +173,139 @@ function canonicalWordType(raw) {
     if (v === "kata benda" || v === "benda" || v === "noun") return "noun";
     if (v === "kata sifat" || v === "sifat" || v === "adjective") return "adjective";
     return v;
+}
+
+function stripHtmlForDisplay(s) {
+    return String(s == null ? "" : s)
+        .replace(/<[^>]*>/g, "")
+        .trim();
+}
+
+/**
+ * Isi kartu ringkasan (seperti Testing): kata → padanan kamus + kelas kata & keyakinan per model.
+ */
+function buildSearchSummaryCardHtml(data) {
+    const qRaw = String(data?.query || "").trim() || "—";
+    const q = escapeHtml(qRaw);
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    const top = rows[0];
+
+    let transRows = "";
+    if (!top) {
+        transRows = `<div class="search-sum-row"><span class="search-sum-k">Dictionary match</span><span class="search-sum-v search-sum-muted">Not found</span></div>`;
+    } else {
+        const m = stripHtmlForDisplay(top.manado);
+        const i = stripHtmlForDisplay(top.indonesia);
+        const eng = stripHtmlForDisplay(top.inggris);
+        if (currentLang === "manado") {
+            transRows = `<div class="search-sum-row"><span class="search-sum-k">Translation (Indonesian)</span><span class="search-sum-v search-sum-em">${escapeHtml(i || "—")}</span></div>`;
+        } else if (currentLang === "indonesia") {
+            transRows = `<div class="search-sum-row"><span class="search-sum-k">Manado equivalent</span><span class="search-sum-v search-sum-em">${escapeHtml(m || "—")}</span></div>`;
+        } else if (currentLang === "inggris") {
+            transRows =
+                `<div class="search-sum-row"><span class="search-sum-k">English</span><span class="search-sum-v">${escapeHtml(eng || "—")}</span></div>` +
+                `<div class="search-sum-row"><span class="search-sum-k">Manado</span><span class="search-sum-v search-sum-em">${escapeHtml(m || "—")}</span></div>` +
+                `<div class="search-sum-row"><span class="search-sum-k">Indonesian</span><span class="search-sum-v search-sum-em">${escapeHtml(i || "—")}</span></div>`;
+        } else {
+            transRows = `<div class="search-sum-row"><span class="search-sum-k">Match</span><span class="search-sum-v search-sum-em">${escapeHtml(i || m || "—")}</span></div>`;
+        }
+    }
+
+    const analyses = Array.isArray(data?.model_analyses) ? data.model_analyses : [];
+
+    function modelSummaryRow(displayLabel, algoKey) {
+        const a = analyses.find((x) => String(x?.algorithm || "").toLowerCase().trim() === algoKey);
+        if (!a) {
+            return `<div class="search-sum-row"><span class="search-sum-k">Part of speech (${escapeHtml(displayLabel)})</span><span class="search-sum-v search-sum-muted">—</span></div>`;
+        }
+        if (!a.available) {
+            const err = a.error ? escapeHtml(String(a.error).slice(0, 160)) : "Unavailable";
+            return `<div class="search-sum-row"><span class="search-sum-k">Part of speech (${escapeHtml(displayLabel)})</span><span class="search-sum-v search-sum-muted">${err}</span></div>`;
+        }
+        const lab = a.label ? formatWordTypeLabel(a.label) : "—";
+        const conf =
+            a.confidence != null && Number.isFinite(Number(a.confidence))
+                ? `${(Number(a.confidence) * 100).toFixed(0)}%`
+                : "—";
+        const ckpt = a.model_name ? escapeHtml(String(a.model_name)) : "";
+        const ckptHtml = ckpt
+            ? `<span class="search-sum-checkpoint" title="Checkpoint">${ckpt}</span>`
+            : "";
+        return `<div class="search-sum-row search-sum-row--stack">
+            <span class="search-sum-k">Part of speech (${escapeHtml(displayLabel)})</span>
+            <span class="search-sum-v">
+              <span class="search-sum-mainline"><strong>${escapeHtml(lab)}</strong> <span class="search-sum-conf">(${escapeHtml(conf)})</span></span>
+              ${ckptHtml}
+            </span>
+          </div>`;
+    }
+
+    const modelBlock =
+        modelSummaryRow("IndoBERT", "indobert") + modelSummaryRow("mBERT", "mbert");
+
+    const modelHint =
+        analyses.length === 0
+            ? `<p class="search-summary-testing-hint">Model predictions are not available. Ensure IndoBERT/mBERT checkpoints exist on the server and the <code class="inline-code">models</code> table is populated.</p>`
+            : "";
+
+    return `
+        <div class="search-summary-testing" role="region" aria-label="Search result overview">
+          <div class="search-summary-testing-inner">
+            <div class="search-sum-word">${q}</div>
+            <div class="search-sum-arrow" aria-hidden="true">↓</div>
+            <div class="search-sum-body">
+              ${transRows}
+              ${modelBlock}
+            </div>
+          </div>
+          ${modelHint}
+          <p class="search-summary-testing-note">Further down: full dictionary entries when available.</p>
+        </div>`;
+}
+
+/**
+ * Single collapsible: overview card + technical panels + consensus strip (all model-related UI).
+ */
+function mountCollapsibleModelInsights(container, data) {
+    const summaryHtml = buildSearchSummaryCardHtml(data);
+    const panelsHtml = buildAlgorithmPanelsHtml(data) || "";
+    const consensusHtml = buildConsensusStripHtml(data) || "";
+
+    const bodyHtml =
+        summaryHtml +
+        (panelsHtml ? `<div class="search-model-insights-panels-wrap">${panelsHtml}</div>` : "") +
+        (consensusHtml ? `<div class="search-model-insights-consensus-wrap">${consensusHtml}</div>` : "");
+
+    const html = `
+<div class="search-model-insights-wrap">
+  <div class="search-model-insights-card">
+    <button type="button" class="search-model-insights-toggle" aria-expanded="false" aria-controls="search-model-insights-panel">
+      <span class="search-model-insights-toggle-text">Show translation &amp; model output</span>
+      <svg class="search-model-insights-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div id="search-model-insights-panel" class="search-model-insights-collapsible" role="region" aria-label="Translation and model classification">
+      <div class="search-model-insights-collapsible-inner">
+        ${bodyHtml}
+      </div>
+    </div>
+  </div>
+</div>`;
+    container.insertAdjacentHTML("beforeend", html);
+    const section = container.querySelector(".search-model-insights-wrap:last-of-type");
+    if (!section) return;
+    const btn = section.querySelector(".search-model-insights-toggle");
+    const label = section.querySelector(".search-model-insights-toggle-text");
+    const panel = section.querySelector("#search-model-insights-panel");
+    if (!btn || !label) return;
+    btn.addEventListener("click", () => {
+        const open = section.classList.toggle("is-open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (panel) panel.setAttribute("aria-hidden", open ? "false" : "true");
+        label.textContent = open
+            ? "Hide translation & model output"
+            : "Show translation & model output";
+    });
+    if (panel) panel.setAttribute("aria-hidden", "true");
 }
 
 /** Info tooltip: consensus + per-algorithm details + dictionary entry check */
@@ -227,20 +403,21 @@ function displayResults(data) {
     const container = document.getElementById("results");
     container.innerHTML = "";
 
-    const algoPanelsHtml = buildAlgorithmPanelsHtml(data);
-    if (algoPanelsHtml) {
-        container.insertAdjacentHTML("beforeend", algoPanelsHtml);
+    if (data.message && (!data.results || data.results.length === 0)) {
+        const p = document.createElement("p");
+        p.className = "search-error-msg";
+        p.textContent = data.message;
+        container.appendChild(p);
+        return;
     }
 
-    const stripHtml = buildConsensusStripHtml(data);
-    if (stripHtml) {
-        container.insertAdjacentHTML("beforeend", stripHtml);
-    }
+    mountCollapsibleModelInsights(container, data);
 
     if (!data.results || data.results.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-results-msg";
-        empty.textContent = "No results found";
+        empty.textContent =
+            "No extra dictionary entries. Translation and model output are in the collapsible section above.";
         container.appendChild(empty);
         return;
     }
@@ -248,10 +425,15 @@ function displayResults(data) {
     const results = Array.isArray(data.results) ? data.results : [];
     const grouped = groupResultsByAlgorithmMatch(results);
 
-    renderResultGroup(container, data, "Cocok IndoBERT & mBERT", grouped.both);
-    renderResultGroup(container, data, "Cocok IndoBERT", grouped.indobertOnly);
-    renderResultGroup(container, data, "Cocok mBERT", grouped.mbertOnly);
-    renderResultGroup(container, data, "Hasil lainnya", grouped.none);
+    container.insertAdjacentHTML(
+        "beforeend",
+        `<div class="result-section-title result-section-title--dictionary">Dictionary entries — words &amp; translations</div>`,
+    );
+
+    renderResultGroup(container, data, "Matches both IndoBERT & mBERT", grouped.both);
+    renderResultGroup(container, data, "Matches IndoBERT", grouped.indobertOnly);
+    renderResultGroup(container, data, "Matches mBERT", grouped.mbertOnly);
+    renderResultGroup(container, data, "Other matches", grouped.none);
 }
 
 function buildAlgorithmPanelsHtml(data) {
@@ -272,17 +454,17 @@ function buildAlgorithmPanelsHtml(data) {
             const err = a?.error ? escapeHtml(String(a.error)) : "";
             const pill = available
                 ? `<span class="algo-pill">${label} <span style="font-weight:600; opacity:.8">(${conf})</span></span>`
-                : `<span class="algo-pill algo-pill--muted">unavailable</span>`;
+                : `<span class="algo-pill algo-pill--muted">Unavailable</span>`;
 
-            const detailLine = available
-                ? `<p class="algo-panel-meta"><strong>Model:</strong> ${modelName} &nbsp;|&nbsp; <strong>MaxLen:</strong> ${maxLen}</p>`
-                : `<p class="algo-panel-meta">${err || "Model belum tersedia / belum ditraining."}</p>`;
+            const checkpointBlock = available
+                ? `<p class="algo-panel-checkpoint"><span class="algo-panel-checkpoint-label">Checkpoint (trained_models folder)</span><span class="algo-panel-checkpoint-name">${modelName}</span></p><p class="algo-panel-meta"><strong>max_length:</strong> ${maxLen}</p>`
+                : `<p class="algo-panel-meta algo-panel-meta--error">${err || "Model unavailable or failed to load."}</p>`;
 
             return `
               <div class="algo-panel">
                 <p class="algo-panel-title">${title}</p>
                 ${pill}
-                ${detailLine}
+                ${checkpointBlock}
               </div>
             `;
         })
@@ -315,10 +497,12 @@ function renderResultGroup(container, data, title, items) {
         card.className = "result-card";
 
         const tooltipInner = buildConsensusTooltipHtml(data, item);
+        const jenisRaw = String(item.jenis || "").replace(/<[^>]*>/g, "").trim();
+        const jenisDisp = jenisRaw ? escapeHtml(formatWordTypeLabel(jenisRaw)) : "—";
 
         const matchBits = [];
-        if (item.model_match_indobert) matchBits.push("cocok jenis ↔ IndoBERT");
-        if (item.model_match_mbert) matchBits.push("cocok jenis ↔ mBERT");
+        if (item.model_match_indobert) matchBits.push("POS matches IndoBERT");
+        if (item.model_match_mbert) matchBits.push("POS matches mBERT");
         const matchStr =
             matchBits.length > 0 ? ` | ${matchBits.join(", ")}` : "";
 
@@ -335,19 +519,20 @@ function renderResultGroup(container, data, title, items) {
             <div class="result-grid">
                 <div class="result-section">
                     <strong>MANADO</strong>
-                    <p>${item.manado}</p>
+                    <p class="result-lemma">${item.manado}</p>
                     <p class="example">${item.kalimat_manado}</p>
                 </div>
 
                 <div class="result-section">
                     <strong>INDONESIA</strong>
-                    <p>${item.indonesia}</p>
+                    <p class="result-lemma">${item.indonesia}</p>
                     <p class="example">${item.kalimat_indonesia}</p>
                 </div>
             </div>
+            <p class="result-entry-meta"><strong>Dictionary POS (this entry):</strong> ${jenisDisp}</p>
 
             <div class="score">
-                ${item.method} | skor: ${item.score}${item.model_match ? " | cocok salah satu model dengan entri" : ""}${matchStr}
+                ${item.method} | score: ${item.score}${item.model_match ? " | POS matches at least one model" : ""}${matchStr}
             </div>
         `;
 
