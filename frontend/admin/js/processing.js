@@ -3698,7 +3698,7 @@
   const MODELS_OPTIONAL_INSERT_COLUMNS = [
     "macro_avg",
     "train_weighted_avg",
-    "train_std_deviation",
+    "std_deviation",
     "train_roc_auc",
     "train_loss",
     "train_mcc",
@@ -4090,7 +4090,7 @@
       f1_score: f1,
       macro_avg: macroAvg,
       train_weighted_avg: trainWeightedAvg,
-      train_std_deviation: epochF1Std,
+      std_deviation: epochF1Std,
       train_roc_auc: trainRocAuc,
       train_loss: trainLoss,
       train_mcc: trainMcc,

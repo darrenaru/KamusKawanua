@@ -41,7 +41,7 @@ var TABLE_METRIC_DEFS = [
     { key: 'f1', label: 'F1', trainField: 'f1_score', testField: 'f1_macro', type: 'percent' },
     { key: 'macro_avg', label: 'Macro Avg', trainField: 'macro_avg', testField: null, type: 'percent' },
     { key: 'weighted_avg', label: 'Weighted Avg', trainField: 'train_weighted_avg', testField: 'weighted_avg', type: 'percent' },
-    { key: 'std_dev', label: 'Std Dev', trainField: 'train_std_deviation', testField: 'std_deviation', type: 'float2' },
+    { key: 'std_dev', label: 'Std Dev', trainField: 'std_deviation', testField: 'std_deviation', type: 'float2' },
     { key: 'loss', label: 'Loss', trainField: 'train_loss', testField: null, type: 'float4' },
     { key: 'mcc', label: 'MCC', trainField: 'train_mcc', testField: 'mcc', type: 'mcc' },
     { key: 'roc_auc', label: 'ROC-AUC', trainField: 'train_roc_auc', testField: 'roc_auc', type: 'percent' },
@@ -191,7 +191,7 @@ function resolveTrainingMetricRaw(model, metricDef) {
         raw = model.train_weighted_avg != null ? model.train_weighted_avg : model.f1_score;
     }
     if (metricDef.key === 'std_dev') {
-        raw = model.train_std_deviation;
+        raw = model.std_deviation;
         if (raw === null || raw === undefined || raw === '') {
             raw = trainingStdDevFromHistory(model);
         }
