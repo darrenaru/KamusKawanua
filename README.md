@@ -1,185 +1,153 @@
-# KamusKawanua
+# 📖 KamusKawanua
 
-Project ini membangun sistem penerjemahan/klasifikasi berbasis data kamus bahasa Manado (kamarna) dengan pipeline:
-`Data Collection -> Pre Processing -> Processing (Training) -> Testing (Evaluasi)`.
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Active_Development-blue?style=for-the-badge)
 
-Backend menggunakan **FastAPI**, penyimpanan data menggunakan **Supabase**, dan project ini menargetkan 5 algoritma utama:
-- **mBERT**
-- **IndoBERT**
-- **XLM-R**
-- **Word2Vec**
-- **GloVe**
+**KamusKawanua** adalah sistem cerdas untuk penerjemahan dan klasifikasi bahasa daerah Manado (Kawanua). Proyek ini dirancang sebagai platform lengkap (end-to-end) yang mendukung pengelolaan data mentah hingga evaluasi model *Machine Learning* / *Natural Language Processing* (NLP).
 
-## Konfigurasi Environment (WAJIB)
-Backend membaca konfigurasi Supabase dari environment variable atau file `.env` di root project.
+---
+
+## 🚀 Pipeline Sistem
+
+Sistem ini beroperasi berdasarkan *pipeline* utama berikut:
+
+**`Data Collection ➔ Pre-Processing ➔ Processing (Training) ➔ Testing ➔ Evaluasi`**
+
+Sistem ini mendukung dan menargetkan 5 algoritma NLP utama:
+1. **mBERT** (Multilingual BERT)
+2. **IndoBERT**
+3. **XLM-R** (XLM-RoBERTa)
+4. **Word2Vec**
+5. **GloVe**
+
+---
+
+## 🛠️ Teknologi yang Digunakan
+
+* **Backend**: Python, FastAPI, Uvicorn, PyTorch, Transformers, Scikit-learn
+* **Frontend**: Vanilla HTML5, CSS3, JavaScript (Dashboard Admin interaktif)
+* **Database & BaaS**: Supabase (PostgreSQL)
+
+---
+
+## ⚙️ Persiapan & Instalasi (Getting Started)
+
+### 1. Konfigurasi Environment (Supabase)
+Sistem ini menggunakan Supabase sebagai database utama. Anda memerlukan file `.env` di root direktori proyek.
 
 1. Salin contoh env:
-   - Windows (PowerShell): `Copy-Item .env.example .env`
-2. Isi variabel berikut di `.env`:
-   - `SUPABASE_URL=...`
-   - `SUPABASE_KEY=...` (**service role key**, hanya untuk backend)
+   ```bash
+   # Windows (PowerShell)
+   Copy-Item .env.example .env
+   ```
+2. Buka `.env` dan isi variabel berikut:
+   ```ini
+   SUPABASE_URL=https://<project-ref>.supabase.co
+   SUPABASE_KEY=<your-service-role-key> 
+   ```
+   > ⚠️ **Catatan**: Gunakan **Service Role Key** untuk backend. File `.env` sudah diabaikan dalam Git, jangan pernah men-commit file ini.
 
-Catatan:
-- File `.env` sudah di-`gitignore` (jangan pernah di-commit).
-- Backend otomatis me-load `.env` (tanpa dependency tambahan).
+### 2. Menjalankan Backend (Python / FastAPI)
 
-## Prasyarat
+Backend melayani berbagai proses berat seperti NLP tokenization dan model training.
 
-### Backend (Python)
-`backend/requirements.txt`
-- `fastapi`
-- `uvicorn`
-- `pandas`
-- `numpy`
-- `torch==2.6.0+cu124` (CUDA 12.4)
-- `transformers`
-- `rapidfuzz`
-- `supabase`
-- `scikit-learn`
-- `sastrawi`
-
-### Frontend (Static)
-- Halaman admin bersifat static (`frontend/admin/...`) dan memanggil backend via `fetch`.
-- Koneksi Supabase dibuat langsung di beberapa file JS (contoh: `frontend/admin/js/data-collection.js`, `frontend/admin/js/preprocessing.js`).
-  - Gunakan **anon key** untuk frontend (bukan service role key).
-
-## Struktur Database (ringkas)
-Tabel yang dipakai untuk pipeline utama:
-- `datasets` (metadata dataset)
-- `raw_data` (data mentah dari CSV)
-- `preprocessed_data` (hasil cleaning/tokenisasi)
-- `models` (registry model training)
-- `model_training_runs` (history training run, bila digunakan)
-- `testing_results` (ringkasan hasil testing)
-- `slang_words`, `stopwords` (resource normalisasi)
-
-## Format CSV yang didukung (Data Collection)
-Parser `parseCSVStrict()` di `frontend/admin/js/data-collection.js` menerima:
-1. **8 kolom (NEW)** (disarankan, sesuai dataset saat ini)
-   - `id_kata, manado, indonesia, jenis, kalimat_manado, kalimat_indonesia, kategori, sumber`
-   - Kolom `inggris` dan `kalimat_inggris` akan diisi otomatis sebagai `""` untuk kompatibilitas schema lama.
-2. **8 kolom (legacy)** (lengkap)
-   - `id_kata, jenis, manado, indonesia, inggris, kalimat_manado, kalimat_indonesia, kalimat_inggris`
-3. **6 kolom (legacy)** (tanpa kolom Inggris)
-   - `id_kata, jenis, manado, indonesia, kalimat_manado, kalimat_indonesia`
-   - Untuk format 6 kolom, parser mengisi `inggris` dan `kalimat_inggris` sebagai `""`.
-
-## Pre Processing (Backend)
-Flow preprocessing:
-1. Seeding `preprocessed_data` dari `raw_data` jika `preprocessed_data` belum ada.
-2. Cleaning + normalisasi slang/stopword.
-3. Tokenisasi menggunakan tokenizer yang dipilih.
-4. Hasil token disimpan ke `preprocessed_data`.
-
-Endpoint:
-- `POST /preprocess/start/{dataset_id}?tokenizer=mbert|indobert`
-- `GET  /preprocess/status/{job_id}`
-- `POST /preprocess/cancel/{job_id}`
-
-Perubahan penting:
-- Preprocess akan memproses ulang baris yang `input_ids/attention_mask` bernilai **NULL / "" / "[]"** (dataset lama sering tersimpan sebagai string kosong).
-- Preprocess menyimpan secara konsisten: `jenis`, `input_ids`, `attention_mask`, `bert_tokens` (serta token-token lain).
-
-Catatan implementasi (untuk kesesuaian dengan IndoBERT):
-- Stemming tidak dilakukan manual di pipeline preprocessing.
-- Tokenisasi word/sentence konsisten memakai tokenizer pilihan.
-- Deduplikasi dan filtering panjang diterapkan saat seed awal.
-
-## Processing / Training (Backend)
-Roadmap algoritma pada tahap processing/testing:
-- mBERT
-- IndoBERT
-- XLM-R
-- Word2Vec
-- GloVe
-
-Implementasi endpoint yang sudah tersedia saat ini (aktif):
-- `POST /processing/train/indobert/async`
-- `GET  /processing/train/status/{job_id}`
-
-Training memakai model klasifikasi `AutoModelForSequenceClassification` dan menyimpan:
-- `trained_models/<model_name>/...`
-- `label_map.json`
-
-Input text untuk training dibangun dari kolom:
-- `manado_clean`, `indonesia_clean`, `kalimat_manado_clean`, `kalimat_indonesia_clean`
-
-## Testing (Backend)
-Registry model untuk dropdown UI:
-- `GET  /testing/models`
-
-Testing model (sinkron):
-- `POST /testing/indobert`
-  - Request: `dataset_id, model_name, model_id, max_length, limit, save_result`
-
-Testing UI (halaman `frontend/admin/pages/testing.html`) sekarang mengambil:
-- daftar `Algoritma` dan `Model` dari tabel `models` melalui backend (`/testing/models`)
-- `dataset_id` langsung terkait dengan model terpilih
-
-## Confusion Matrix
-Confusion matrix ditampilkan pada modal “Training Results” (halaman `frontend/admin/pages/processing.html`) dengan mengambil:
-- epoch validasi dengan **akurasi tertinggi**
-- confusion matrix yang dihitung backend per-epoch
-
-## Menjalankan Aplikasi
-
-### Backend (Python + FastAPI)
-
-1. **Setup Virtual Environment**
+1. **Buat Virtual Environment**
    ```bash
    python -m venv .venv
    
-   # Windows (PowerShell)
+   # Aktivasi di Windows (PowerShell)
    .\.venv\Scripts\Activate.ps1
    
-   # Linux / macOS
+   # Aktivasi di Linux / macOS
    source .venv/bin/activate
    ```
 
-2. **Install Dependencies**
+2. **Install Dependensi**
    ```bash
    pip install -r backend/requirements.txt
    ```
+   *(Membutuhkan CUDA 12.4 untuk akselerasi GPU - `torch==2.6.0+cu124`)*
 
-3. **Jalankan Backend Server**
+3. **Jalankan Server**
    ```bash
    uvicorn backend.main:app --reload
    ```
-   Backend akan berjalan di `http://localhost:8000`
-   
-   Dokumentasi API: `http://localhost:8000/docs` (Swagger UI)
+   - API berjalan di: `http://localhost:8000`
+   - Dokumentasi Swagger UI: `http://localhost:8000/docs`
 
-### Frontend (Static HTML + JavaScript)
+### 3. Menjalankan Frontend (Static Web)
+Frontend dapat langsung dibuka di peramban (browser) modern tanpa perlu kompilasi.
+- **Halaman Publik**: Buka `frontend/index.html`
+- **Dashboard Admin**: Buka `frontend/admin/pages/dashboard.html`
 
-1. **Buka di Browser**
-   - Halaman utama: `frontend/index.html`
-   - Halaman admin: `frontend/admin/pages/` (dashboard, data-collection, preprocessing, processing, testing, evaluasi)
-
-2. **Jalankan dengan Live Server (opsional)**
-   Jika menggunakan VS Code, install extension **Live Server** (5500):
-   - Klik kanan di `frontend/index.html` → "Open with Live Server"
-   - Atau gunakan `python -m http.server 8080` di folder `frontend/`
-
-3. **Konfigurasi Supabase di Frontend**
-   - Update `SUPABASE_URL` dan `SUPABASE_ANON_KEY` di file-file JavaScript:
-     - `frontend/admin/js/data-collection.js`
-     - `frontend/admin/js/preprocessing.js`
-     - `frontend/admin/js/processing.js`
-     - `frontend/admin/js/testing.js`
-     - `frontend/admin/js/evaluasi.js`
-
-### Struktur Folder Backend
+Untuk pengalaman pengembangan terbaik, gunakan ekstensi **Live Server** di VS Code atau jalankan perintah ini di direktori `frontend/`:
+```bash
+python -m http.server 8080
 ```
-backend/
-├── main.py                    # Entry point FastAPI
-├── config.py                  # Konfigurasi
-├── model.py                   # Model utility
-├── supabase_client.py         # Klien Supabase
-├── requirements.txt           # Dependencies Python
-├── preprocessing/             # Pipeline preprocessing
-├── processing/                # Pipeline training/processing
-├── testing/                   # Pipeline testing
-├── evaluasi/                  # Pipeline evaluasi
-└── trained_models/            # Folder model yang sudah di-train
-```
+> **Penting**: Pastikan untuk mengisi `SUPABASE_URL` dan `SUPABASE_ANON_KEY` (Anon Key, bukan Service Key) langsung di dalam file JS frontend yang membutuhkan akses real-time (seperti `frontend/admin/js/data-collection.js`).
 
+---
+
+## 🗄️ Struktur Database
+
+Proyek ini menggunakan skema relasional di Supabase:
+* `datasets`: Metadata untuk setiap dataset yang diimpor.
+* `raw_data`: Data mentah yang diimpor dari file CSV.
+* `preprocessed_data`: Hasil text cleaning, normalisasi slang/stopword, dan tokenisasi.
+* `models`: Registri model AI yang telah dilatih.
+* `model_training_runs`: Riwayat proses training per *epoch*.
+* `testing_results`: Ringkasan hasil testing/prediksi model.
+* `slang_words` & `stopwords`: Kamus referensi untuk normalisasi data.
+
+---
+
+## 🧬 Arsitektur Modul
+
+### 1. Data Collection
+Menerima impor data CSV dengan format struktur kolom (Strict 8 kolom atau Legacy 6/8 kolom):
+`id_kata`, `manado`, `indonesia`, `inggris`, `jenis`, `kalimat_manado`, `kalimat_indonesia`, `kalimat_inggris`.
+
+### 2. Pre-Processing
+Endpoint: `POST /preprocess/start/{dataset_id}?tokenizer=mbert|indobert`
+* **Flow**: Pemindahan data mentah ➔ Cleaning Text ➔ Normalisasi (Slang/Stopwords) ➔ Tokenisasi.
+* Sistem memastikan agar `input_ids` dan `attention_mask` selalu diisi dengan benar.
+
+### 3. Processing (Training)
+Endpoint: `POST /processing/train/indobert/async`
+* Model pelatihan klasifikasi didasarkan pada `AutoModelForSequenceClassification`.
+* Model yang sudah dilatih akan disimpan di direktori `backend/trained_models/<model_name>/...` beserta `label_map.json`.
+* Metrik performa dan *Confusion Matrix* otomatis dihitung dan disimpan tiap epoch.
+
+### 4. Testing & Evaluasi
+Endpoint: `POST /testing/indobert`
+* Mendukung sinkronisasi parameter dari database UI.
+* Metrik evaluasi seperti *Accuracy*, *Precision*, *Recall*, *F1-Score*, *MCC* serta visualisasi *Confusion Matrix* disajikan secara langsung pada halaman Evaluasi Admin.
+
+---
+
+## 📂 Struktur Direktori Utama
+
+```text
+KamusKawanua/
+├── backend/                  # Kode sumber Backend (FastAPI)
+│   ├── evaluasi/             # Pipeline perhitungan evaluasi & metrics
+│   ├── preprocessing/        # Pipeline data cleaning & tokenizer
+│   ├── processing/           # Pipeline training model
+│   ├── testing/              # Pipeline inferensi (prediksi) model
+│   ├── trained_models/       # Penyimpanan artefak model ML lokal
+│   ├── main.py               # Entry point API server
+│   └── requirements.txt      # Dependensi Python backend
+├── frontend/                 # Kode sumber Frontend (HTML/CSS/JS)
+│   ├── admin/                # Dashboard Admin panel
+│   │   ├── css/              # Styling untuk admin
+│   │   ├── js/               # Logika aplikasi frontend (API call, UI state)
+│   │   └── pages/            # Halaman admin (dashboard, evaluasi, dsb.)
+│   ├── assets/               # Aset gambar publik
+│   └── index.html            # Halaman utama (Landing Page)
+└── README.md                 # Dokumentasi utama proyek
+```
