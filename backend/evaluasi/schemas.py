@@ -17,3 +17,18 @@ class EvaluationModelsMetricsResponse(BaseModel):
     status: str
     total: int
     items: list[dict[str, Any]]
+
+
+class ModelEpochMetricsResponse(BaseModel):
+    """Per-epoch training metrics for one model (`model_epoch_metrics`)."""
+
+    status: str
+    total: int
+    items: list[dict[str, Any]]
+
+
+class TrainingLogLookupResponse(BaseModel):
+    """Latest training_logs entry for a model name (+ optional algorithm filter)."""
+
+    status: str
+    log: dict[str, Any] | None

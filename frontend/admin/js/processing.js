@@ -28,6 +28,15 @@
   let ratioComparisonData = {}; // Untuk menyimpan data perbandingan rasio
   let epochResultsData = []; // Untuk menyimpan hasil per epoch
   const MBERT_MULTI_SEEDS = [42, 123, 2024, 7];
+
+  function isFinalTrainingMode(mode) {
+    const m = String(mode || "")
+      .trim()
+      .toLowerCase()
+      .replace(/_/g, "-");
+    return m === "training-final" || m === "final-training" || m === "final";
+  }
+
   function refreshAdminPageAOS() {
     requestAnimationFrame(() => {
       if (typeof window.refreshPageAOS === "function") {
@@ -111,27 +120,57 @@
     return k === "indobert" || k === "xlm-r";
   }
 
+  function isTransformerAlgoKey(algo) {
+    const k = normalizeAlgoKey(algo || "");
+    return k === "indobert" || k === "mbert" || k === "xlm-r";
+  }
+
+  function resolveParamDisplay(params = {}, camel, snake) {
+    if (!params || typeof params !== "object") return undefined;
+    const c = params[camel];
+    if (c !== undefined && c !== null && c !== "") return c;
+    if (snake && params[snake] !== undefined && params[snake] !== null && params[snake] !== "") {
+      return params[snake];
+    }
+    return undefined;
+  }
+
+  function resolveMaxLengthDisplay(params = {}) {
+    const v = resolveParamDisplay(params, "maxLength", "max_length");
+    return v === undefined || v === null || v === "" ? "-" : String(v);
+  }
+
+  function normalizeParameterViewForDisplay(params = {}, extra = {}) {
+    const merged = { ...(params || {}), ...(extra || {}) };
+    if (
+      resolveParamDisplay(merged, "maxLength", "max_length") === undefined &&
+      extra.max_length != null
+    ) {
+      merged.maxLength = extra.max_length;
+    }
+    if (!merged.algo && extra.algo) merged.algo = extra.algo;
+    return merged;
+  }
+
   function formatTransformerInputSnippet(params = {}) {
-    if (isMbertParams(params)) {
-      return `<strong>Seed:</strong> ${mbertSeedValue(params)}`;
-    }
-    if (isIndobertOrXlmParams(params)) {
-      const maxLen = params.maxLength || "-";
+    if (isMbertParams(params) || isIndobertOrXlmParams(params)) {
       const seed = params.seed || "-";
-      return `<strong>MaxLen:</strong> ${maxLen} | <strong>Seed:</strong> ${seed}`;
+      return `<strong>MaxLen:</strong> ${resolveMaxLengthDisplay(params)} | <strong>Seed:</strong> ${seed}`;
     }
-    return `<strong>MaxLen:</strong> ${params.maxLength || "-"}`;
+    if (isTransformerAlgoKey(params?.algo || currentAlgo)) {
+      return `<strong>MaxLen:</strong> ${resolveMaxLengthDisplay(params)}`;
+    }
+    return `<strong>MaxLen:</strong> ${resolveMaxLengthDisplay(params)}`;
   }
 
   function formatTransformerInputLayerLabel(params = {}) {
-    if (isMbertParams(params)) return { label: "Seed", value: mbertSeedValue(params) };
-    if (isIndobertOrXlmParams(params)) {
+    if (isMbertParams(params) || isIndobertOrXlmParams(params)) {
       return {
         label: "Max Length / Seed",
-        value: `${params.maxLength || "-"} / ${params.seed || "-"}`,
+        value: `${resolveMaxLengthDisplay(params)} / ${params.seed || "-"}`,
       };
     }
-    return { label: "Max Length", value: params.maxLength || "-" };
+    return { label: "Max Length", value: resolveMaxLengthDisplay(params) };
   }
 
   function mbertSeedValue(params = {}) {
@@ -765,7 +804,7 @@
     }
     const meta = [
       ["Exported", new Date().toLocaleString()],
-      ["Note", "Browser-stored final training history (summary row)."],
+      ["Note", "Browser-stored training history (best-ratio runs, summary row)."],
     ];
     await exportProcessingTableXlsx({
       filename: `processing_training_log_${Date.now()}`,
@@ -1263,7 +1302,7 @@
       }
 
       if (currentMode === "training-final") {
-        renderHistoryTable();
+        void renderHistoryTable();
       }
       refreshAdminPageAOS();
     });
@@ -1325,7 +1364,7 @@
         .getElementById("btn-simpan-nama")
         .addEventListener("click", simpanNamaModel);
       setModelSelectionStatus(
-        `Creating a new ${getAlgorithmLabel(currentAlgo)} model. Save the name, then run Final Training.`,
+        `Creating a new ${getAlgorithmLabel(currentAlgo)} model. Save the name, then start training using the best ratio.`,
       );
     } else if (value === "lama") {
       selectedModel = null;
@@ -1335,7 +1374,7 @@
       modelCard.style.display = "none";
       newModelNameCard.style.display = "none";
       setModelSelectionStatus(
-        `Open old model list for ${getAlgorithmLabel(currentAlgo)}. Select one model and click Select.`,
+        `Open existing model list for ${getAlgorithmLabel(currentAlgo)}. Select one model and click Select.`,
         "warning",
       );
     }
@@ -1356,10 +1395,10 @@
     if (!input) return;
     const a = String(currentAlgo || "").toLowerCase().trim();
     if (!a) {
-      input.placeholder = "Example: ModelName-Final-v2";
+      input.placeholder = "Example: ModelName-BestRatio-v2";
       return;
     }
-    input.placeholder = `Example: ${getAlgorithmLabel(currentAlgo)}-Final-v2`;
+    input.placeholder = `Example: ${getAlgorithmLabel(currentAlgo)}-BestRatio-v2`;
   }
 
   function setModelSelectionStatus(message, tone = "info") {
@@ -1377,13 +1416,13 @@
 
     if (!currentAlgo) {
       list.innerHTML = `<li style="opacity:.7;">Select an algorithm first</li>`;
-      setModelSelectionStatus("Select an algorithm first before loading old models.", "warning");
+      setModelSelectionStatus("Select an algorithm first before loading existing models.", "warning");
       return;
     }
 
     if (!supabaseClient) {
       list.innerHTML = `<li style="color:#c62828;">Supabase is unavailable</li>`;
-      setModelSelectionStatus("Supabase is unavailable. Old models cannot be loaded.", "warning");
+      setModelSelectionStatus("Supabase is unavailable. Existing models cannot be loaded.", "warning");
       return;
     }
 
@@ -1413,7 +1452,7 @@
       list.innerHTML = `<li style="opacity:.7;">No saved ${getAlgorithmLabel(currentAlgo)} model yet</li>`;
       showToast(`No saved ${getAlgorithmLabel(currentAlgo)} model yet. Create a new model first.`);
       setModelSelectionStatus(
-        `No saved ${getAlgorithmLabel(currentAlgo)} model yet. Use Create a New Model for final training.`,
+        `No saved ${getAlgorithmLabel(currentAlgo)} model yet. Use Create a New Model for training using the best ratio.`,
         "warning",
       );
       return;
@@ -2302,7 +2341,7 @@
     if (modelCardName) modelCardName.innerText = modelName;
     if (modelCardMeta) {
       modelCardMeta.innerText =
-        "Selected old model will prefill saved hyperparameters for final training.";
+        "Selected existing model will prefill saved hyperparameters for training using the best ratio.";
     }
     if (modelCard) modelCard.style.display = "flex";
     if (modelSelect) modelSelect.value = "lama";
@@ -2327,7 +2366,7 @@
         }
         showToast(`Model "${modelName}" was loaded successfully.`, "success");
         setModelSelectionStatus(
-          `Selected model: ${modelName}. You can run Final Training now or adjust parameters first.`,
+          `Selected model: ${modelName}. You can start training using the best ratio now or adjust parameters first.`,
           "success",
         );
       }, 150);
@@ -2349,7 +2388,7 @@
       .querySelectorAll("#model-list li")
       .forEach((el) => el.classList.remove("selected"));
     selectedModel = null;
-    setModelSelectionStatus("Old model selection was cancelled.", "warning");
+    setModelSelectionStatus("Existing model selection was cancelled.", "warning");
   };
 
   document.addEventListener("click", async function (e) {
@@ -2398,7 +2437,7 @@
         // Mode training-final
         const trainingName =
           document.getElementById("training-name")?.value || "Training";
-        title.innerHTML = `${trainingName} - Final Training`;
+        title.innerHTML = `${trainingName} - Training (Best Ratio)`;
       }
     }
 
@@ -2549,7 +2588,7 @@
       await hydrateBestParamsForCurrentContext();
       if (!globalBestParams && !modelSelected) {
         showToast(
-          "Please run Find the Best Ratio first, or select an old model (Select Old Model) to reuse its split and hyperparameters.",
+          "Please run Find the Best Ratio first, or select an existing model (Select Existing Model) to reuse its split and hyperparameters.",
         );
         return;
       }
@@ -3133,7 +3172,7 @@
         const result = generateEpochResult(currentEpoch, params);
         epochResults.push(result);
         showToast(
-          `Final Training: Epoch ${currentEpoch}/${totalEpochs} completed`,
+          `Training (best ratio): Epoch ${currentEpoch}/${totalEpochs} completed`,
           "info",
         );
       }
@@ -3154,7 +3193,9 @@
 
         const historyEntry = {
           tanggal: new Date().toISOString(),
+          training_name: trainingName,
           nama_model: trainingName,
+          algo: params.algo || currentAlgo,
           rasio: splitRatio,
           keterangan: trainingDesc,
           parameter: {
@@ -3182,15 +3223,14 @@
           hasil: epochResults,
         };
 
-        saveTrainingHistory(historyEntry);
-        renderHistoryTable();
+        void saveTrainingHistory(historyEntry);
 
         // Hitung average untuk ditampilkan di toast
         const avgF1 =
           epochResults.reduce((sum, r) => sum + r.f1, 0) / epochResults.length;
 
         showToast(
-          `Final Training completed. Average F1: ${avgF1.toFixed(2)}%`,
+          `Training completed. Average F1: ${avgF1.toFixed(2)}%`,
           "success",
         );
 
@@ -3381,6 +3421,11 @@
     if (avgData) {
       card.dataset.avgMetrics = JSON.stringify(avgData);
     }
+    if (isFinalTrainingMode(mode)) {
+      card.dataset.epochResults = JSON.stringify(epochResults || []);
+    } else {
+      delete card.dataset.epochResults;
+    }
 
     // Simpan ke comparison data (untuk tabel perbandingan rasio)
     if (avgData && params.splitRatio) {
@@ -3437,7 +3482,10 @@
         tanggal: new Date().toISOString(),
         training_name: trainingName, // 🔧 Training name dari form
         model_name: modelNameFromInput, // 🔧 Model name dari input "Nama Model Baru"
+        algo: params.algo || currentAlgo,
         rasio: splitRatio,
+        dataset:
+          localStorage.getItem(STORAGE_SELECTED_DATASET_NAME) || "",
         keterangan: trainingDesc,
         parameter: {
           algo: params.algo || currentAlgo,
@@ -3475,9 +3523,8 @@
         })),
       };
 
-      saveTrainingHistory(historyEntry);
-      renderHistoryTable();
-      showToast("Final training was saved to history.", "success");
+      void saveTrainingHistory(historyEntry);
+      showToast("Training was saved to history.", "success");
     }
 
     if (mode === "training-final") {
@@ -3486,6 +3533,7 @@
         silent: true,
         auto: true,
         allowLocalFallback: true,
+        epochResults: epochResults,
       });
     } else if (mode === "cari-rasio") {
       // Cari rasio tetap disimpan ke database, tanpa fallback ke local saved_models.
@@ -3559,7 +3607,7 @@
       persistRatioSearchContextState();
 
       showToast(
-        "Find Best Ratio completed. Click 'Use Best Model' on the card you want to use for Final Training.",
+        "Find Best Ratio completed. Click 'Use Best Model' on the card you want to use for training with the best ratio.",
         "success",
       );
     }
@@ -3678,7 +3726,7 @@
       // document.getElementById('best-params-display').style.display = 'block';
 
       showToast(
-        `The best model from ratio ${params.splitRatio} was applied. Proceeding to Final Training.`,
+        `The best model from ratio ${params.splitRatio} was applied. Proceeding to training using the best ratio.`,
         "success",
       );
 
@@ -3862,6 +3910,20 @@
       error: { message: "Too many schema fallback attempts" },
       dropped,
     };
+  }
+
+  async function insertModelEpochMetricsWithFallback(payloads) {
+    if (!payloads || payloads.length === 0) return { ok: true };
+    if (!supabaseClient) return { ok: false, error: { message: "No Supabase client" } };
+    try {
+      const { error } = await supabaseClient
+        .from("model_epoch_metrics")
+        .insert(payloads);
+      if (!error) return { ok: true };
+      return { ok: false, error };
+    } catch (error) {
+      return { ok: false, error };
+    }
   }
 
   function shouldNotifyModelSave(opts, kind) {
@@ -4106,6 +4168,47 @@
       }
       if (insertResult.ok) {
         card.dataset.savedToModels = "1";
+
+        const saveMode = card.dataset.mode || modelData.mode || "training-final";
+        let epochResultsArr = Array.isArray(opts.epochResults)
+          ? opts.epochResults
+          : [];
+        if (!epochResultsArr.length && isFinalTrainingMode(saveMode)) {
+          const epochResultsStr = card.dataset.epochResults;
+          if (epochResultsStr) {
+            try {
+              const parsed = JSON.parse(epochResultsStr);
+              if (Array.isArray(parsed)) epochResultsArr = parsed;
+            } catch (parseErr) {
+              console.warn("Invalid card.dataset.epochResults JSON", parseErr);
+            }
+          }
+        }
+        if (
+          insertResult.id &&
+          isFinalTrainingMode(saveMode) &&
+          epochResultsArr.length > 0
+        ) {
+          const metricsRows = epochResultsArr.map((r) => ({
+            model_id: insertResult.id,
+            epoch: r.epoch,
+            accuracy: r.accuracy,
+            precision: r.precision,
+            recall: r.recall,
+            f1_score: r.f1,
+            loss: r.loss,
+            roc_auc: r.roc_auc,
+            mcc: r.mcc,
+            confusion_matrix: r.confusion_matrix,
+            confusion_labels: r.confusion_labels,
+            created_at: new Date().toISOString(),
+          }));
+          const epochSave = await insertModelEpochMetricsWithFallback(metricsRows);
+          if (!epochSave.ok) {
+            console.warn("model_epoch_metrics insert failed:", epochSave.error);
+          }
+        }
+
         if (shouldNotifyModelSave(opts, "success")) {
           const dropped = insertResult.dropped || [];
           if (dropped.length) {
@@ -4188,46 +4291,180 @@
 
   // ==================== TRAINING HISTORY MANAGER ====================
   const HISTORY_KEY = "training_history";
+  let currentTrainingHistory = [];
 
-  // Load history dari localStorage
-  function loadTrainingHistory() {
+  async function loadTrainingHistory() {
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient
+          .from("training_logs")
+          .select("*")
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        currentTrainingHistory = (data || []).map((row) => {
+          const params = normalizeParameterViewForDisplay(row.params || {}, {
+            algo: row.algo,
+          });
+          return {
+            id: row.id,
+            training_name: row.name,
+            model_name: params.model_name || "",
+            algo: row.algo || params.algo || "",
+            tanggal: row.date,
+            rasio: row.ratio,
+            dataset: row.dataset,
+            parameter: params,
+            hasil: row.hasil || [],
+          };
+        });
+        return currentTrainingHistory;
+      } catch (e) {
+        console.error(
+          "Failed to load training logs from Supabase, falling back to localStorage",
+          e,
+        );
+      }
+    }
+
     const saved = localStorage.getItem(HISTORY_KEY);
-    return saved ? JSON.parse(saved) : [];
+    currentTrainingHistory = saved ? JSON.parse(saved) : [];
+    return currentTrainingHistory;
   }
 
-  // Save history ke localStorage
-  function saveTrainingHistory(historyData) {
-    const history = loadTrainingHistory();
+  async function saveTrainingHistory(historyData) {
+    currentTrainingHistory.push(historyData);
+    _renderHistoryTableUI(currentTrainingHistory);
+
+    if (supabaseClient) {
+      try {
+        const payload = {
+          name:
+            historyData.training_name ||
+            historyData.nama_model ||
+            "Untitled Training",
+          algo:
+            historyData.algo ||
+            (historyData.parameter ? historyData.parameter.algo : ""),
+          date: historyData.tanggal || new Date().toISOString(),
+          ratio: historyData.rasio || "",
+          dataset: historyData.dataset || "",
+          params: {
+            ...(historyData.parameter || {}),
+            model_name:
+              historyData.model_name ||
+              historyData.nama_model ||
+              "",
+            training_name: historyData.training_name || "",
+            algo:
+              historyData.algo ||
+              (historyData.parameter ? historyData.parameter.algo : ""),
+          },
+          hasil: historyData.hasil || [],
+        };
+        const { error } = await supabaseClient
+          .from("training_logs")
+          .insert([payload]);
+        if (error) throw error;
+        return;
+      } catch (e) {
+        console.error(
+          "Failed to save training log to Supabase, falling back to localStorage",
+          e,
+        );
+      }
+    }
+
+    const saved = localStorage.getItem(HISTORY_KEY);
+    const history = saved ? JSON.parse(saved) : [];
     history.push(historyData);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    currentTrainingHistory = history;
   }
 
-  // Render tabel riwayat
-  // Render tabel riwayat
+  function _renderHistoryTableUI(history) {
+    const tbody = document.getElementById("history-body");
+    if (!tbody) return;
+
+    if (history.length === 0) {
+      tbody.innerHTML =
+        '<tr class="empty-row"><td colspan="4" style="text-align:center; color:#999; padding: 20px;">No training history yet</td></tr>';
+      return;
+    }
+
+    const sorted = [...history].reverse();
+
+    tbody.innerHTML = sorted
+      .map((item, index) => {
+        const originalIndex = history.length - 1 - index;
+        const date = new Date(item.tanggal).toLocaleString("en-US", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const displayName =
+          item.training_name || item.nama_model || "Untitled Training";
+        const shortName =
+          displayName.length > 25
+            ? displayName.substring(0, 22) + "..."
+            : displayName;
+
+        return `
+      <tr>
+        <td>${date}</td>
+        <td title="${displayName}"><strong>${shortName}</strong></td>
+        <td>${item.rasio || "-"}</td>
+        <td>
+          <button class="btn-lihat" data-index="${originalIndex}" onclick="showHistoryDetailModal(${originalIndex})">👁️ View</button>
+        </td>
+      </tr>
+    `;
+      })
+      .join("");
+  }
+
+  async function renderHistoryTable() {
+    const tbody = document.getElementById("history-body");
+    if (!tbody) return;
+
+    if (currentTrainingHistory.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="4" style="text-align:center; color:#666; padding: 20px;">Loading data from database...</td></tr>';
+    }
+
+    const history = await loadTrainingHistory();
+    _renderHistoryTableUI(history);
+  }
+
   function buildLayeredParameterHtmlForDetail(p = {}) {
     const algo = String(p.algo || "").toLowerCase();
+    const algoKey = normalizeAlgoKey(algo);
     const v = (x) => (x === undefined || x === null || x === "" ? "-" : String(x));
     const item = (label, value) => `<span><strong>${label}:</strong> ${v(value)}</span>`;
 
     const inputReprLabel =
-      algo === "xlm-r"
+      algoKey === "xlm-r"
         ? "SentencePiece tokens (XLM-RoBERTa)"
-        : ["indobert", "mbert", "xlm-r"].includes(algo)
+        : isTransformerAlgoKey(algoKey)
           ? "WordPiece Tokens + [CLS]/[SEP]"
           : "Word Embedding";
+    const inputItems = [
+      item("Batch Size", resolveParamDisplay(p, "batchSize", "batch_size")),
+    ];
+    if (isTransformerAlgoKey(algoKey)) {
+      inputItems.push(item("Max Length", resolveMaxLengthDisplay(p)));
+      inputItems.push(item("Seed", p.seed));
+    }
+    inputItems.push(item("Input Representation", inputReprLabel));
     const inputLayer = `
       <div class="layer-block">
         <h5 class="layer-title">1. Input Layer</h5>
         <div class="layer-grid">
-          ${item("Batch Size", p.batchSize)}
-          ${
-            algo === "mbert"
-              ? item("Seed", p.seed)
-              : algo === "indobert" || algo === "xlm-r"
-                ? `${item("Max Length", p.maxLength)}${item("Seed", p.seed)}`
-                : item("Max Length", p.maxLength)
-          }
-          ${item("Input Representation", inputReprLabel)}
+          ${inputItems.join("")}
         </div>
       </div>
     `;
@@ -4241,9 +4478,14 @@
       item("Dropout", p.dropout),
     ];
 
-    if (["indobert", "mbert", "xlm-r"].includes(algo)) {
+    if (isTransformerAlgoKey(algoKey)) {
       hiddenItems.push(item("Warmup", p.warmup));
-      hiddenItems.push(item("Gradient Accumulation", p.gradAccum));
+      hiddenItems.push(
+        item(
+          "Gradient Accumulation",
+          resolveParamDisplay(p, "gradAccum", "gradient_accumulation"),
+        ),
+      );
     } else if (algo === "word2vec") {
       hiddenItems.push(item("Vector Size", p.vectorSize));
       hiddenItems.push(item("Window Size", p.windowSize));
@@ -4299,60 +4541,8 @@
     return map[key] || v;
   }
 
-  function renderHistoryTable() {
-    const tbody = document.getElementById("history-body");
-    if (!tbody) return;
-
-    const history = loadTrainingHistory();
-
-    if (history.length === 0) {
-      tbody.innerHTML =
-        '<tr class="empty-row"><td colspan="4" style="text-align:center; color:#999; padding: 20px;">No training history yet</td></tr>';
-      return;
-    }
-
-    // Urutkan dari terbaru
-    const sorted = [...history].reverse();
-
-    tbody.innerHTML = sorted
-      .map((item, index) => {
-        const originalIndex = history.length - 1 - index;
-        const date = new Date(item.tanggal).toLocaleString("en-US", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-        // 🔧 Gunakan training_name, fallback ke nama_model untuk data lama (backward compatibility)
-        const displayName =
-          item.training_name || item.nama_model || "Untitled Training";
-
-        // 🔧 Limit panjang nama untuk tampilan
-        const shortName =
-          displayName.length > 25
-            ? displayName.substring(0, 22) + "..."
-            : displayName;
-
-        return `
-      <tr>
-        <td>${date}</td>
-        <td title="${displayName}"><strong>${shortName}</strong></td>
-        <td>${item.rasio || "-"}</td>
-        <td>
-          <button class="btn-lihat" data-index="${originalIndex}" onclick="showHistoryDetailModal(${originalIndex})">👁️ View</button>
-        </td>
-      </tr>
-    `;
-      })
-      .join("");
-  }
-
-  // Tampilkan modal detail
-  // Tampilkan modal detail
   window.showHistoryDetailModal = function (index) {
-    const history = loadTrainingHistory();
+    const history = currentTrainingHistory;
     const data = history[index];
     if (!data) {
       showToast("History data was not found.", "error");
@@ -4402,11 +4592,15 @@
       descEl.innerText = data.keterangan || "No description";
     }
 
+    const paramView = normalizeParameterViewForDisplay(data.parameter || {}, {
+      algo: data.parameter?.algo || data.algo,
+    });
+
     // 🔧 Isi parameter
     const paramsDiv = document.getElementById("detail-params");
     if (paramsDiv) {
-      if (data.parameter) {
-        paramsDiv.innerHTML = buildLayeredParameterHtmlForDetail(data.parameter);
+      if (data.parameter || paramView.algo) {
+        paramsDiv.innerHTML = buildLayeredParameterHtmlForDetail(paramView);
       } else {
         paramsDiv.innerHTML =
           '<p style="color:#999;">Parameter not available</p>';
@@ -4437,14 +4631,15 @@
       tbody.innerHTML = results
         .map((r) => {
           const isBest = r.epoch === bestEpoch;
+          const f1Val = r.f1 != null ? r.f1 : r.f1_score;
           return `
         <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.3); font-weight: 600;" : ""}">
           <td>${isBest ? "Best " : ""}${r.epoch}</td>
-          <td>${r.accuracy.toFixed(2)}%</td>
-          <td>${r.precision.toFixed(2)}%</td>
-          <td>${r.recall.toFixed(2)}%</td>
-          <td>${r.f1.toFixed(2)}%</td>
-          <td>${r.loss.toFixed(4)}</td>
+          <td>${Number(r.accuracy).toFixed(2)}%</td>
+          <td>${Number(r.precision).toFixed(2)}%</td>
+          <td>${Number(r.recall).toFixed(2)}%</td>
+          <td>${Number(f1Val).toFixed(2)}%</td>
+          <td>${Number(r.loss).toFixed(4)}</td>
         </tr>
       `;
         })
@@ -4454,11 +4649,12 @@
       const count = results.length;
       const sum = results.reduce(
         (acc, r) => {
-          acc.accuracy += r.accuracy;
-          acc.precision += r.precision;
-          acc.recall += r.recall;
-          acc.f1 += r.f1;
-          acc.loss += r.loss;
+          const f1Val = r.f1 != null ? r.f1 : r.f1_score;
+          acc.accuracy += Number(r.accuracy) || 0;
+          acc.precision += Number(r.precision) || 0;
+          acc.recall += Number(r.recall) || 0;
+          acc.f1 += Number(f1Val) || 0;
+          acc.loss += Number(r.loss) || 0;
           return acc;
         },
         { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 },
@@ -4549,9 +4745,8 @@
     document.getElementById("history-detail-modal").style.display = "none";
   };
 
-  // Inisialisasi history table saat DOM loaded
   document.addEventListener("DOMContentLoaded", function () {
-    renderHistoryTable();
+    void renderHistoryTable();
   });
 
   document.querySelectorAll(".modal-overlay").forEach((overlay) => {

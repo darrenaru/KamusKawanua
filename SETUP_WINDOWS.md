@@ -153,9 +153,10 @@ Tunggu sampai selesai (bisa 10–30 menit).
 
 ## 6. Supabase — migrasi kolom (sekali)
 
-Di Supabase → **SQL Editor**, jalankan isi file:
+Di Supabase → **SQL Editor**, jalankan isi file (berurutan):
 
-`supabase/models_testing_columns.sql`
+1. `supabase/models_testing_columns.sql` — kolom metrik di tabel `models`
+2. `supabase/training_logs_and_epoch_metrics.sql` — tabel `training_logs` & `model_epoch_metrics`
 
 ---
 
@@ -179,8 +180,8 @@ Cari `SUPABASE_URL` / `SUPABASE_KEY` (anon, **bukan** service role).
 Edit **satu baris** di `backend/xlm_generation.py`:
 
 ```python
-ACTIVE_XLM_PROFILE: str = "xlm-r-2"   # gen2
-# ACTIVE_XLM_PROFILE: str = "xlm-r"   # gen1
+ACTIVE_XLM_PROFILE: str = "xlm-r-2"   # xlm milik Brad
+# ACTIVE_XLM_PROFILE: str = "xlm-r"   # xlm milik Tesa
 ```
 
 Restart backend setelah mengubah.

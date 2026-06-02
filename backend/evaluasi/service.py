@@ -260,3 +260,65 @@ def get_models_metrics() -> list[dict]:
         out.append(merged)
 
     return out
+
+
+def get_model_epochs(model_id: int) -> list[dict]:
+    """Return all epoch metrics for a specific model."""
+    try:
+        res = (
+            supabase.table("model_epoch_metrics")
+            .eq("model_id", model_id)
+            .select("*")
+            .order("epoch", desc=False)
+            .execute()
+        )
+        return list(res.data or [])
+    except Exception as e:
+        raise ValueError(f"Failed to fetch model epoch metrics: {e}") from e
+
+
+def find_training_log_for_model(
+    *, nama_model: str, algoritma: str | None = None
+) -> dict | None:
+    """
+    Latest training_logs row for a saved model (by model_name in params, not training title).
+    Avoids mixing logs across algorithms when nama_model matches.
+    """
+    name_key = str(nama_model or "").strip().lower()
+    if not name_key:
+        return None
+    algo_key = _canonical_algo_key(algoritma) if algoritma else None
+    try:
+        res = (
+            supabase.table("training_logs")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as e:
+        raise ValueError(f"Failed to fetch training logs: {e}") from e
+
+    for row in rows:
+        params = row.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
+        mn = str(params.get("model_name") or "").strip().lower()
+        row_name = str(row.get("name") or "").strip().lower()
+        if mn != name_key and row_name != name_key:
+            continue
+        row_algo = _canonical_algo_key(str(row.get("algo") or ""))
+        if algo_key and row_algo and algo_key != row_algo:
+            continue
+        return {
+            "id": row.get("id"),
+            "training_name": row.get("name"),
+            "model_name": params.get("model_name") or row.get("name"),
+            "algo": row_algo or row.get("algo"),
+            "tanggal": row.get("date"),
+            "rasio": row.get("ratio"),
+            "dataset": row.get("dataset"),
+            "parameter": params,
+            "hasil": row.get("hasil") or [],
+        }
+    return None

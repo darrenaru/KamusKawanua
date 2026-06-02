@@ -143,10 +143,10 @@
             <select id="model-select">
               <option value="" disabled selected>Select Model</option>
               <option value="baru">Create a New Model</option>
-              <option value="lama">Select Old Model</option>
+              <option value="lama">Select Existing Model</option>
             </select>
             <p class="model-select-help" id="model-select-help">
-              Select model mode for final training: create a new model name, or load an old model to reuse its setup.
+              For training using the best ratio: create a new model name, or select an existing model to reuse its setup.
             </p>
 
             <div class="mode-selection">
@@ -165,7 +165,7 @@
                   name="training-mode"
                   value="training-final"
                 />
-                <span>Final Training Using the Best Ratio</span>
+                <span>Training Using the Best Ratio</span>
               </label>
             </div>
           </div>
@@ -246,7 +246,7 @@
             style="display: none"
           >
             <h3 style="margin-bottom: 20px">
-              Mode: Final Training with the Best Ratio
+              Training Using the Best Ratio
             </h3>
 
             <div
@@ -273,7 +273,7 @@
                   <input
                     type="text"
                     id="training-name"
-                    placeholder="Example: ModelName-Final-v2"
+                    placeholder="Example: ModelName-BestRatio-v2"
                     style="width: 100%"
                   />
                 </div>
@@ -353,7 +353,7 @@
               style="display: flex; justify-content: flex-end; margin-top: 20px"
             >
               <button class="btn-mulai" id="btn-mulai-training">
-                Start Final Training
+                Start Training
               </button>
             </div>
           </div>
@@ -649,7 +649,7 @@
     <div id="history-detail-modal" class="modal-overlay" style="display: none">
       <div class="modal-content modal-large" style="max-width: 950px">
         <div class="modal-header">
-          <h3>Final Training Details</h3>
+          <h3>Training Details</h3>
           <button onclick="closeHistoryDetailModal()" class="close-btn">
             &times;
           </button>

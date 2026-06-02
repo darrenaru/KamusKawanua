@@ -47,6 +47,11 @@ var TABLE_METRIC_DEFS = [
     { key: 'roc_auc', label: 'ROC-AUC', trainField: 'train_roc_auc', testField: 'roc_auc', type: 'percent' },
 ];
 
+/** Supabase training_logs keyed by nama_model|algo (filled on page load). */
+var trainingLogCache = {};
+/** model_epoch_metrics keyed by model id (detail modal + metric fallbacks). */
+var modelEpochsCache = {};
+
 var state = {
     allItems: [],
     byAlgo: {},
@@ -136,9 +141,19 @@ function trainingMacroAvg(model) {
     return (p + r + f) / 3;
 }
 
-function trainingRocFromHistory(model) {
+function trainingMetricResultRows(model) {
     var hist = findHistoryByModel(model);
-    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    if (hist && Array.isArray(hist.hasil) && hist.hasil.length) {
+        return hist.hasil;
+    }
+    if (model && model.id != null && Array.isArray(modelEpochsCache[model.id])) {
+        return modelEpochsCache[model.id];
+    }
+    return [];
+}
+
+function trainingRocFromHistory(model) {
+    var results = trainingMetricResultRows(model);
     var rocVals = results
         .map(function (r) {
             return normalizePercent(r.roc_auc);
@@ -150,11 +165,10 @@ function trainingRocFromHistory(model) {
 }
 
 function trainingStdDevFromHistory(model) {
-    var hist = findHistoryByModel(model);
-    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var results = trainingMetricResultRows(model);
     var f1Vals = results
         .map(function (r) {
-            return normalizePercent(r.f1);
+            return normalizePercent(pickEpochF1(r));
         })
         .filter(function (v) {
             return v != null;
@@ -163,8 +177,7 @@ function trainingStdDevFromHistory(model) {
 }
 
 function trainingMccFromHistory(model) {
-    var hist = findHistoryByModel(model);
-    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
+    var results = trainingMetricResultRows(model);
     var mccVals = results
         .map(function (r) {
             return normalizeMcc(r.mcc);
@@ -329,6 +342,84 @@ async function fetchEvaluationItems() {
     return items;
 }
 
+function trainingLogCacheKey(model) {
+    var name = String(model.nama_model || '').trim().toLowerCase();
+    var algo = canonicalAlgoKey(model.canonical_algorithm || model.algoritma || '');
+    return name + '|' + (algo || '');
+}
+
+async function fetchTrainingLogForModel(model) {
+    var key = trainingLogCacheKey(model);
+    if (Object.prototype.hasOwnProperty.call(trainingLogCache, key)) {
+        return trainingLogCache[key];
+    }
+    var name = String(model.nama_model || '').trim();
+    if (!name) {
+        trainingLogCache[key] = null;
+        return null;
+    }
+    try {
+        var qs = new URLSearchParams({ nama_model: name });
+        var algo = model.canonical_algorithm || model.algoritma;
+        if (algo) qs.set('algoritma', String(algo));
+        var res = await fetch(API_BASE + '/evaluasi/training-log?' + qs.toString());
+        var data = await res.json();
+        if (!res.ok) {
+            trainingLogCache[key] = null;
+            return null;
+        }
+        trainingLogCache[key] = data.log || null;
+        return trainingLogCache[key];
+    } catch (e) {
+        console.warn('evaluasi: training-log lookup failed', e);
+        trainingLogCache[key] = null;
+        return null;
+    }
+}
+
+async function prefetchTrainingLogsForModels(items) {
+    var seen = {};
+    var tasks = [];
+    for (var i = 0; i < items.length; i++) {
+        var key = trainingLogCacheKey(items[i]);
+        if (seen[key]) continue;
+        seen[key] = true;
+        tasks.push(fetchTrainingLogForModel(items[i]));
+    }
+    await Promise.all(tasks);
+}
+
+async function fetchModelEpochsForModel(model) {
+    if (model.id == null) return [];
+    if (Object.prototype.hasOwnProperty.call(modelEpochsCache, model.id)) {
+        return modelEpochsCache[model.id];
+    }
+    try {
+        var res = await fetch(API_BASE + '/evaluasi/model-epochs/' + model.id);
+        var data = await res.json();
+        if (res.ok && Array.isArray(data.items)) {
+            modelEpochsCache[model.id] = data.items;
+            return data.items;
+        }
+    } catch (e) {
+        console.warn('evaluasi: model-epochs prefetch failed', e);
+    }
+    modelEpochsCache[model.id] = [];
+    return [];
+}
+
+async function prefetchEpochMetricsForModels(items) {
+    var need = items.filter(function (m) {
+        if (m.id == null) return false;
+        var needsStd =
+            m.train_std_deviation == null || m.train_std_deviation === '';
+        var needsMcc = m.train_mcc == null || m.train_mcc === '';
+        var needsRoc = m.train_roc_auc == null || m.train_roc_auc === '';
+        return needsStd || needsMcc || needsRoc;
+    });
+    await Promise.all(need.map(fetchModelEpochsForModel));
+}
+
 function renderAlgoSelect(selectId, keys, selected) {
     var el = document.getElementById(selectId);
     if (!el) return;
@@ -414,9 +505,57 @@ function buildTestingMetricsExportMatrix(algoKey) {
     return [header].concat(body);
 }
 
+function resolveParamDisplayEval(p, camel, snake) {
+    if (!p || typeof p !== 'object') return undefined;
+    var c = p[camel];
+    if (c !== undefined && c !== null && c !== '') return c;
+    if (snake && p[snake] !== undefined && p[snake] !== null && p[snake] !== '') {
+        return p[snake];
+    }
+    return undefined;
+}
+
+function resolveMaxLengthDisplayEval(p) {
+    var v = resolveParamDisplayEval(p || {}, 'maxLength', 'max_length');
+    return v === undefined || v === null || v === '' ? '-' : String(v);
+}
+
+function isTransformerAlgoEval(algo) {
+    var k = canonicalAlgoKey(algo);
+    return TRANSFORMER_KEYS.indexOf(k) >= 0;
+}
+
+function buildModelParameterViewFromRow(model) {
+    if (!model) return {};
+    var hist = findHistoryByModel(model);
+    var p = hist && hist.parameter ? Object.assign({}, hist.parameter) : {};
+    var algo = p.algo || model.canonical_algorithm || model.algoritma;
+    p.algo = algo;
+    if (resolveParamDisplayEval(p, 'maxLength', 'max_length') === undefined && model.max_length != null) {
+        p.maxLength = model.max_length;
+    }
+    if (!p.batchSize && model.batch_size != null) p.batchSize = model.batch_size;
+    if (!p.lr && model.learning_rate != null) p.lr = model.learning_rate;
+    if (!p.epoch && model.epoch != null) p.epoch = model.epoch;
+    if (!p.seed && model.seed != null) p.seed = model.seed;
+    if (!p.optimizer && model.optimizer) p.optimizer = model.optimizer;
+    if (!p.weightDecay && model.weight_decay != null) p.weightDecay = model.weight_decay;
+    if (!p.scheduler && model.scheduler) p.scheduler = model.scheduler;
+    if (!p.dropout && model.dropout != null) p.dropout = model.dropout;
+    if (!p.warmup && model.warmup_ratio != null) p.warmup = model.warmup_ratio;
+    if (!p.gradAccum && model.gradient_accumulation != null) {
+        p.gradAccum = model.gradient_accumulation;
+    }
+    if (!p.earlyStopping && model.early_stopping != null) {
+        p.earlyStopping = model.early_stopping;
+    }
+    return p;
+}
+
 function buildLayeredParameterHtml(p) {
     if (!p) return '<p style="color:#999;">Parameter not available</p>';
     var algo = String(p.algo || p.canonical_algorithm || p.algoritma || '').toLowerCase();
+    var algoKey = canonicalAlgoKey(algo);
     var gridStart = '<div class="layer-grid">';
     var gridEnd = '</div>';
     var sectionWrapStart = '<div class="layer-block"><h5 class="layer-title">';
@@ -426,22 +565,22 @@ function buildLayeredParameterHtml(p) {
     function value(v) { return v == null || v === '' ? '-' : String(v); }
     function item(label, v) { return '<span><strong>' + label + ':</strong> ' + escapeHtml(value(v)) + '</span>'; }
     var inputReprLabel =
-        algo === 'xlm-r'
+        algoKey === 'xlm-r'
             ? 'SentencePiece tokens (XLM-RoBERTa)'
-            : TRANSFORMER_KEYS.indexOf(algo) >= 0
+            : isTransformerAlgoEval(algoKey)
               ? 'WordPiece Tokens + [CLS]/[SEP]'
               : 'Word Embedding';
-    var inputLayerItems =
-        item('Batch Size', p.batchSize || p.batch_size) +
-        (algo === 'mbert'
-            ? item('Seed', p.seed)
-            : algo === 'indobert' || algo === 'xlm-r'
-              ? item('Max Length', p.maxLength || p.max_length) + item('Seed', p.seed)
-              : item('Max Length', p.maxLength || p.max_length)) +
-        item('Input Representation', inputReprLabel);
+    var inputLayerItems = [
+        item('Batch Size', resolveParamDisplayEval(p, 'batchSize', 'batch_size')),
+    ];
+    if (isTransformerAlgoEval(algoKey)) {
+        inputLayerItems.push(item('Max Length', resolveMaxLengthDisplayEval(p)));
+        inputLayerItems.push(item('Seed', p.seed));
+    }
+    inputLayerItems.push(item('Input Representation', inputReprLabel));
 
     var inputLayer = sectionWrapStart + '1. Input Layer' + sectionMid + gridStart +
-        inputLayerItems +
+        inputLayerItems.join('') +
         gridEnd + sectionWrapEnd;
 
     var hiddenLayerItems = [
@@ -453,9 +592,14 @@ function buildLayeredParameterHtml(p) {
         item('Dropout', p.dropout),
     ];
 
-    if (TRANSFORMER_KEYS.indexOf(algo) >= 0) {
+    if (isTransformerAlgoEval(algoKey)) {
         hiddenLayerItems.push(item('Warmup', p.warmup || p.warmup_ratio));
-        hiddenLayerItems.push(item('Gradient Accumulation', p.gradAccum || p.gradient_accumulation));
+        hiddenLayerItems.push(
+            item(
+                'Gradient Accumulation',
+                resolveParamDisplayEval(p, 'gradAccum', 'gradient_accumulation'),
+            ),
+        );
     } else if (algo === 'word2vec') {
         hiddenLayerItems.push(item('Vector Size', p.vectorSize || p.vector_size));
         hiddenLayerItems.push(item('Window Size', p.windowSize || p.window_size));
@@ -480,10 +624,9 @@ function buildLayeredParameterHtml(p) {
     return inputLayer + hiddenLayer + outputLayer;
 }
 
-function openEvaluationModelDetail(model) {
+async function openEvaluationModelDetail(model) {
     var modal = document.getElementById('eval-model-detail-modal');
     if (!modal || !model) return;
-    var testing = model.testing_result || {};
     var modelNameEl = document.getElementById('eval-detail-model-name');
     var algoEl = document.getElementById('eval-detail-algo');
     var ratioEl = document.getElementById('eval-detail-ratio');
@@ -502,9 +645,51 @@ function openEvaluationModelDetail(model) {
     if (ratioEl) ratioEl.textContent = model.split_ratio || '-';
     if (datasetEl) datasetEl.textContent = model.dataset_name || '-';
     if (dateEl) dateEl.textContent = model.created_at ? new Date(model.created_at).toLocaleString('en-US') : '-';
-    if (paramsEl) paramsEl.innerHTML = buildLayeredParameterHtml(model);
-    renderEvaluationEpochMetrics(model, resultsBody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty);
+    var paramView = buildModelParameterViewFromRow(model);
+    if (paramsEl) paramsEl.innerHTML = buildLayeredParameterHtml(paramView);
+
+    if (resultsBody) {
+        resultsBody.innerHTML =
+            '<tr><td colspan="6" style="text-align:center; color:#999;">Loading...</td></tr>';
+    }
+    if (avgFoot) avgFoot.innerHTML = '';
+    if (confusionSection) confusionSection.style.display = 'none';
     modal.style.display = 'flex';
+
+    var results = [];
+    if (model.id != null) {
+        try {
+            var res = await fetch(API_BASE + '/evaluasi/model-epochs/' + model.id);
+            var data = await res.json();
+            if (res.ok && Array.isArray(data.items)) {
+                results = data.items;
+                if (model.id != null) {
+                    modelEpochsCache[model.id] = results;
+                }
+            } else if (!res.ok && data.detail) {
+                console.error('Failed to fetch model epochs:', data.detail);
+            }
+        } catch (e) {
+            console.error('Failed to fetch model epochs:', e);
+        }
+    }
+
+    if (!results.length) {
+        var hist = findHistoryByModel(model);
+        if (hist && Array.isArray(hist.hasil)) {
+            results = hist.hasil;
+        }
+    }
+
+    renderEvaluationEpochMetrics(
+        results,
+        resultsBody,
+        avgFoot,
+        confusionSection,
+        confusionMeta,
+        confusionTable,
+        confusionEmpty,
+    );
 }
 
 function loadTrainingHistoryItems() {
@@ -518,14 +703,31 @@ function loadTrainingHistoryItems() {
 }
 
 function findHistoryByModel(model) {
+    var cacheKey = trainingLogCacheKey(model);
+    if (trainingLogCache[cacheKey]) {
+        return trainingLogCache[cacheKey];
+    }
+
     var history = loadTrainingHistoryItems();
     if (!history.length) return null;
     var modelName = String(model.nama_model || '').trim().toLowerCase();
     var algo = String(model.canonical_algorithm || model.algoritma || '').trim().toLowerCase();
+    var modelCanon = canonicalAlgoKey(algo);
     var filtered = history.filter(function (h) {
-        var hn = String(h.model_name || h.nama_model || '').trim().toLowerCase();
-        var ha = String((h.parameter && h.parameter.algo) || '').trim().toLowerCase();
-        var modelCanon = canonicalAlgoKey(algo);
+        var params = h.parameter || {};
+        var hn = String(
+            h.model_name ||
+                h.nama_model ||
+                params.model_name ||
+                '',
+        )
+            .trim()
+            .toLowerCase();
+        var ha = String(
+            h.algo || params.algo || (params && params.algo) || '',
+        )
+            .trim()
+            .toLowerCase();
         var histCanon = canonicalAlgoKey(ha);
         return (
             hn === modelName &&
@@ -544,11 +746,15 @@ function confusionMatrixLabelAsStored(raw) {
     return String(raw == null ? '' : raw).trim();
 }
 
-function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
+function pickEpochF1(row) {
+    if (row.f1 != null && row.f1 !== '') return Number(row.f1);
+    if (row.f1_score != null && row.f1_score !== '') return Number(row.f1_score);
+    return NaN;
+}
+
+function renderEvaluationEpochMetrics(results, tbody, avgFoot, confusionSection, confusionMeta, confusionTable, confusionEmpty) {
     if (!tbody || !avgFoot) return;
-    var hist = findHistoryByModel(model);
-    var results = hist && Array.isArray(hist.hasil) ? hist.hasil : [];
-    if (!results.length) {
+    if (!results || !results.length) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999;">Result data not available</td></tr>';
         avgFoot.innerHTML = '';
         if (confusionSection) confusionSection.style.display = 'none';
@@ -567,13 +773,14 @@ function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, c
 
     tbody.innerHTML = results.map(function (r) {
         var isBest = r.epoch === bestEpoch;
+        var f1Val = pickEpochF1(r);
         return (
             '<tr class="' + (isBest ? 'best-row' : '') + '">' +
             '<td>' + escapeHtml(String(r.epoch == null ? '-' : r.epoch)) + '</td>' +
             '<td>' + formatFloatOrDash(r.accuracy, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.precision, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.recall, 2) + '%</td>' +
-            '<td>' + formatFloatOrDash(r.f1, 2) + '%</td>' +
+            '<td>' + (Number.isFinite(f1Val) ? f1Val.toFixed(2) : '—') + '%</td>' +
             '<td>' + formatFloatOrDash(r.loss, 4) + '</td>' +
             '</tr>'
         );
@@ -584,7 +791,7 @@ function renderEvaluationEpochMetrics(model, tbody, avgFoot, confusionSection, c
         acc.accuracy += Number(r.accuracy) || 0;
         acc.precision += Number(r.precision) || 0;
         acc.recall += Number(r.recall) || 0;
-        acc.f1 += Number(r.f1) || 0;
+        acc.f1 += Number.isFinite(pickEpochF1(r)) ? pickEpochF1(r) : 0;
         acc.loss += Number(r.loss) || 0;
         return acc;
     }, { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 });
@@ -1679,7 +1886,7 @@ function bindEvents() {
             if (!Number.isFinite(modelId)) return;
             var models = state.byAlgo[state.selectedTableAlgo] || [];
             var model = models.find(function (m) { return Number(m.id) === modelId; });
-            if (model) openEvaluationModelDetail(model);
+            if (model) void openEvaluationModelDetail(model);
         });
     }
     var closeBtn = document.getElementById('eval-model-detail-close');
@@ -1740,6 +1947,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             showChartHint('Chart.js failed to load. Please check internet/CDN access.');
         }
         var items = await fetchEvaluationItems();
+        await prefetchTrainingLogsForModels(items);
+        await prefetchEpochMetricsForModels(items);
         state.byAlgo = groupByAlgorithm(items);
         state.orderedAlgos = orderedAlgorithmKeys(state.byAlgo);
         state.allItems = items;
