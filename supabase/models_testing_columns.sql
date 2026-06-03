@@ -1,7 +1,13 @@
 -- Tambahkan kolom metrik testing/training di tabel `models`.
 -- Jalankan di Supabase SQL Editor sekali (menghindari error simpan model: train_roc_auc / test_roc_auc).
+--
+-- Catatan schema:
+-- - `std_deviation` = kolom legacy (std dev training); Evaluasi & Processing membacanya.
+-- - `train_std_deviation` = nama baru (disarankan); isi keduanya jika memungkinkan.
+-- - `test_std_deviation` = std dev hasil testing (kolom Testing / Comparison).
 
 alter table public.models
+  add column if not exists std_deviation double precision,
   add column if not exists test_accuracy double precision,
   add column if not exists test_precision_macro double precision,
   add column if not exists test_recall_macro double precision,

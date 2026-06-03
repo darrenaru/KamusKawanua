@@ -57,7 +57,12 @@ def normalize_stored_metric_for_display(value: Any, nest_key: str) -> float:
 def model_row_has_testing_metrics(row: dict | None) -> bool:
     if not row:
         return False
-    return row.get("test_accuracy") is not None
+    if row.get("test_accuracy") is not None:
+        return True
+    return any(
+        row.get(col) is not None
+        for col in _MODEL_TEST_COLUMN_TO_NEST_KEY
+    )
 
 
 def legacy_row_has_testing_metrics(row: dict | None) -> bool:

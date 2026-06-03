@@ -164,16 +164,68 @@ function trainingRocFromHistory(model) {
     return mean(rocVals);
 }
 
-function trainingStdDevFromHistory(model) {
-    var results = trainingMetricResultRows(model);
-    var f1Vals = results
-        .map(function (r) {
-            return normalizePercent(pickEpochF1(r));
-        })
-        .filter(function (v) {
-            return v != null;
-        });
-    return stdDev(f1Vals);
+function parseStoredNumber(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+    var s = String(raw).trim().replace(',', '.');
+    var n = Number(s);
+    return Number.isFinite(n) ? n : null;
+}
+
+/** Nilai numerik pertama yang ada dari daftar kunci (snake_case di Supabase). */
+function pickFirstStoredNumber(row, keys) {
+    if (!row) return null;
+    for (var i = 0; i < keys.length; i++) {
+        var n = parseStoredNumber(row[keys[i]]);
+        if (n != null) return n;
+    }
+    return null;
+}
+
+/**
+ * Satukan std dev ke skala 0–1 (selaras sklearn / test_std_deviation).
+ * Data lama: std F1 antar epoch sering tersimpan sebagai persen (mis. 1.69 → 0.0169).
+ */
+function normalizeStdDevComparisonScale(n) {
+    if (n == null || !Number.isFinite(n)) return null;
+    var x = Number(n);
+    if (x > 1) return x / 100;
+    if (x > 0.15) return x / 100;
+    return x;
+}
+
+/**
+ * Std dev training dari Supabase.
+ * Utama: `std_deviation` (kolom Anda). Jika `train_std_deviation` lama bentrok, pilih yang
+ * paling dekat dengan nilai testing (hindari 1.69 vs 0.02 palsu).
+ */
+function trainStdDevFromSupabase(model) {
+    if (!model) return null;
+    var legacy = normalizeStdDevComparisonScale(parseStoredNumber(model.std_deviation));
+    var trainCol = normalizeStdDevComparisonScale(
+        pickFirstStoredNumber(model, ['train_std_deviation', 'train_std_dev']),
+    );
+    var testN = testStdDevFromSupabase(model);
+    if (legacy != null && trainCol != null && testN != null) {
+        if (Math.abs(legacy - testN) <= Math.abs(trainCol - testN)) return legacy;
+        return trainCol;
+    }
+    if (legacy != null) return legacy;
+    if (trainCol != null) return trainCol;
+    return normalizeStdDevComparisonScale(
+        pickFirstStoredNumber(model, ['std_deviation', 'train_std_deviation', 'train_std_dev']),
+    );
+}
+
+/** Std dev testing: `test_std_deviation` atau nested `testing_result.std_deviation`. */
+function testStdDevFromSupabase(model) {
+    if (!model) return null;
+    var nested = model.testing_result || {};
+    var n = pickFirstStoredNumber(model, ['test_std_deviation', 'test_std_dev']);
+    if (n == null) {
+        n = parseStoredNumber(nested.std_deviation);
+    }
+    return normalizeStdDevComparisonScale(n);
 }
 
 function trainingMccFromHistory(model) {
@@ -190,6 +242,11 @@ function trainingMccFromHistory(model) {
 
 function resolveTrainingMetricRaw(model, metricDef) {
     if (!model || !metricDef) return null;
+
+    if (metricDef.key === 'std_dev') {
+        return trainStdDevFromSupabase(model);
+    }
+
     var raw = metricDef.trainField ? model[metricDef.trainField] : null;
     if (raw !== null && raw !== undefined && raw !== '') return raw;
 
@@ -199,12 +256,6 @@ function resolveTrainingMetricRaw(model, metricDef) {
     }
     if (metricDef.key === 'weighted_avg') {
         raw = model.train_weighted_avg != null ? model.train_weighted_avg : model.f1_score;
-    }
-    if (metricDef.key === 'std_dev') {
-        raw = model.train_std_deviation;
-        if (raw === null || raw === undefined || raw === '') {
-            raw = trainingStdDevFromHistory(model);
-        }
     }
     if (metricDef.key === 'roc_auc') {
         if (raw === null || raw === undefined || raw === '') {
@@ -412,7 +463,8 @@ async function prefetchEpochMetricsForModels(items) {
     var need = items.filter(function (m) {
         if (m.id == null) return false;
         var needsStd =
-            m.train_std_deviation == null || m.train_std_deviation === '';
+            (m.train_std_deviation == null || m.train_std_deviation === '') &&
+            (m.std_deviation == null || m.std_deviation === '');
         var needsMcc = m.train_mcc == null || m.train_mcc === '';
         var needsRoc = m.train_roc_auc == null || m.train_roc_auc === '';
         return needsStd || needsMcc || needsRoc;
@@ -460,7 +512,10 @@ function renderTrainingTable(algoKey) {
         .map(function (m) {
             var trClass = bestTraining && m === bestTraining ? ' class="row-best-training"' : '';
             var metricCells = TABLE_METRIC_DEFS.map(function (d) {
-                var raw = resolveTrainingMetricRaw(m, d);
+                var raw =
+                    d.key === 'std_dev'
+                        ? trainStdDevFromSupabase(m)
+                        : resolveTrainingMetricRaw(m, d);
                 return '<td>' + formatByType(raw, d.type) + '</td>';
             }).join('');
             return (
@@ -858,6 +913,7 @@ function fittingStatus(trainValue, testValue, type) {
     var diff = Math.abs(trainValue - testValue);
     var pctLike = type === 'percent' || type === 'loss_pct';
     var mccLike = type === 'mcc';
+    var stdLike = type === 'float2';
     var rawText = pctLike ? diff.toFixed(4) + '%' : diff.toFixed(6);
     var txt = pctLike ? (Math.round(diff * 10) / 10).toFixed(1) + '%' : diff.toFixed(4);
     // Metrik persen: gap < 2% dianggap seimbang (sama seperti sebelum perbaikan format).
@@ -866,6 +922,10 @@ function fittingStatus(trainValue, testValue, type) {
     }
     // MCC pada skala [-1, 1]: gap kecil (mis. 0.80 vs 0.82) bukan under/overfitting.
     if (mccLike && diff < 0.05) {
+        return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
+    }
+    // Std dev (0–1): gap kecil dianggap seimbang — training epoch vs sklearn testing beda definisi.
+    if (stdLike && diff < 0.02) {
         return '<span class="fit good">Balanced <small>(raw ' + rawText + ')</small></span>';
     }
     if (trainValue > testValue) {
@@ -984,7 +1044,13 @@ function getAlgoComparisonValue(algoKey, metricDef) {
     var tTest = bestTesting ? bestTesting.testing_result || {} : {};
 
     var value = null;
-    if (metricDef.testField) {
+    if (metricDef.key === 'std_dev' && bestTraining) {
+        value = normalizeMetricValue(testStdDevFromSupabase(bestTraining), 'float2');
+        if (value == null) {
+            value = normalizeMetricValue(trainStdDevFromSupabase(bestTraining), 'float2');
+        }
+    }
+    if (value == null && metricDef.testField) {
         value = normalizeMetricValue(tTrain[metricDef.testField], metricDef.type);
     }
     if (value == null && metricDef.key === 'macro_avg') {
@@ -1060,6 +1126,7 @@ function normalizeMetricValue(raw, type) {
     if (type === 'percent') return normalizePercent(raw);
     if (type === 'mcc') return normalizeMcc(raw);
     if (type === 'loss_pct') return normalizeLossPercent(raw);
+    if (type === 'float2' || type === 'float4') return parseStoredNumber(raw);
     var n = Number(raw);
     return Number.isFinite(n) ? n : null;
 }
@@ -1080,15 +1147,17 @@ function resolveSummaryComparisonValues(referenceModel, metricDef) {
             if (p != null && r != null && f != null) testValue = (p + r + f) / 3;
         }
         trainValue = normalizeMetricValue(resolveTrainingMetricRaw(referenceModel, metricDef), 'percent');
-    } else if (
-        metricDef.key === 'std_dev' ||
-        metricDef.key === 'weighted_avg' ||
-        metricDef.key === 'roc_auc'
-    ) {
+    } else if (metricDef.key === 'std_dev') {
+        testValue = referenceModel
+            ? normalizeMetricValue(testStdDevFromSupabase(referenceModel), 'float2')
+            : null;
+        trainValue = referenceModel
+            ? normalizeMetricValue(trainStdDevFromSupabase(referenceModel), 'float2')
+            : null;
+    } else if (metricDef.key === 'weighted_avg' || metricDef.key === 'roc_auc') {
         // Dulu hanya ada di metrik testing → bandingkan nilai testing di kedua kolom.
-        var summaryType = metricDef.key === 'std_dev' ? 'percent' : 'percent';
         testValue = metricDef.testField
-            ? normalizeMetricValue(t[metricDef.testField], summaryType)
+            ? normalizeMetricValue(t[metricDef.testField], 'percent')
             : null;
         trainValue = testValue;
     } else if (metricDef.key === 'loss') {
@@ -1102,8 +1171,12 @@ function resolveSummaryComparisonValues(referenceModel, metricDef) {
             : null;
     }
 
-    // Jangan salin nilai testing ke training untuk MCC (hindari underfitting palsu).
-    if (metricDef.type !== 'mcc' && metricDef.key !== 'mcc') {
+    // Jangan salin testing → training (MCC / std dev harus dari Supabase masing-masing).
+    if (
+        metricDef.type !== 'mcc' &&
+        metricDef.key !== 'mcc' &&
+        metricDef.key !== 'std_dev'
+    ) {
         if (trainValue == null && testValue != null) trainValue = testValue;
         if (testValue == null && trainValue != null) testValue = trainValue;
     }
@@ -1112,7 +1185,7 @@ function resolveSummaryComparisonValues(referenceModel, metricDef) {
         metricDef.key === 'loss'
             ? 'loss_pct'
             : metricDef.key === 'std_dev'
-              ? 'percent'
+              ? 'float2'
               : metricDef.type;
 
     return { train: trainValue, test: testValue, type: diffType };

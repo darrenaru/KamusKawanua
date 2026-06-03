@@ -177,6 +177,46 @@
     return params.seed || "-";
   }
 
+  /**
+   * Std dev F1 antar epoch, disimpan skala 0–1 (selaras test_std_deviation / sklearn).
+   * F1 epoch di UI biasanya persen (0–100); std persen dibagi 100 sebelum disimpan ke Supabase.
+   */
+  function computeEpochF1StdDev(epochResults) {
+    if (!Array.isArray(epochResults) || epochResults.length < 2) return null;
+    const f1Vals = epochResults
+      .map((r) => {
+        const raw = r.f1 != null && r.f1 !== "" ? r.f1 : r.f1_score;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : NaN;
+      })
+      .filter((n) => Number.isFinite(n));
+    if (f1Vals.length < 2) return null;
+    const avg = f1Vals.reduce((a, b) => a + b, 0) / f1Vals.length;
+    const variance =
+      f1Vals.reduce((acc, v) => acc + (v - avg) * (v - avg), 0) / f1Vals.length;
+    const stdRaw = Math.sqrt(variance);
+    const f1OnPercentScale = f1Vals.some((v) => v > 1) || avg > 1;
+    return f1OnPercentScale ? stdRaw / 100 : stdRaw;
+  }
+
+  function epochF1StdFromCardTable(card) {
+    const tableBody = card?.querySelector(".results-table tbody");
+    if (!tableBody) return null;
+    const rows = Array.from(tableBody.querySelectorAll("tr")).filter((row) => {
+      const epochLabel = String(row.cells?.[0]?.innerText || "")
+        .trim()
+        .toLowerCase();
+      return epochLabel && epochLabel !== "average";
+    });
+    const f1Vals = rows
+      .map((row) => parseFloat(row.cells?.[4]?.innerText))
+      .filter((n) => Number.isFinite(n));
+    if (f1Vals.length < 2) return null;
+    return computeEpochF1StdDev(
+      f1Vals.map((f1, i) => ({ epoch: i + 1, f1 })),
+    );
+  }
+
   function parseSeedSelection(rawValue) {
     const raw = String(rawValue || "").trim().toLowerCase();
     if (!raw) return { mode: "single", seeds: [42] };
@@ -3379,6 +3419,10 @@
     if (sum.rocCount > 0) {
       avg.roc_auc = sum.roc_auc / sum.rocCount;
     }
+    const stdDev = computeEpochF1StdDev(epochResults);
+    if (stdDev != null && Number.isFinite(stdDev)) {
+      avg.std_deviation = stdDev;
+    }
 
     // Tampilkan baris average
     avgRow.style.display = "table-footer-group";
@@ -3744,6 +3788,7 @@
     "macro_avg",
     "train_weighted_avg",
     "train_std_deviation",
+    "std_deviation",
     "train_roc_auc",
     "train_loss",
     "train_mcc",
@@ -4058,24 +4103,24 @@
       }
     }
 
-    const epochF1Std = (() => {
-      const tableBody = card.querySelector(".results-table tbody");
-      if (!tableBody) return null;
-      const rows = Array.from(tableBody.querySelectorAll("tr")).filter((row) => {
-        const epochLabel = String(row.cells?.[0]?.innerText || "")
-          .trim()
-          .toLowerCase();
-        return epochLabel && epochLabel !== "average";
-      });
-      const f1Vals = rows
-        .map((row) => parseFloat(row.cells?.[4]?.innerText))
-        .filter((n) => Number.isFinite(n));
-      if (f1Vals.length < 2) return null;
-      const avg = f1Vals.reduce((a, b) => a + b, 0) / f1Vals.length;
-      const variance =
-        f1Vals.reduce((acc, v) => acc + (v - avg) * (v - avg), 0) / f1Vals.length;
-      return Math.sqrt(variance);
-    })();
+    let epochResultsForStd = Array.isArray(opts.epochResults)
+      ? opts.epochResults
+      : [];
+    if (!epochResultsForStd.length) {
+      try {
+        const parsed = JSON.parse(card.dataset.epochResults || "[]");
+        if (Array.isArray(parsed)) epochResultsForStd = parsed;
+      } catch (err) {
+        epochResultsForStd = [];
+      }
+    }
+    let epochF1Std = computeEpochF1StdDev(epochResultsForStd);
+    if (epochF1Std == null && resolvedAvg?.std_deviation != null) {
+      epochF1Std = Number(resolvedAvg.std_deviation);
+    }
+    if (epochF1Std == null) {
+      epochF1Std = epochF1StdFromCardTable(card);
+    }
 
     const macroAvg =
       precision || recall || f1 ? (precision + recall + f1) / 3 : null;
@@ -4144,6 +4189,7 @@
       macro_avg: macroAvg,
       train_weighted_avg: trainWeightedAvg,
       train_std_deviation: epochF1Std,
+      std_deviation: epochF1Std,
       train_roc_auc: trainRocAuc,
       train_loss: trainLoss,
       train_mcc: trainMcc,

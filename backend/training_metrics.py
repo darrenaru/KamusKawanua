@@ -70,3 +70,31 @@ def enrich_training_metrics(merged: dict[str, Any]) -> None:
         merged["train_mcc"] = train_mcc
     else:
         merged.pop("train_mcc", None)
+
+    # Schema legacy: `std_deviation` = training std dev (skala 0–1).
+    train_std = merged.get("train_std_deviation")
+    legacy_std = merged.get("std_deviation")
+    has_train_std = train_std is not None and str(train_std).strip() != ""
+    has_legacy_std = legacy_std is not None and str(legacy_std).strip() != ""
+    train_f = _to_float(train_std, 0.0) if has_train_std else None
+    legacy_f = _to_float(legacy_std, 0.0) if has_legacy_std else None
+
+    def _std_on_0_1_scale(v: float) -> float:
+        if v > 1.0:
+            return v / 100.0
+        if v > 0.15:
+            return v / 100.0
+        return v
+
+    if not has_train_std and has_legacy_std:
+        merged["train_std_deviation"] = legacy_f
+    elif has_train_std and not has_legacy_std:
+        merged["std_deviation"] = train_f
+    elif has_train_std and has_legacy_std and train_f is not None and legacy_f is not None:
+        train_n = _std_on_0_1_scale(train_f)
+        legacy_n = _std_on_0_1_scale(legacy_f)
+        # Data lama: train_std_deviation ~1.69 (persen), std_deviation sudah benar ~0.01
+        if train_n > 0.15 and legacy_n <= 0.15:
+            merged["train_std_deviation"] = legacy_f
+        elif legacy_n > 0.15 and train_n <= 0.15:
+            merged["std_deviation"] = train_f
