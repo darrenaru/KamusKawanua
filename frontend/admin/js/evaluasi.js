@@ -254,8 +254,8 @@ function formatPercentOrDash(value) {
 function readPreferredAlgorithm() {
     try {
         var raw =
-            localStorage.getItem('kamusWorkflowAlgorithm') ||
-            localStorage.getItem('selectedAlgorithm') ||
+            sessionStorage.getItem('kamusWorkflowAlgorithm') ||
+            sessionStorage.getItem('selectedAlgorithm') ||
             '';
         try {
             var sess = sessionStorage.getItem('evaluasi_selectedTableAlgo');
@@ -538,7 +538,7 @@ async function openEvaluationModelDetail(model) {
 
 function loadTrainingHistoryItems() {
     try {
-        var raw = localStorage.getItem('training_history');
+        var raw = sessionStorage.getItem('training_history');
         var parsed = raw ? JSON.parse(raw) : [];
         return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
@@ -1687,7 +1687,7 @@ function bindEvents() {
             if (!t || !t.classList || !t.classList.contains('algo-btn')) return;
             state.selectedTableAlgo = t.getAttribute('data-algo') || state.selectedTableAlgo;
             try {
-                localStorage.setItem('selectedAlgorithm', state.selectedTableAlgo);
+                sessionStorage.setItem('selectedAlgorithm', state.selectedTableAlgo);
             } catch (err) {}
             renderTableAlgoButtons();
             renderTrainingTable(state.selectedTableAlgo);

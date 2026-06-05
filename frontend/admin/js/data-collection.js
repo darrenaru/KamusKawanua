@@ -1,8 +1,8 @@
 // ==============================
 // SUPABASE INIT (WAJIB GANTI)
 // ==============================
-const supabaseUrl = "https://cdrabgiuvfisxntfzskd.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
+const supabaseUrl = "https://itagwofqlqixmzanvbpv.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWd3b2ZxbHFpeG16YW52YnB2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ1OTU2MiwiZXhwIjoyMDk2MDM1NTYyfQ.wmgYZZyQHS07ee3afwa_jQ7zsARbtKCJ-f7rUUqJq4U";
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
@@ -30,11 +30,11 @@ let isUploading = false;
 // INIT
 // ==============================
     console.log("LOGIN DEBUG:");
-    console.log("isLoggedIn =", localStorage.getItem("isLoggedIn"));
-    console.log("username =", localStorage.getItem("username"));
+    console.log("isLoggedIn =", sessionStorage.getItem("isLoggedIn"));
+    console.log("username =", sessionStorage.getItem("username"));
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const isLoggedIn = localStorage.getItem("isLoggedIn");
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn");
 
 if (!isLoggedIn) {
     alert("You are not logged in!");
@@ -78,7 +78,6 @@ async function fetchDatasets() {
             kerja: d.kata_kerja,
             benda: d.kata_benda,
             sifat: d.kata_sifat,
-            keterangan: d.kata_keterangan,
             uploader: d.uploaded_by,
             date: d.created_at?.split("T")[0] || "-"
         }));
@@ -204,7 +203,6 @@ function renderDatasets(list = datasets) {
                 <div>Verb</div><div>: ${ds.kerja}</div>
                 <div>Noun</div><div>: ${ds.benda}</div>
                 <div>Adjective</div><div>: ${ds.sifat}</div>
-                <div>Adverb</div><div>: ${ds.keterangan}</div>
                 <div>Uploader</div><div>: ${ds.uploader}</div>
                 <div>Upload Date</div><div>: ${ds.date}</div>
             </div>
@@ -446,19 +444,18 @@ async function uploadDataset() {
         const rows = parseCSVStrict(text);
 
         // HITUNG STAT
-        let kerja = 0, benda = 0, sifat = 0, keterangan = 0;
+        let kerja = 0, benda = 0, sifat = 0;
 
         rows.forEach(r => {
             const j = (r.jenis || "").toLowerCase();
             if (j === "kata kerja") kerja++;
             else if (j === "kata benda") benda++;
             else if (j === "kata sifat") sifat++;
-            else if (j === "kata keterangan") keterangan++;
         });
 
         const { data: { session } } = await supabaseClient.auth.getSession();
 
-        const username = localStorage.getItem("username");
+        const username = sessionStorage.getItem("username");
         console.log("UPLOAD DEBUG username =", username);
 
         if (!username) {
@@ -477,7 +474,6 @@ async function uploadDataset() {
                 kata_kerja: kerja,
                 kata_benda: benda,
                 kata_sifat: sifat,
-                kata_keterangan: keterangan,
                 uploaded_by: username
             }])
             .select()

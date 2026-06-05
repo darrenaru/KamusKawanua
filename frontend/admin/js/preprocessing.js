@@ -1,5 +1,5 @@
-const supabaseUrl = "https://cdrabgiuvfisxntfzskd.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
+const supabaseUrl = "https://itagwofqlqixmzanvbpv.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWd3b2ZxbHFpeG16YW52YnB2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ1OTU2MiwiZXhwIjoyMDk2MDM1NTYyfQ.wmgYZZyQHS07ee3afwa_jQ7zsARbtKCJ-f7rUUqJq4U";
 
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
@@ -24,7 +24,7 @@ function preprocessTokenizerLabel(algo) {
 }
 
 function resolvePreprocessAlgorithm() {
-    const saved = localStorage.getItem("selectedAlgorithm");
+    const saved = sessionStorage.getItem("selectedAlgorithm");
     activePreprocessAlgorithm = normalizeAlgorithmForPreprocess(saved);
     return activePreprocessAlgorithm;
 }
@@ -98,7 +98,6 @@ function renderTable() {
             <td>${ds.kata_kerja ?? 0}</td>
             <td>${ds.kata_benda ?? 0}</td>
             <td>${ds.kata_sifat ?? 0}</td>
-            <td>${ds.kata_keterangan ?? 0}</td>
             <td>
                 <span class="status ${ds.is_preprocessed ? 'done' : 'pending'}">
                     ${ds.is_preprocessed ? 'Completed' : 'Not Yet'}
@@ -146,7 +145,6 @@ function selectDataset(ds) {
     document.getElementById("kerja").innerText = ds.kata_kerja;
     document.getElementById("benda").innerText = ds.kata_benda;
     document.getElementById("sifat").innerText = ds.kata_sifat;
-    document.getElementById("keterangan").innerText = ds.kata_keterangan;
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
     const algoLabel = activePreprocessAlgorithm === "indobert" ? "IndoBERT" : "mBERT";
@@ -159,8 +157,8 @@ function selectDataset(ds) {
 
 function goToProcessing() {
     if (selectedDataset?.id) {
-        localStorage.setItem("processing_selected_dataset_id", String(selectedDataset.id));
-        localStorage.setItem("processing_selected_dataset_name", selectedDataset.name || "");
+        sessionStorage.setItem("processing_selected_dataset_id", String(selectedDataset.id));
+        sessionStorage.setItem("processing_selected_dataset_name", selectedDataset.name || "");
     }
     window.location.href = "processing.html";
 }

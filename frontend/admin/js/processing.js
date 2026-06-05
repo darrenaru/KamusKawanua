@@ -1,9 +1,9 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://cdrabgiuvfisxntfzskd.supabase.co";
+  const SUPABASE_URL = "https://itagwofqlqixmzanvbpv.supabase.co";
   const SUPABASE_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWd3b2ZxbHFpeG16YW52YnB2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ1OTU2MiwiZXhwIjoyMDk2MDM1NTYyfQ.wmgYZZyQHS07ee3afwa_jQ7zsARbtKCJ-f7rUUqJq4U";
 
   let supabaseClient = null;
   if (window.supabase) {
@@ -46,7 +46,7 @@
     return String(value || "").trim().toLowerCase().replace(/_/g, "-");
   }
 
-  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r. */
+  /** Dashboard / sessionStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r. */
   function normalizeStoredAlgorithmSelection(raw) {
     const k = normalizeAlgoKey(raw);
     if (k === "xlmr" || k === "xlm-r" || k === "xlm-r-2") return "xlm-r";
@@ -160,7 +160,7 @@
 
   function loadRatioSearchContextStore() {
     try {
-      const raw = localStorage.getItem(STORAGE_RATIO_SEARCH_BY_CONTEXT);
+      const raw = sessionStorage.getItem(STORAGE_RATIO_SEARCH_BY_CONTEXT);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return {};
@@ -190,7 +190,7 @@
   }
 
   function saveRatioSearchContextStore(store) {
-    localStorage.setItem(STORAGE_RATIO_SEARCH_BY_CONTEXT, JSON.stringify(store || {}));
+    sessionStorage.setItem(STORAGE_RATIO_SEARCH_BY_CONTEXT, JSON.stringify(store || {}));
   }
 
   function renderGlobalBestParamsDisplay() {
@@ -342,7 +342,7 @@
   }
 
   function loadRatioFromLocalStorage() {
-    const saved = localStorage.getItem("ratio_data_split");
+    const saved = sessionStorage.getItem("ratio_data_split");
     if (saved) {
       try {
         ratioData = JSON.parse(saved);
@@ -357,7 +357,7 @@
   }
 
   function saveRatioToLocalStorage() {
-    localStorage.setItem("ratio_data_split", JSON.stringify(ratioData));
+    sessionStorage.setItem("ratio_data_split", JSON.stringify(ratioData));
   }
 
   function setupRatioEventListeners() {
@@ -878,6 +878,152 @@
     showToast("Training detail exported.", "success");
   }
 
+
+  async function resumeActiveJobIfAny() {
+    try {
+      const activeStr = sessionStorage.getItem("processing_active_job");
+      if (!activeStr) return;
+      const active = JSON.parse(activeStr);
+      if (!active || !active.jobId) return;
+
+      const { jobId, mode, params, isIndobertTrain, totalEpochs } = active;
+      const statusUrl = isIndobertTrain
+          ? `${API_BASE}/processing/indobert/train/status/${jobId}`
+          : `${API_BASE}/processing/train/status/${jobId}`;
+      
+      const stRes = await fetch(statusUrl);
+      if (!stRes.ok) {
+        sessionStorage.removeItem("processing_active_job");
+        return;
+      }
+      const st = await stRes.json();
+      if (st.status === "done" || st.status === "error") {
+        sessionStorage.removeItem("processing_active_job");
+        // We could render the final result here, but since it's done, history will fetch it
+        return;
+      }
+
+      // Recreate UI
+      const container = document.getElementById("training-results-container");
+      if (!container) return;
+      
+      document.getElementById("training-results-section").style.display = "block";
+      const card = createTrainingCard(mode, params);
+      container.appendChild(card);
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+      const progressBar = card.querySelector(".progress-bar");
+      const progressText = card.querySelector(".progress-text");
+      const tableBody = card.querySelector(".results-table tbody");
+      
+      progressBar.classList.add("running");
+      resetProcessingStepUI(card);
+      setProcessingStep(card, "queue");
+      setLoadingVisual(card, true, `Resuming Job ${jobId.slice(0, 6)}...`);
+      
+      const setProgressPct = (value) => {
+        const safe = Math.max(0, Math.min(100, Number(value) || 0));
+        progressBar.style.width = `${safe.toFixed(1)}%`;
+        progressText.innerText = `${Math.round(safe)}% — Training in progress...`;
+      };
+      
+      const epochResults = [];
+      let renderedEpochs = 0;
+      let lastStatus = "";
+
+      const poll = async () => {
+        try {
+            const stRes = await fetch(statusUrl);
+            const st = await stRes.json();
+            if (!stRes.ok) throw new Error(st?.detail || "Failed to fetch status");
+
+            if (st.status !== lastStatus) {
+            lastStatus = st.status;
+            if (st.status === "queued") appendProgressLog(card, "Job is still in the queue...", "warning");
+            if (st.status === "running") {
+                appendProgressLog(card, "Training is running on backend", "info");
+                setProcessingStep(card, "train");
+            }
+            }
+
+            const cur = Number(st.current_epoch || 0);
+            if (st.status === "queued") setProgressPct(2);
+            if (st.status === "running") {
+            const progressByEpoch = (cur / Math.max(1, totalEpochs)) * 100;
+            setProgressPct(progressByEpoch);
+            }
+
+            const metrics = st.metrics || [];
+            for (let i = renderedEpochs; i < metrics.length; i++) {
+            const m = metrics[i];
+            const row = document.createElement("tr");
+            const accuracy = (m.accuracy * 100) || 0;
+            const precision = (m.precision_macro * 100) || 0;
+            const recall = (m.recall_macro * 100) || 0;
+            const f1 = (m.f1_macro * 100) || 0;
+            const loss = m.val_loss ?? m.train_loss ?? 0;
+            row.innerHTML = `
+                <td>${m.epoch}</td>
+                <td>${accuracy.toFixed(2)}%</td>
+                <td>${precision.toFixed(2)}%</td>
+                <td>${recall.toFixed(2)}%</td>
+                <td>${f1.toFixed(2)}%</td>
+                <td>${parseFloat(loss).toFixed(4)}</td>
+            `;
+            tableBody.appendChild(row);
+            epochResults.push({
+                epoch: m.epoch,
+                accuracy,
+                precision,
+                recall,
+                f1,
+                loss: parseFloat(loss),
+                mcc: Number.isFinite(Number(m.mcc)) ? Number(m.mcc) : null,
+                roc_auc: Number.isFinite(Number(m.roc_auc)) ? Number(m.roc_auc) * 100 : null,
+                confusion_matrix: m.confusion_matrix || null,
+                confusion_labels: m.confusion_labels || null,
+            });
+            appendProgressLog(card, `Epoch ${m.epoch}/${totalEpochs} | F1 ${f1.toFixed(2)}%`, "info");
+            renderedEpochs++;
+            }
+
+            if (st.status === "done") {
+            sessionStorage.removeItem("processing_active_job");
+            setProgressPct(100);
+            progressBar.classList.remove("running");
+            setLoadingVisual(card, false);
+            setProcessingStep(card, "metrics");
+            appendProgressLog(card, `Training completed (${st.result?.device || "device"})`, "success");
+            finishTrainingInCard(card, mode, params, epochResults);
+            return;
+            }
+
+            if (st.status === "error") {
+            sessionStorage.removeItem("processing_active_job");
+            progressText.innerText = "100% — Failed";
+            progressBar.classList.remove("running");
+            setLoadingVisual(card, false);
+            stopProcessingElapsed(card);
+            appendProgressLog(card, `Training failed: ${st.error || "-"}`, "error");
+            return;
+            }
+
+            setTimeout(poll, 1000);
+        } catch (err) {
+            console.error(err);
+        }
+      };
+
+      setTimeout(poll, 700);
+
+    } catch(e) {
+      console.error("Failed to resume job:", e);
+    }
+  }
+  
+  // Call it on load
+  document.addEventListener("DOMContentLoaded", resumeActiveJobIfAny);
+
   window.exportHistoryDetailModalXlsx = exportHistoryDetailModalXlsx;
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -895,16 +1041,16 @@
     }
 
     const preferredAlgo = normalizeStoredAlgorithmSelection(
-      localStorage.getItem("selectedAlgorithm") || "",
+      sessionStorage.getItem("selectedAlgorithm") || "",
     );
     if (preferredAlgo && Array.from(algoSelect.options || []).some((opt) => opt.value === preferredAlgo)) {
       algoSelect.value = preferredAlgo;
       currentAlgo = preferredAlgo;
-      localStorage.setItem("selectedAlgorithm", preferredAlgo);
+      sessionStorage.setItem("selectedAlgorithm", preferredAlgo);
     } else {
       algoSelect.value = "indobert";
       currentAlgo = "indobert";
-      localStorage.setItem("selectedAlgorithm", "indobert");
+      sessionStorage.setItem("selectedAlgorithm", "indobert");
     }
 
     algoSelect.addEventListener("change", onAlgoChange);
@@ -1066,8 +1212,8 @@
   }
 
   function applyPreferredDatasetSelection(datasets) {
-    const preferredId = parseInt(localStorage.getItem(STORAGE_SELECTED_DATASET_ID) || "", 10);
-    const preferredName = localStorage.getItem(STORAGE_SELECTED_DATASET_NAME) || "";
+    const preferredId = parseInt(sessionStorage.getItem(STORAGE_SELECTED_DATASET_ID) || "", 10);
+    const preferredName = sessionStorage.getItem(STORAGE_SELECTED_DATASET_NAME) || "";
     if (!preferredId) return;
 
     const found = (datasets || []).find((d) => Number(d.id) === preferredId);
@@ -1171,7 +1317,7 @@
 
   function onAlgoChange(e) {
     currentAlgo = e.target.value;
-    localStorage.setItem("selectedAlgorithm", currentAlgo);
+    sessionStorage.setItem("selectedAlgorithm", currentAlgo);
     updateTrainingNamePlaceholder();
 
     if (currentMode === "training-final") {
@@ -2227,8 +2373,8 @@
     const datasetName = selected.innerText.trim();
     selectedDatasetId = parseInt(selected.dataset.datasetId || "0", 10) || null;
     if (selectedDatasetId) {
-      localStorage.setItem(STORAGE_SELECTED_DATASET_ID, String(selectedDatasetId));
-      localStorage.setItem(STORAGE_SELECTED_DATASET_NAME, datasetName);
+      sessionStorage.setItem(STORAGE_SELECTED_DATASET_ID, String(selectedDatasetId));
+      sessionStorage.setItem(STORAGE_SELECTED_DATASET_NAME, datasetName);
     }
     document.getElementById("dataset-card-name").innerText = datasetName;
     document.getElementById("dataset-card").style.display = "flex";
@@ -2446,7 +2592,7 @@
   }
 
   async function hydrateBestParamsForCurrentContext() {
-    // 1) Coba ambil dari localStorage context store (paling cepat).
+    // 1) Coba ambil dari sessionStorage context store (paling cepat).
     try {
       applyRatioSearchContextState({ rerenderParams: false });
     } catch (e) {
@@ -2544,7 +2690,7 @@
       return;
     }
 
-    // Pastikan state best ratio yang pernah dicari (localStorage/Supabase) ter-load,
+    // Pastikan state best ratio yang pernah dicari (sessionStorage/Supabase) ter-load,
     // supaya final training tidak salah ter-restrict.
     if (mode === "training-final" && !globalBestParams && !modelSelected) {
       await hydrateBestParamsForCurrentContext();
@@ -2979,6 +3125,14 @@
 
       const jobId = startResult.job_id;
       const totalEpochs = payload.epoch || startResult.total_epochs || 1;
+      
+      sessionStorage.setItem("processing_active_job", JSON.stringify({
+        jobId: jobId,
+        mode: mode,
+        params: params,
+        isIndobertTrain: isIndobertTrain,
+        totalEpochs: totalEpochs
+      }));
       setLoadingVisual(card, true, `Job ${jobId.slice(0, 6)} is in progress...`);
       setProcessingStep(card, "queue");
       appendProgressLog(
@@ -3063,6 +3217,7 @@
         }
 
         if (st.status === "done") {
+          sessionStorage.removeItem("processing_active_job");
           setProgressPct(100);
           progressBar.classList.remove("running");
           setLoadingVisual(card, false);
@@ -3090,6 +3245,7 @@
         }
 
         if (st.status === "error") {
+          sessionStorage.removeItem("processing_active_job");
           progressText.innerText = "100% — Failed";
           progressBar.classList.remove("running");
           setLoadingVisual(card, false);
@@ -3754,7 +3910,7 @@
     const silent = options.silent !== false;
     let saved = [];
     try {
-      saved = JSON.parse(localStorage.getItem("saved_models") || "[]");
+      saved = JSON.parse(sessionStorage.getItem("saved_models") || "[]");
     } catch (e) {
       return { synced: 0, remaining: 0 };
     }
@@ -3793,7 +3949,7 @@
       }
     }
 
-    localStorage.setItem("saved_models", JSON.stringify(remaining));
+    sessionStorage.setItem("saved_models", JSON.stringify(remaining));
     if (synced && !silent) {
       showToast(
         synced === 1
@@ -4199,11 +4355,11 @@
 
   function saveToLocalStorage(modelData) {
     try {
-      const saved = JSON.parse(localStorage.getItem("saved_models") || "[]");
+      const saved = JSON.parse(sessionStorage.getItem("saved_models") || "[]");
       saved.push(modelData);
-      localStorage.setItem("saved_models", JSON.stringify(saved));
+      sessionStorage.setItem("saved_models", JSON.stringify(saved));
     } catch (e) {
-      console.error("Error saving to localStorage:", e);
+      console.error("Error saving to sessionStorage:", e);
     }
   }
 
@@ -4221,7 +4377,7 @@
   const HISTORY_KEY = "training_history";
   let currentTrainingHistory = [];
 
-  // Load history dari Supabase (fallback ke localStorage)
+  // Load history dari Supabase (fallback ke sessionStorage)
   async function loadTrainingHistory() {
     if (supabaseClient) {
       try {
@@ -4244,17 +4400,17 @@
         }));
         return currentTrainingHistory;
       } catch (e) {
-        console.error("Failed to load training logs from Supabase, falling back to localStorage", e);
+        console.error("Failed to load training logs from Supabase, falling back to sessionStorage", e);
       }
     }
     
     // Fallback
-    const saved = localStorage.getItem(HISTORY_KEY);
+    const saved = sessionStorage.getItem(HISTORY_KEY);
     currentTrainingHistory = saved ? JSON.parse(saved) : [];
     return currentTrainingHistory;
   }
 
-  // Save history ke Supabase (fallback ke localStorage)
+  // Save history ke Supabase (fallback ke sessionStorage)
   async function saveTrainingHistory(historyData) {
     // Optimistic UI Update
     currentTrainingHistory.push(historyData);
@@ -4275,15 +4431,15 @@
         if (error) throw error;
         return; // Success
       } catch (e) {
-        console.error("Failed to save training log to Supabase, falling back to localStorage", e);
+        console.error("Failed to save training log to Supabase, falling back to sessionStorage", e);
       }
     }
     
     // Fallback
-    const saved = localStorage.getItem(HISTORY_KEY);
+    const saved = sessionStorage.getItem(HISTORY_KEY);
     const history = saved ? JSON.parse(saved) : [];
     history.push(historyData);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   }
 
   // Helper untuk merender tabel tanpa fetch ulang

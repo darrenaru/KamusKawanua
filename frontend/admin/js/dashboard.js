@@ -2,7 +2,7 @@
 // AUTH CHECK (PROTEKSI HALAMAN)
 // ==============================
 
-const isLoggedIn = localStorage.getItem("isLoggedIn");
+const isLoggedIn = sessionStorage.getItem("isLoggedIn");
 
 if (!isLoggedIn) {
     window.location.href = "../../login/login.html";
@@ -55,7 +55,7 @@ buttons.forEach(btn => {
     btn.addEventListener("click", () => {
         const algo = btn.dataset.algo;
 
-        localStorage.setItem("selectedAlgorithm", algo);
+        sessionStorage.setItem("selectedAlgorithm", algo);
 
         applySelection(algo);
     });
@@ -76,17 +76,17 @@ window.onload = () => {
         void window.kamusInitXlmGeneration();
     }
     let saved = normalizeStoredAlgorithmSelection(
-        localStorage.getItem("selectedAlgorithm")
+        sessionStorage.getItem("selectedAlgorithm")
     );
     if (saved === "xlmr" || saved === "xlm-r" || saved === "xlm-r-2") {
         saved = "xlm-r";
-        localStorage.setItem("selectedAlgorithm", saved);
+        sessionStorage.setItem("selectedAlgorithm", saved);
     }
 
     if (saved) {
         applySelection(saved);
     } else {
-        localStorage.setItem("selectedAlgorithm", "indobert");
+        sessionStorage.setItem("selectedAlgorithm", "indobert");
         applySelection("indobert");
     }
 };
@@ -96,7 +96,7 @@ window.onload = () => {
 // ==============================
 
 nextBtn.addEventListener("click", () => {
-    const selected = localStorage.getItem("selectedAlgorithm");
+    const selected = sessionStorage.getItem("selectedAlgorithm");
 
     if (!selected) {
         alert("Please select an algorithm first!");

@@ -18,8 +18,8 @@ try {
    PREPROCESSING (same flow as preprocessing.html)
    — seed preprocessed_data from raw_data, then backend tokenizer job
 ============================= */
-var TESTING_SUPABASE_URL = 'https://cdrabgiuvfisxntfzskd.supabase.co';
-var TESTING_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y';
+var TESTING_SUPABASE_URL = 'https://itagwofqlqixmzanvbpv.supabase.co';
+var TESTING_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWd3b2ZxbHFpeG16YW52YnB2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ1OTU2MiwiZXhwIjoyMDk2MDM1NTYyfQ.wmgYZZyQHS07ee3afwa_jQ7zsARbtKCJ-f7rUUqJq4U';
 var testingSupabaseClient = null;
 
 function getTestingSupabaseClient() {
@@ -704,7 +704,7 @@ function initAlgorithmModelSelect() {
                 algorithmSelect.appendChild(option);
             });
 
-            var preferred = normalizeTestingAlgo(localStorage.getItem('selectedAlgorithm'));
+            var preferred = normalizeTestingAlgo(sessionStorage.getItem('selectedAlgorithm'));
             if (preferred && !algorithmModelMap[preferred]) {
                 algorithmModelMap[preferred] = [];
                 var missingOption = document.createElement('option');

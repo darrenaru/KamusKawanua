@@ -201,3 +201,76 @@
   stroke-linecap: round !important;
   stroke-linejoin: round !important;
 }
+
+/* ===========================
+   SIDEBAR PROFILE (ADMIN)
+=========================== */
+.sidebar {
+  justify-content: space-between !important;
+}
+
+.sidebar-content {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-grow: 1 !important;
+}
+
+.sidebar-profile {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 16px 16px !important;
+  margin-top: auto !important;
+  border-radius: 12px !important;
+  background: rgba(44, 31, 14, 0.03) !important;
+  border: 1px solid rgba(44, 31, 14, 0.05) !important;
+  transition: all 0.25s ease !important;
+}
+
+.sidebar-profile:hover {
+  background: rgba(44, 31, 14, 0.06) !important;
+}
+
+.profile-img {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  background: var(--accent, #2c1f0e) !important;
+  color: #fff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 4px 10px rgba(44, 31, 14, 0.15) !important;
+  flex-shrink: 0 !important;
+}
+
+.profile-img svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  fill: none !important;
+}
+
+.profile-info {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.profile-name {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary, #2c1f0e) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.profile-role {
+  font-size: 11px !important;
+  color: #8b7d6b !important;
+  font-weight: 500 !important;
+}

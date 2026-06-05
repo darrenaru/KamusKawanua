@@ -10,9 +10,9 @@
   var SNAPSHOT_URL = "../js/xlm-generation.snapshot.json";
   var API_BASE = "http://127.0.0.1:8000";
 
-  var SUPABASE_URL = "https://cdrabgiuvfisxntfzskd.supabase.co";
+  var SUPABASE_URL = "https://itagwofqlqixmzanvbpv.supabase.co";
   var SUPABASE_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmFiZ2l1dmZpc3hudGZ6c2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTE3MDYsImV4cCI6MjA5NDA4NzcwNn0.7mOQSIwKZqH-SJtAIQFvmM-iFwjlUrmoknc6mZiny6Y";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0YWd3b2ZxbHFpeG16YW52YnB2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ1OTU2MiwiZXhwIjoyMDk2MDM1NTYyfQ.wmgYZZyQHS07ee3afwa_jQ7zsARbtKCJ-f7rUUqJq4U";
 
   var client = null;
   if (window.supabase) {
@@ -40,7 +40,7 @@
       _profile = p === "xlm-r" || p === "xlm-r-2" ? p : g === "gen1" ? "xlm-r" : "xlm-r-2";
       _ready = true;
       try {
-        localStorage.setItem(STORAGE_KEY, _generation);
+        sessionStorage.setItem(STORAGE_KEY, _generation);
       } catch (e) {}
       return _generation;
     }
@@ -50,7 +50,7 @@
   function getXlmGeneration() {
     if (_generation === "gen1" || _generation === "gen2") return _generation;
     try {
-      var v = localStorage.getItem(STORAGE_KEY);
+      var v = sessionStorage.getItem(STORAGE_KEY);
       if (v === "gen1" || v === "gen2") return v;
     } catch (e2) {}
     return null;
@@ -230,7 +230,7 @@
     );
     var n = hasil.length;
     var datasetId = parseInt(
-      localStorage.getItem("processing_selected_dataset_id") || "",
+      sessionStorage.getItem("processing_selected_dataset_id") || "",
       10,
     );
     if (!Number.isFinite(datasetId) || datasetId <= 0) return null;
@@ -284,7 +284,7 @@
     var remainingSaved = [];
 
     try {
-      var saved = JSON.parse(localStorage.getItem("saved_models") || "[]");
+      var saved = JSON.parse(sessionStorage.getItem("saved_models") || "[]");
       if (Array.isArray(saved)) {
         for (var i = 0; i < saved.length; i++) {
           var entry = saved[i];
@@ -309,12 +309,12 @@
           if (ins.ok) synced += 1;
           else remainingSaved.push(entry);
         }
-        localStorage.setItem("saved_models", JSON.stringify(remainingSaved));
+        sessionStorage.setItem("saved_models", JSON.stringify(remainingSaved));
       }
     } catch (e) {}
 
     try {
-      var histRaw = localStorage.getItem("training_history");
+      var histRaw = sessionStorage.getItem("training_history");
       var history = histRaw ? JSON.parse(histRaw) : [];
       if (Array.isArray(history)) {
         for (var h = 0; h < history.length; h++) {

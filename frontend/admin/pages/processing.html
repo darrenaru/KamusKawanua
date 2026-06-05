@@ -24,7 +24,26 @@
                 <li><a href="testing.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span><span>Testing</span></a></li>
                 <li><a href="evaluasi.html"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span>Model Evaluation</span></a></li>
             </ul>
+        
+            <div class="sidebar-profile">
+                <div class="profile-img">
+                    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div class="profile-info">
+                    <span class="profile-name" id="sidebar-username">Loading...</span>
+                    <span class="profile-role">System Administrator</span>
+                </div>
+            </div>
+            
+            <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    const uname = sessionStorage.getItem("username") || "Admin User";
+                    const el = document.getElementById("sidebar-username");
+                    if(el) el.innerText = uname;
+                });
+            </script>
         </aside>
+
 
       <!-- MAIN -->
       <main class="main">

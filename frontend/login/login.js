@@ -38,12 +38,12 @@ form.addEventListener("submit", async (e) => {
 
         if (data.success) {
 
-            localStorage.setItem("isLoggedIn", "true");
-            localStorage.setItem("username", username);
+            sessionStorage.setItem("isLoggedIn", "true");
+            sessionStorage.setItem("username", username);
 
             console.log("LOGIN DEBUG:");
-            console.log("isLoggedIn =", localStorage.getItem("isLoggedIn"));
-            console.log("username =", localStorage.getItem("username"));
+            console.log("isLoggedIn =", sessionStorage.getItem("isLoggedIn"));
+            console.log("username =", sessionStorage.getItem("username"));
 
             msg.className = "login-msg login-msg--success";
             msg.innerText = "Login successful";

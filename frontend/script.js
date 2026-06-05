@@ -157,8 +157,6 @@ function formatWordTypeLabel(raw) {
         "kata sifat": "Adjective",
         sifat: "Adjective",
         adjective: "Adjective",
-        "kata keterangan": "Adverb",
-        keterangan: "Adverb",
         adverb: "Adverb",
     };
     return map[v] || String(raw || "");
