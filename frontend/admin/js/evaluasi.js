@@ -1840,6 +1840,63 @@ function matrixFromElementPlainLines(el) {
     });
 }
 
+async function resolveEpochResultsForModelExport(model) {
+    if (!model) return [];
+    if (model.id != null) {
+        var cached = modelEpochsCache[model.id];
+        if (Array.isArray(cached) && cached.length) return cached;
+        try {
+            var res = await fetch(API_BASE + '/evaluasi/model-epochs/' + model.id);
+            var data = await res.json();
+            if (res.ok && Array.isArray(data.items) && data.items.length) {
+                modelEpochsCache[model.id] = data.items;
+                return data.items;
+            }
+        } catch (e) {
+            console.warn('evaluasi export: model-epochs fetch failed', e);
+        }
+    }
+    var hist = await fetchTrainingLogForModel(model);
+    if (!hist) hist = findHistoryByModel(model);
+    if (hist && Array.isArray(hist.hasil) && hist.hasil.length) return hist.hasil;
+    return [];
+}
+
+async function buildEvalTrainingLogEpochSheets(algoKey) {
+    if (!window.KamusExcel || !window.KamusExcel.buildTrainingLogDetailSheet) return [];
+    var rows = state.byAlgo[algoKey] || [];
+    if (!rows.length) return [];
+    await prefetchTrainingLogsForModels(rows);
+    await prefetchEpochMetricsForModels(rows);
+
+    var sheets = [];
+    for (var i = 0; i < rows.length; i++) {
+        var model = rows[i];
+        var results = await resolveEpochResultsForModelExport(model);
+        if (!results.length) continue;
+        var hist = findHistoryByModel(model);
+        var logLike = {
+            training_name: (hist && (hist.training_name || hist.name)) || model.nama_model,
+            model_name: model.nama_model,
+            rasio: model.split_ratio || (hist && hist.rasio) || '-',
+            dataset: model.dataset_name || (hist && hist.dataset) || '-',
+            tanggal: model.created_at || (hist && hist.tanggal) || null,
+            algo: model.canonical_algorithm || model.algoritma || algoKey,
+            parameter: buildModelParameterViewFromRow(model),
+            hasil: results,
+        };
+        var shortName = window.KamusExcel.sanitizeFilename(model.nama_model || 'model').slice(0, 16);
+        sheets.push(
+            window.KamusExcel.buildTrainingLogDetailSheet(
+                logLike,
+                'Ep_' + String(i + 1).padStart(2, '0') + '_' + shortName,
+                confusionMatrixLabelAsStored,
+            ),
+        );
+    }
+    return sheets;
+}
+
 async function exportEvaluasiWorkbook() {
     if (!window.KamusExcel) {
         alert('Excel export module is not loaded.');
@@ -1866,6 +1923,7 @@ async function exportEvaluasiWorkbook() {
         var fittingTable = document.querySelector('#fitting-summary-card table.summary-table');
         var algoTable = document.querySelector('#algo-compare-card table.comp-table');
         var conclusionEl = document.getElementById('eval-conclusion-content');
+        var epochSheets = await buildEvalTrainingLogEpochSheets(algo);
 
         var sheets = [
             {
@@ -1875,6 +1933,8 @@ async function exportEvaluasiWorkbook() {
                     ['Exported (local time)', new Date().toLocaleString()],
                     ['Table algorithm', algoLabel],
                     ['Chart metric (images)', chartLabel],
+                    ['Training log epoch sheets', String(epochSheets.length)],
+                    ['Note', 'Ep_* sheets include per-model epoch metrics and confusion matrix (best epoch).'],
                 ],
             },
             {
@@ -1914,6 +1974,10 @@ async function exportEvaluasiWorkbook() {
                 matrix: matrixFromElementPlainLines(conclusionEl),
             },
         );
+
+        if (epochSheets.length) {
+            sheets = sheets.concat(epochSheets);
+        }
 
         var imgs = await buildEvalChartExportImages(chartLabel);
         if (imgs.length) {

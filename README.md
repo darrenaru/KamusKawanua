@@ -1,4 +1,6 @@
-# KamusKawanua
+# KamusKawanua (noadverb — 3 kelas)
+
+> Panduan folder ini: **`NOADVERB_README.md`** · Setup clone: **`SETUP_CLONE.md`** · Script: **`scripts/setup-after-clone.ps1`**
 
 Project ini membangun sistem penerjemahan/klasifikasi berbasis data kamus bahasa Manado (kamarna) dengan pipeline:
 `Data Collection -> Pre Processing -> Processing (Training) -> Testing (Evaluasi)`.
@@ -40,8 +42,8 @@ Catatan:
 
 ### Frontend (Static)
 - Halaman admin bersifat static (`frontend/admin/...`) dan memanggil backend via `fetch`.
-- Koneksi Supabase dibuat langsung di beberapa file JS (contoh: `frontend/admin/js/data-collection.js`, `frontend/admin/js/preprocessing.js`).
-  - Gunakan **anon key** untuk frontend (bukan service role key).
+- Supabase admin: `frontend/admin/js/supabase-init.js` (ikut Git) + `supabase-config.js` (gitignored, salin dari `.example.js`).
+  - Gunakan **anon key** di `supabase-config.js` (bukan service role untuk produksi).
 
 ## Struktur Database (ringkas)
 Tabel yang dipakai untuk pipeline utama:

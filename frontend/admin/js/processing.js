@@ -51,11 +51,35 @@
     return String(value || "").trim().toLowerCase().replace(/_/g, "-");
   }
 
-  /** Dashboard / localStorage lama memakai xlmr atau xlm-r; bucket Supabase: xlm-r. */
+  /** Bucket UI/dropdown (semua varian XLM → satu pilihan "XLM-R"). */
   function normalizeStoredAlgorithmSelection(raw) {
     const k = normalizeAlgoKey(raw);
     if (k === "xlmr" || k === "xlm-r" || k === "xlm-r-2") return "xlm-r";
     return k;
+  }
+
+  /**
+   * Nilai kolom `algoritma` di Supabase — pisahkan gen1 (xlm-r) vs gen2 (xlm-r-2).
+   * Jangan pakai normalizeStoredAlgorithmSelection untuk insert/update models.
+   */
+  function resolveSupabaseAlgoritma(raw) {
+    const k = normalizeAlgoKey(raw);
+    if (k === "xlmr" || k === "xlm-r" || k === "xlm-r-2") {
+      if (typeof window.kamusGetXlmActiveProfile === "function") {
+        const profile = window.kamusGetXlmActiveProfile();
+        if (profile === "xlm-r" || profile === "xlm-r-2") return profile;
+      }
+      return k === "xlm-r-2" ? "xlm-r-2" : "xlm-r";
+    }
+    return k;
+  }
+
+  function resolveXlmTrainApiSlug() {
+    const profile =
+      typeof window.kamusGetXlmActiveProfile === "function"
+        ? window.kamusGetXlmActiveProfile()
+        : "xlm-r";
+    return profile === "xlm-r-2" ? "xlm-r-2" : "xlm-r";
   }
 
   function getCurrentRatioContextKey() {
@@ -833,24 +857,60 @@
   }
 
   async function exportTrainingLogTableXlsx() {
+    if (!window.KamusExcel) {
+      showToast("Excel module not loaded.", "error");
+      return;
+    }
     const tbl = document.getElementById("history-table");
     if (!tbl) {
       showToast("Training log table not found.", "error");
       return;
     }
-    const meta = [
-      ["Exported", new Date().toLocaleString()],
-      ["Note", "Browser-stored training history (best-ratio runs, summary row)."],
+    await window.KamusExcel.ensureExcelJs();
+    const history = await loadTrainingHistory();
+    if (!history.length) {
+      showToast("No training log data to export.", "error");
+      return;
+    }
+
+    const algoLabel = currentAlgo || document.getElementById("algo-select")?.value || "-";
+    const sheets = [
+      {
+        name: "Metadata",
+        layout: "metadata",
+        matrix: [
+          ["Exported", new Date().toLocaleString()],
+          ["Algorithm (processing)", algoLabel],
+          ["Training log entries", String(history.length)],
+          ["Note", "Each log sheet includes parameters, epoch metrics, and confusion matrix."],
+        ],
+      },
+      {
+        name: "Overview",
+        title: "Training log overview",
+        table: tbl,
+        tableOpts: { skipColumnsFromEnd: 1, uppercaseHeader: true },
+      },
     ];
-    await exportProcessingTableXlsx({
-      filename: `processing_training_log_${Date.now()}`,
-      sheetName: "Training_log",
-      table: tbl,
-      tableOpts: { skipColumnsFromEnd: 1 },
-      title: "Training log",
-      extraMatrix: meta,
+
+    history.forEach((log, index) => {
+      const displayName =
+        log.training_name || log.nama_model || log.model_name || `Log_${index + 1}`;
+      const safe = window.KamusExcel.sanitizeFilename(displayName).slice(0, 18);
+      sheets.push(
+        window.KamusExcel.buildTrainingLogDetailSheet(
+          log,
+          `Log_${String(index + 1).padStart(2, "0")}_${safe}`,
+          toEnglishConfusionLabel,
+        ),
+      );
     });
-    showToast("Training log exported.", "success");
+
+    await window.KamusExcel.exportWorkbook(
+      `processing_training_log_${window.KamusExcel.defaultExportTimestamp()}`,
+      sheets,
+    );
+    showToast("Training log exported (epochs, parameters, confusion matrix).", "success");
   }
 
   async function exportTrainingCardEpochs(card) {
@@ -894,62 +954,24 @@
       showToast("Excel module not loaded.", "error");
       return;
     }
-    const name =
-      document.getElementById("detail-training-name")?.innerText?.trim() ||
-      "training_detail";
-    const safe = window.KamusExcel.sanitizeFilename(name).slice(0, 60);
-    const resultsTable = document.getElementById("history-results-table");
-    const confusionTable = document.getElementById("history-confusion-table");
-    const confusionSection = document.getElementById("history-confusion-section");
-    const hasConfusion =
-      confusionSection &&
-      confusionSection.style.display !== "none" &&
-      confusionTable &&
-      confusionTable.querySelector("tr");
-
-    await window.KamusExcel.ensureExcelJs();
-
-    const summaryRows = [
-      ["Training name", document.getElementById("detail-training-name")?.innerText || "-"],
-      ["Model name", document.getElementById("detail-model-name")?.innerText || "-"],
-      ["Split ratio", document.getElementById("detail-ratio")?.innerText || "-"],
-      ["Date", document.getElementById("detail-date")?.innerText || "-"],
-      ["Algorithm", document.getElementById("detail-algo")?.innerText || "-"],
-      ["Description", document.getElementById("detail-desc")?.innerText || "-"],
-      ["Exported", new Date().toLocaleString()],
-    ];
-
-    const sheets = [
-      {
-        name: "Metadata",
-        layout: "metadata",
-        matrix: summaryRows,
-      },
-      {
-        name: "Epoch_results",
-        title: "Training results by epoch",
-        table: resultsTable,
-        tableOpts: { skipEmptyRows: true, uppercaseHeader: true },
-      },
-    ];
-
-    if (hasConfusion) {
-      sheets.push({
-        name: "Confusion",
-        title: "Confusion matrix (best accuracy epoch)",
-        table: confusionTable,
-        tableOpts: { uppercaseHeader: true },
-      });
-    } else {
-      sheets.push({
-        name: "Confusion",
-        layout: "conclusion",
-        title: "Confusion matrix",
-        matrix: [["Confusion matrix was not available or not shown for this run."]],
-      });
+    const log = currentHistoryDetailData;
+    if (!log) {
+      showToast("Open a training log entry first.", "error");
+      return;
     }
-
-    await window.KamusExcel.exportWorkbook(`processing_log_${safe}_${Date.now()}`, sheets);
+    await window.KamusExcel.ensureExcelJs();
+    const name = log.training_name || log.nama_model || log.model_name || "training_detail";
+    const safe = window.KamusExcel.sanitizeFilename(name).slice(0, 60);
+    const detailSheet = window.KamusExcel.buildTrainingLogDetailSheet(
+      log,
+      "Training_detail",
+      toEnglishConfusionLabel,
+    );
+    detailSheet.meta = (detailSheet.meta || []).concat([["Exported", new Date().toLocaleString()]]);
+    await window.KamusExcel.exportWorkbook(
+      `processing_log_${safe}_${window.KamusExcel.defaultExportTimestamp()}`,
+      [detailSheet],
+    );
     showToast("Training detail exported.", "success");
   }
 
@@ -966,7 +988,11 @@
     loadPreprocessedDatasets();
 
     if (typeof window.kamusInitXlmGeneration === "function") {
-      void window.kamusInitXlmGeneration();
+      void window.kamusInitXlmGeneration().then(() => {
+        if (isXlmAlgoKey(currentAlgo)) {
+          void syncLocalSavedXlmModelsToSupabase({ silent: false });
+        }
+      });
     }
 
     const preferredAlgo = normalizeStoredAlgorithmSelection(
@@ -1012,10 +1038,6 @@
       applyRatioSearchContextState();
       refreshAdminPageAOS();
     });
-
-    if (isXlmAlgoKey(currentAlgo)) {
-      void syncLocalSavedXlmModelsToSupabase({ silent: false });
-    }
 
     const datasetList = document.getElementById("dataset-list");
     if (datasetList) {
@@ -1915,7 +1937,7 @@
       ? "SentencePiece tokens (XLM-RoBERTa)"
       : "WordPiece Tokens + [CLS]/[SEP]";
     const inputReprHint = isXlm
-      ? `Input representation follows the ${bert} / RoBERTa tokenizer (preprocessed final_text).`
+      ? `Input dari kolom teks bersih (*_clean); XLM-R tokenize ulang dengan SentencePiece (bukan final_text WordPiece).`
       : `Input representation follows the default ${bert} tokenizer.`;
     const maxLengthField = `
       <div class="param-group">
@@ -3002,7 +3024,7 @@
     const algoKeyTrain = normalizeAlgoKey(params.algo || currentAlgo);
     let backendTrainSlug = "indobert";
     if (algoKeyTrain === "mbert") backendTrainSlug = "mbert";
-    else if (algoKeyTrain === "xlm-r") backendTrainSlug = "xlm-r";
+    else if (algoKeyTrain === "xlm-r") backendTrainSlug = resolveXlmTrainApiSlug();
     const algoLabel =
       algoKeyTrain === "mbert"
         ? "mBERT"
@@ -3038,6 +3060,25 @@
       const trainAsyncUrl = isIndobertTrain
         ? `${API_BASE}/processing/indobert/train/async`
         : `${API_BASE}/processing/train/${encodeURIComponent(backendTrainSlug)}/async`;
+
+      const fastModeOn = Boolean(payload.fast_mode);
+      const xlmGen =
+        typeof window.kamusGetXlmGeneration === "function"
+          ? window.kamusGetXlmGeneration()
+          : null;
+      appendProgressLog(
+        card,
+        `Config | split ${payload.split_ratio} | max_length ${payload.max_length}` +
+          (fastModeOn && algoKeyTrain === "xlm-r"
+            ? " (fast cap ≤32 for XLM cari-rasio)"
+            : fastModeOn && algoKeyTrain === "indobert"
+              ? " (fast cap ≤64)"
+              : "") +
+          ` | fast_mode ${fastModeOn ? "on" : "off"}` +
+          ` | batch ${payload.batch_size} | epoch ${payload.epoch}` +
+          (xlmGen ? ` | XLM ${xlmGen}` : ""),
+        "info",
+      );
 
       // Start async job
       const res = await fetch(trainAsyncUrl, {
@@ -3240,6 +3281,7 @@
             epoch: params.epoch,
             batchSize: params.batchSize,
             maxLength: params.maxLength,
+            fast_mode: mode === "cari-rasio",
             seed: params.seed,
             optimizer: params.optimizer,
             weightDecay: params.weightDecay,
@@ -3533,6 +3575,7 @@
           epoch: params.epoch,
           batchSize: params.batchSize,
           maxLength: params.maxLength,
+          fast_mode: false,
           seed: params.seed,
           optimizer: params.optimizer,
           weightDecay: params.weightDecay,
@@ -3816,7 +3859,8 @@
   }
 
   function isXlmAlgoKey(value) {
-    return normalizeStoredAlgorithmSelection(value) === "xlm-r";
+    const k = normalizeAlgoKey(value);
+    return k === "xlmr" || k === "xlm-r" || k === "xlm-r-2";
   }
 
   async function supabaseModelExists(namaModel) {
@@ -3866,7 +3910,7 @@
       }
       const row = buildModelsBaseInsertRow({
         ...entry,
-        algoritma: "xlm-r",
+        algoritma: resolveSupabaseAlgoritma(entry.algoritma || "xlm-r"),
         mode: entry.mode || "training-final",
         created_at: entry.created_at || new Date().toISOString(),
       });
@@ -3893,7 +3937,7 @@
   function buildModelsBaseInsertRow(modelData) {
     return {
       nama_model: modelData.nama_model,
-      algoritma: normalizeStoredAlgorithmSelection(modelData.algoritma),
+      algoritma: resolveSupabaseAlgoritma(modelData.algoritma),
       mode: modelData.mode,
       dataset_id: modelData.dataset_id,
       split_ratio: modelData.split_ratio,
@@ -4148,7 +4192,7 @@
 
     const modelData = {
       nama_model: modelName,
-      algoritma: normalizeStoredAlgorithmSelection(params.algo || currentAlgo),
+      algoritma: resolveSupabaseAlgoritma(params.algo || currentAlgo),
       mode: card.dataset.mode || "training-final",
       dataset_id: selectedDatasetId,
       split_ratio: params.splitRatio,
@@ -4203,7 +4247,7 @@
         insertResult = await insertModelsRowWithFallback(
           buildModelsBaseInsertRow({
             ...modelData,
-            algoritma: "xlm-r",
+            algoritma: resolveSupabaseAlgoritma(modelData.algoritma),
             mode: modelData.mode || "training-final",
           }),
         );
@@ -4334,6 +4378,7 @@
   // ==================== TRAINING HISTORY MANAGER ====================
   const HISTORY_KEY = "training_history";
   let currentTrainingHistory = [];
+  let currentHistoryDetailData = null;
 
   async function loadTrainingHistory() {
     if (supabaseClient) {
@@ -4381,14 +4426,15 @@
 
     if (supabaseClient) {
       try {
+        const rawAlgo =
+          historyData.algo ||
+          (historyData.parameter ? historyData.parameter.algo : "");
         const payload = {
           name:
             historyData.training_name ||
             historyData.nama_model ||
             "Untitled Training",
-          algo:
-            historyData.algo ||
-            (historyData.parameter ? historyData.parameter.algo : ""),
+          algo: resolveSupabaseAlgoritma(rawAlgo),
           date: historyData.tanggal || new Date().toISOString(),
           ratio: historyData.rasio || "",
           dataset: historyData.dataset || "",
@@ -4399,9 +4445,13 @@
               historyData.nama_model ||
               "",
             training_name: historyData.training_name || "",
-            algo:
-              historyData.algo ||
-              (historyData.parameter ? historyData.parameter.algo : ""),
+            algo: normalizeStoredAlgorithmSelection(rawAlgo),
+            xlm_profile: resolveSupabaseAlgoritma(rawAlgo),
+            maxLength:
+              historyData.parameter?.maxLength ??
+              historyData.parameter?.max_length ??
+              null,
+            fast_mode: historyData.parameter?.fast_mode ?? null,
           },
           hasil: historyData.hasil || [],
         };
@@ -4590,6 +4640,7 @@
       showToast("History data was not found.", "error");
       return;
     }
+    currentHistoryDetailData = data;
 
     // 🔧 Isi info - Training Name
     const trainingNameEl = document.getElementById("detail-training-name");
@@ -4785,6 +4836,7 @@
   // Tutup modal
   window.closeHistoryDetailModal = function () {
     document.getElementById("history-detail-modal").style.display = "none";
+    currentHistoryDetailData = null;
   };
 
   document.addEventListener("DOMContentLoaded", function () {

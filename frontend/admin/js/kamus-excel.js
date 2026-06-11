@@ -203,26 +203,53 @@
       rowPtr += 2;
     }
 
-    var matrix = spec.matrix;
-    if (!matrix && spec.table) {
-      matrix = matrixFromHtmlTable(spec.table, Object.assign({ skipEmptyRows: true, uppercaseHeader: true }, spec.tableOpts || {}));
-    }
-    matrix = cleanMatrix(matrix, { skipEmptyRows: true });
-
-    if (matrix.length) {
+    function writeMatrixBlock(blockMatrix, blockOpts) {
+      var m = cleanMatrix(blockMatrix, { skipEmptyRows: true });
+      if (!m.length) return rowPtr;
       var headerRowCount = 0;
-      if (spec.tableOpts && spec.tableOpts.uppercaseHeaderRows != null) {
-        headerRowCount = Number(spec.tableOpts.uppercaseHeaderRows) || 0;
-      } else if (!spec.tableOpts || spec.tableOpts.uppercaseHeader !== false) {
+      var opts = blockOpts || spec.tableOpts || {};
+      if (opts.uppercaseHeaderRows != null) {
+        headerRowCount = Number(opts.uppercaseHeaderRows) || 0;
+      } else if (opts.uppercaseHeader !== false) {
         headerRowCount = 1;
       }
-      applyMatrix(ws, matrix, rowPtr, { headerRowCount: headerRowCount });
-      rowPtr += matrix.length + 1;
-      for (var m = 0; m < matrix.length; m++) {
-        if (matrix[m].length > maxCol) maxCol = matrix[m].length;
+      applyMatrix(ws, m, rowPtr, { headerRowCount: headerRowCount });
+      rowPtr += m.length + 1;
+      for (var mi = 0; mi < m.length; mi++) {
+        if (m[mi].length > maxCol) maxCol = m[mi].length;
       }
-      if (maxCol > 0) autosizeColumns(ws, maxCol);
+      return rowPtr;
     }
+
+    var matrix = spec.matrix;
+    if (!matrix && spec.table) {
+      matrix = matrixFromHtmlTable(
+        spec.table,
+        Object.assign({ skipEmptyRows: true, uppercaseHeader: true }, spec.tableOpts || {}),
+      );
+    }
+    if (matrix && matrix.length) {
+      writeMatrixBlock(matrix, spec.tableOpts);
+    }
+
+    if (spec.sections && spec.sections.length) {
+      for (var si = 0; si < spec.sections.length; si++) {
+        var sec = spec.sections[si] || {};
+        if (sec.title) {
+          ws.getCell(rowPtr, 1).value = sec.title;
+          ws.getCell(rowPtr, 1).font = Object.assign({}, STYLE.titleFont);
+          rowPtr += 2;
+        }
+        if (sec.subtitle) {
+          ws.getCell(rowPtr, 1).value = sec.subtitle;
+          ws.getCell(rowPtr, 1).font = Object.assign({}, STYLE.metaLabelFont);
+          rowPtr += 1;
+        }
+        writeMatrixBlock(sec.matrix, sec.tableOpts || spec.tableOpts);
+      }
+    }
+
+    if (maxCol > 0) autosizeColumns(ws, maxCol);
 
     if (spec.images && spec.images.length) {
       if (!spec.title && rowPtr === 1) {
@@ -330,6 +357,226 @@
     return new Date().toISOString().slice(0, 19).replace(/:/g, "-");
   }
 
+  function resolveParamVal(p, camel, snake) {
+    if (!p || typeof p !== "object") return undefined;
+    var c = p[camel];
+    if (c !== undefined && c !== null && c !== "") return c;
+    if (snake && p[snake] !== undefined && p[snake] !== null && p[snake] !== "") {
+      return p[snake];
+    }
+    return undefined;
+  }
+
+  function paramText(v) {
+    return v === undefined || v === null || v === "" ? "-" : String(v);
+  }
+
+  function pickEpochF1(row) {
+    if (!row) return NaN;
+    if (row.f1 != null && row.f1 !== "") return Number(row.f1);
+    if (row.f1_score != null && row.f1_score !== "") return Number(row.f1_score);
+    return NaN;
+  }
+
+  function findBestEpochByAccuracy(results) {
+    if (!results || !results.length) return { best: null, bestEpoch: -1, bestAcc: -Infinity };
+    var best = null;
+    var bestEpoch = -1;
+    var bestAcc = -Infinity;
+    for (var i = 0; i < results.length; i++) {
+      var acc = Number(results[i].accuracy);
+      if (Number.isFinite(acc) && acc > bestAcc) {
+        bestAcc = acc;
+        bestEpoch = results[i].epoch;
+        best = results[i];
+      }
+    }
+    return { best: best, bestEpoch: bestEpoch, bestAcc: bestAcc };
+  }
+
+  function formatMetricPercent(v, digits) {
+    var n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return n.toFixed(digits == null ? 2 : digits) + "%";
+  }
+
+  function formatMetricFloat(v, digits) {
+    var n = Number(v);
+    if (!Number.isFinite(n)) return "—";
+    return n.toFixed(digits == null ? 4 : digits);
+  }
+
+  /**
+   * @param {object[]} results
+   * @returns {string[][]}
+   */
+  function buildEpochResultsMatrix(results) {
+    if (!results || !results.length) {
+      return [["EPOCH", "ACCURACY (%)", "PRECISION (%)", "RECALL (%)", "F1-SCORE (%)", "LOSS"], ["(no data)", "—", "—", "—", "—", "—"]];
+    }
+    var rows = [["EPOCH", "ACCURACY (%)", "PRECISION (%)", "RECALL (%)", "F1-SCORE (%)", "LOSS"]];
+    var sum = { accuracy: 0, precision: 0, recall: 0, f1: 0, loss: 0 };
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var f1Val = pickEpochF1(r);
+      rows.push([
+        String(r.epoch == null ? i + 1 : r.epoch),
+        formatMetricPercent(r.accuracy, 2),
+        formatMetricPercent(r.precision, 2),
+        formatMetricPercent(r.recall, 2),
+        Number.isFinite(f1Val) ? f1Val.toFixed(2) + "%" : "—",
+        formatMetricFloat(r.loss, 4),
+      ]);
+      sum.accuracy += Number(r.accuracy) || 0;
+      sum.precision += Number(r.precision) || 0;
+      sum.recall += Number(r.recall) || 0;
+      sum.f1 += Number.isFinite(f1Val) ? f1Val : 0;
+      sum.loss += Number(r.loss) || 0;
+    }
+    var count = results.length;
+    rows.push([
+      "Average",
+      (sum.accuracy / count).toFixed(2) + "%",
+      (sum.precision / count).toFixed(2) + "%",
+      (sum.recall / count).toFixed(2) + "%",
+      (sum.f1 / count).toFixed(2) + "%",
+      (sum.loss / count).toFixed(4),
+    ]);
+    return rows;
+  }
+
+  /**
+   * @param {function(string): string} [labelFn]
+   */
+  function buildConfusionMatrixFromResults(results, labelFn) {
+    var pick = findBestEpochByAccuracy(results);
+    var best = pick.best;
+    if (!best) return null;
+    var cm = best.confusion_matrix;
+    var labels = best.confusion_labels;
+    if (!cm || !labels || !Array.isArray(cm) || !Array.isArray(labels) || cm.length !== labels.length) {
+      return null;
+    }
+    var mapLabel = typeof labelFn === "function" ? labelFn : function (x) { return String(x == null ? "" : x).trim(); };
+    var labelsOut = labels.map(mapLabel);
+    var header = ["Actual \\ Predicted"].concat(labelsOut);
+    var body = [];
+    for (var i = 0; i < labelsOut.length; i++) {
+      var row = cm[i] || [];
+      body.push([labelsOut[i]].concat(row.map(function (c) { return String(c == null ? 0 : c); })));
+    }
+    return {
+      matrix: [header].concat(body),
+      subtitle:
+        "Best epoch: " +
+        String(pick.bestEpoch) +
+        " | Accuracy: " +
+        formatMetricPercent(pick.bestAcc, 2),
+    };
+  }
+
+  function buildTrainingLogParameterMeta(params, algoHint) {
+    var p = params || {};
+    var algo = String(p.algo || algoHint || "").toLowerCase();
+    var rows = [
+      ["Batch Size", paramText(resolveParamVal(p, "batchSize", "batch_size"))],
+      ["Max Length", paramText(resolveParamVal(p, "maxLength", "max_length"))],
+      ["Seed", paramText(p.seed)],
+      ["Learning Rate", paramText(p.lr)],
+      ["Epoch", paramText(p.epoch)],
+      ["Optimizer", paramText(p.optimizer)],
+      ["Weight Decay", paramText(resolveParamVal(p, "weightDecay", "weight_decay"))],
+      ["Scheduler", paramText(p.scheduler)],
+      ["Dropout", paramText(p.dropout)],
+      ["Warmup", paramText(p.warmup || p.warmup_ratio)],
+      [
+        "Gradient Accumulation",
+        paramText(resolveParamVal(p, "gradAccum", "gradient_accumulation")),
+      ],
+      ["Early Stopping", paramText(resolveParamVal(p, "earlyStopping", "early_stopping"))],
+      ["Fast Mode", paramText(p.fast_mode)],
+      ["Algorithm (params)", paramText(p.algo || algoHint)],
+    ];
+    if (algo === "word2vec") {
+      rows.push(
+        ["Vector Size", paramText(resolveParamVal(p, "vectorSize", "vector_size"))],
+        ["Window Size", paramText(resolveParamVal(p, "windowSize", "window_size"))],
+        ["Min Count", paramText(resolveParamVal(p, "minCount", "min_count"))],
+        ["Model Type", paramText(resolveParamVal(p, "modelType", "model_type"))],
+        ["Negative", paramText(p.negative)],
+      );
+    } else if (algo === "glove") {
+      rows.push(
+        ["Vector Size", paramText(resolveParamVal(p, "vectorSize", "vector_size"))],
+        ["Window Size", paramText(resolveParamVal(p, "windowSize", "window_size"))],
+        ["Min Count", paramText(resolveParamVal(p, "minCount", "min_count"))],
+        ["X Max", paramText(resolveParamVal(p, "xMax", "x_max"))],
+        ["Alpha", paramText(p.alpha)],
+      );
+    }
+    return rows;
+  }
+
+  function buildTrainingLogSummaryMeta(log) {
+    var item = log || {};
+    var params = item.parameter || item.params || {};
+    var dateRaw = item.tanggal || item.date || item.created_at;
+    var dateText = "-";
+    if (dateRaw) {
+      try {
+        dateText = new Date(dateRaw).toLocaleString("en-US");
+      } catch (e) {
+        dateText = String(dateRaw);
+      }
+    }
+    return [
+      ["Training name", paramText(item.training_name || item.name || item.nama_model)],
+      ["Model name", paramText(item.model_name || params.model_name || item.nama_model)],
+      ["Split ratio", paramText(item.rasio || item.ratio)],
+      ["Dataset", paramText(item.dataset || params.dataset)],
+      ["Date", dateText],
+      ["Algorithm", paramText(item.algo || params.algo)],
+      ["Description", paramText(item.keterangan || item.description)],
+    ];
+  }
+
+  /**
+   * Build one Excel sheet spec for a training log entry (epochs + parameters + confusion).
+   */
+  function buildTrainingLogDetailSheet(log, sheetName, labelFn) {
+    var results = log && (log.hasil || log.results) ? log.hasil || log.results : [];
+    var meta = buildTrainingLogSummaryMeta(log)
+      .concat([["", ""]])
+      .concat(buildTrainingLogParameterMeta(log.parameter || log.params || {}, log.algo));
+    var sections = [
+      {
+        title: "Training results by epoch",
+        matrix: buildEpochResultsMatrix(results),
+        tableOpts: { uppercaseHeader: true },
+      },
+    ];
+    var conf = buildConfusionMatrixFromResults(results, labelFn);
+    if (conf && conf.matrix) {
+      sections.push({
+        title: "Confusion matrix (best accuracy epoch)",
+        subtitle: conf.subtitle,
+        matrix: conf.matrix,
+        tableOpts: { uppercaseHeader: true },
+      });
+    } else {
+      sections.push({
+        title: "Confusion matrix (best accuracy epoch)",
+        matrix: [["Confusion matrix was not available for this run."]],
+        tableOpts: { uppercaseHeader: false },
+      });
+    }
+    return {
+      name: sheetName,
+      meta: meta,
+      sections: sections,
+    };
+  }
+
   global.KamusExcel = {
     ensureExcelJs: ensureExcelJs,
     matrixFromHtmlTable: matrixFromHtmlTable,
@@ -338,5 +585,11 @@
     canvasToPngBase64: canvasToPngBase64,
     sanitizeFilename: sanitizeFilename,
     defaultExportTimestamp: defaultExportTimestamp,
+    buildEpochResultsMatrix: buildEpochResultsMatrix,
+    buildConfusionMatrixFromResults: buildConfusionMatrixFromResults,
+    buildTrainingLogParameterMeta: buildTrainingLogParameterMeta,
+    buildTrainingLogSummaryMeta: buildTrainingLogSummaryMeta,
+    buildTrainingLogDetailSheet: buildTrainingLogDetailSheet,
+    findBestEpochByAccuracy: findBestEpochByAccuracy,
   };
 })(typeof window !== "undefined" ? window : this);

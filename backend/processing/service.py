@@ -31,6 +31,7 @@ from transformers import (
 )
 
 from backend.supabase_client import supabase
+from backend.xlm_generation import active_xlm_profile
 
 
 def _validation_roc_auc_score(
@@ -153,8 +154,8 @@ def _build_word_only_text(row: dict) -> str:
 
 
 def _build_text_with_preprocessed_fallback(row: dict) -> str:
-    # Prioritaskan final_text hasil preprocessing agar konsisten
-    # dengan pipeline tokenisasi yang sudah disimpan di DB.
+    # IndoBERT/mBERT: final_text berisi subword WordPiece yang konsisten saat di-tokenize ulang.
+    # Jangan dipakai untuk XLM-R (SentencePiece) — gunakan _build_text dari kolom *_clean.
     final_text = str(row.get("final_text") or "").strip()
     if final_text:
         return final_text
@@ -997,7 +998,7 @@ def train_xlm_r_softmax(
     on_epoch_end=None,
     fast_mode: bool = False,
 ) -> dict:
-    """Fine-tune XLM-R; teks training memakai final_text dari preprocessing XLM."""
+    """Fine-tune XLM-R; teks dari kolom *_clean (bukan final_text WordPiece IndoBERT/mBERT)."""
     _cleanup_torch_memory()
     try:
         return train_indobert_softmax(
@@ -1017,8 +1018,8 @@ def train_xlm_r_softmax(
             on_epoch_end=on_epoch_end,
             base_model_id=XLMR_MODEL_ID,
             fast_mode=fast_mode,
-            algorithm="xlm-r",
-            text_extractor=_build_text_with_preprocessed_fallback,
+            algorithm=active_xlm_profile(),
+            text_extractor=_build_text,
         )
     finally:
         _cleanup_torch_memory()

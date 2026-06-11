@@ -162,16 +162,13 @@ Di Supabase → **SQL Editor**, jalankan isi file (berurutan):
 
 ## 7. Konfigurasi frontend Supabase (anon key)
 
-Di beberapa file JS, ganti URL dan **anon key** project Anda, misalnya:
+```cmd
+Copy-Item frontend\admin\js\supabase-config.example.js frontend\admin\js\supabase-config.js
+```
 
-- `frontend/admin/js/data-collection.js`
-- `frontend/admin/js/preprocessing.js`
-- `frontend/admin/js/processing.js`
-- `frontend/admin/js/testing.js`
-- `frontend/admin/js/evaluasi.js`
-- `frontend/admin/js/xlm-registry-sync.js`
+Edit **`frontend/admin/js/supabase-config.js`** — isi `url` + **anon key** (bukan service role).
 
-Cari `SUPABASE_URL` / `SUPABASE_KEY` (anon, **bukan** service role).
+Helper `createKamusSupabaseClient` ada di `supabase-init.js` (ikut Git). Lihat juga `SETUP_CLONE.md` dan `NOADVERB_README.md`.
 
 ---
 

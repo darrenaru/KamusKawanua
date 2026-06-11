@@ -122,12 +122,7 @@
       }
     }
 
-    kept.forEach(function (r) {
-      r.algoritma = "xlm-r";
-      if (r.canonical_algorithm !== undefined) {
-        r.canonical_algorithm = "xlm-r";
-      }
-    });
+    // Pertahankan algoritma asli dari Supabase (xlm-r vs xlm-r-2) agar tidak bentrok gen.
     return other.concat(kept);
   }
 
@@ -240,6 +235,8 @@
       learning_rate: parseFloat(p.lr) || null,
       epoch: parseInt(p.epoch || "", 10) || null,
       batch_size: parseInt(p.batchSize || "", 10) || null,
+      max_length:
+        parseInt(p.maxLength || p.max_length || "", 10) || null,
       accuracy: sum.accuracy / n,
       precision: sum.precision / n,
       recall: sum.recall / n,
@@ -261,6 +258,7 @@
       learning_rate: entry.learning_rate,
       epoch: entry.epoch,
       batch_size: entry.batch_size,
+      max_length: entry.max_length,
       accuracy: entry.accuracy,
       precision: entry.precision,
       recall: entry.recall,

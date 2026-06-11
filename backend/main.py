@@ -397,16 +397,19 @@ model = BertModel.from_pretrained("bert-base-multilingual-cased")
 # Preprocess tokenizer via query param (default: indobert; alternatif: mbert)
 tokenizer_pre_mbert = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
 tokenizer_pre_indobert = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p2")
+tokenizer_pre_xlmr = AutoTokenizer.from_pretrained("xlm-roberta-base")
 
 PREPROCESS_JOBS: dict[str, dict] = {}
 PREPROCESS_JOBS_LOCK = threading.Lock()
 
 
 def get_preprocess_tokenizer(name: str):
-    """Default: IndoBERT. Nilai lain yang jelas memakai mBERT tetap ke tokenizer multilingual."""
-    name = (name or "").lower().strip()
+    """Pilih tokenizer preprocess: IndoBERT (default), XLM-R (SentencePiece), atau mBERT."""
+    name = (name or "").lower().strip().replace("_", "-")
     if not name or name in ("indobert", "indo-bert", "indobenchmark"):
         return tokenizer_pre_indobert
+    if name in ("xlm-r-2", "xlm-r", "xlmr", "xlm-roberta-base", "xlm-roberta"):
+        return tokenizer_pre_xlmr
     return tokenizer_pre_mbert
 
 def encode(text):

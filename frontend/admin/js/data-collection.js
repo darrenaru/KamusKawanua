@@ -5,6 +5,12 @@ const supabaseClient = window.createKamusSupabaseClient
     ? window.createKamusSupabaseClient()
     : null;
 
+if (!supabaseClient) {
+    console.error(
+        "Supabase client tidak ada. Buat frontend/admin/js/supabase-config.js dari supabase-config.example.js",
+    );
+}
+
 function bumpPageAOS() {
     requestAnimationFrame(() => {
         if (typeof window.refreshPageAOS === "function") {
@@ -52,6 +58,12 @@ if (!isLoggedIn) {
 // FETCH DATASETS (TIDAK ERROR SAAT KOSONG)
 // ==============================
 async function fetchDatasets() {
+    if (!supabaseClient) {
+        setDatasetStatus(
+            "Supabase belum dikonfigurasi. Salin supabase-config.example.js → supabase-config.js lalu isi URL/key.",
+        );
+        return;
+    }
     try {
         const { data, error } = await supabaseClient
             .from("datasets")

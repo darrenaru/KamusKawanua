@@ -20,7 +20,6 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from backend.processing.service import (
     _build_text,
-    _build_text_with_preprocessed_fallback,
     _fetch_preprocessed_rows,
     _parse_ratio,
     _safe_name,
@@ -165,11 +164,6 @@ def get_available_testing_models() -> list[dict]:
     # Testing dropdown must only list final-training models.
     models = [row for row in raw_models if is_final_training_mode(row.get("mode"))]
     models = filter_xlm_model_rows(models)
-    # Normalisasi legacy xlm-r-2 → xlm-r (nama kanonis).
-    for row in models:
-        algo = str(row.get("algoritma") or "").strip().lower().replace("_", "-")
-        if algo == "xlm-r-2":
-            row["algoritma"] = "xlm-r"
 
     dataset_ids = sorted(
         {
@@ -1068,7 +1062,7 @@ def test_xlm_r_model(
     save_result: bool,
 ) -> dict:
     assert_xlm_model_allowed(model_name=model_name)
-    # Sama seperti referensi: teks dari final_text preprocessing XLM bila ada.
+    # XLM-R pakai teks bersih (*_clean), bukan final_text WordPiece IndoBERT/mBERT.
     return _evaluate_transformer_model(
         dataset_id=dataset_id,
         model_name=model_name,
@@ -1076,7 +1070,7 @@ def test_xlm_r_model(
         max_length=max_length,
         limit=limit,
         save_result=save_result,
-        text_fn=_build_text_with_preprocessed_fallback,
+        text_fn=_build_text,
     )
 
 

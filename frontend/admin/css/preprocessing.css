@@ -157,6 +157,13 @@ body::before {
   gap: 10px;
 }
 
+.page-subtitle {
+  margin: 6px 0 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .title-icon {
   width: 34px;
   height: 34px;

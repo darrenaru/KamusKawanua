@@ -2,6 +2,12 @@ const supabaseClient = window.createKamusSupabaseClient
     ? window.createKamusSupabaseClient()
     : null;
 
+if (!supabaseClient) {
+    console.error(
+        "Supabase client tidak ada. Buat frontend/admin/js/supabase-config.js dari supabase-config.example.js",
+    );
+}
+
 let datasets = [];
 let selectedDataset = null;
 let isProcessing = false;
@@ -10,9 +16,10 @@ let cancelRequested = false;
 let activePreprocessAlgorithm = "indobert";
 
 function normalizeAlgorithmForPreprocess(raw) {
-    const value = String(raw || "").toLowerCase().trim();
+    const value = String(raw || "").toLowerCase().trim().replace(/_/g, "-");
     if (value === "indobert" || value === "indo-bert") return "indobert";
     if (value === "xlm-r-2" || value === "xlm-r" || value === "xlmr") return "xlm-r";
+    if (value === "mbert" || value === "m-bert") return "mbert";
     return "mbert";
 }
 
@@ -26,6 +33,14 @@ function resolvePreprocessAlgorithm() {
     const saved = localStorage.getItem("selectedAlgorithm");
     activePreprocessAlgorithm = normalizeAlgorithmForPreprocess(saved);
     return activePreprocessAlgorithm;
+}
+
+function updatePreprocessAlgoBanner() {
+    const el = document.getElementById("preprocessAlgoInfo");
+    if (!el) return;
+    const algo = resolvePreprocessAlgorithm();
+    const label = preprocessTokenizerLabel(algo);
+    el.textContent = `Tokenizer aktif: ${label} (dari pilihan di Home)`;
 }
 
 function openDatasetModal() {
@@ -63,6 +78,14 @@ function cleanText(text) {
 // LOAD DATASET
 // ==============================
 async function loadDatasets() {
+    if (!supabaseClient) {
+        const body = document.getElementById("tableBody");
+        if (body) {
+            body.innerHTML =
+                '<tr><td colspan="6">Supabase belum dikonfigurasi. Salin supabase-config.example.js → supabase-config.js</td></tr>';
+        }
+        return;
+    }
     const { data, error } = await supabaseClient
         .from("datasets")
         .select("*")
@@ -124,6 +147,7 @@ function renderTable() {
 function selectDataset(ds) {
     selectedDataset = ds;
     resolvePreprocessAlgorithm();
+    updatePreprocessAlgoBanner();
 
     document.getElementById("processBtn").disabled = ds.is_preprocessed;
     document.getElementById("cancelProcessBtn").style.display = "none";
@@ -146,7 +170,7 @@ function selectDataset(ds) {
     document.getElementById("sifat").innerText = ds.kata_sifat;
     document.getElementById("uploader").innerText = ds.uploaded_by || "-";
     document.getElementById("date").innerText = ds.created_at?.split("T")[0] || "-";
-    const algoLabel = activePreprocessAlgorithm === "indobert" ? "IndoBERT" : "mBERT";
+    const algoLabel = preprocessTokenizerLabel(activePreprocessAlgorithm);
     updateProgressUI(0, `Ready to process (${algoLabel})`);
 }
 
@@ -499,7 +523,7 @@ async function startPreprocessing() {
         }
 
         const selectedAlgo = resolvePreprocessAlgorithm();
-        const algoLabel = selectedAlgo === "indobert" ? "IndoBERT" : "mBERT";
+        const algoLabel = preprocessTokenizerLabel(selectedAlgo);
 
         // Jalankan tokenizer backend secara async + polling progres real.
         const preprocessStartUrl =
@@ -785,5 +809,6 @@ async function deleteSlangWord(slang) {
 }
 
 // INIT
+updatePreprocessAlgoBanner();
 loadDatasets();
 wireLexiconControls();
