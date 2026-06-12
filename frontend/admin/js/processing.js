@@ -4391,6 +4391,7 @@
         currentTrainingHistory = data.map(row => ({
           id: row.id,
           training_name: row.name,
+          model_name: row.nama_model || (row.params && row.params.model_name) || "",
           algo: row.algo,
           tanggal: row.date,
           rasio: row.ratio,
@@ -4418,13 +4419,18 @@
 
     if (supabaseClient) {
       try {
+        const paramsWithModelName = { ...(historyData.parameter || {}) };
+        if (historyData.model_name) {
+          paramsWithModelName.model_name = historyData.model_name;
+        }
         const payload = {
           name: historyData.training_name || historyData.nama_model || "Untitled Training",
+          nama_model: historyData.model_name || "",
           algo: historyData.algo || (historyData.parameter ? historyData.parameter.algo : ""),
           date: historyData.tanggal || new Date().toISOString(),
           ratio: historyData.rasio || "",
           dataset: historyData.dataset || "",
-          params: historyData.parameter || {},
+          params: paramsWithModelName,
           hasil: historyData.hasil || []
         };
         const { error } = await supabaseClient.from("training_logs").insert([payload]);
@@ -4475,7 +4481,7 @@
         <td title="${displayName}"><strong>${shortName}</strong></td>
         <td>${item.rasio || "-"}</td>
         <td>
-          <button class="btn-lihat" data-index="${originalIndex}" onclick="showHistoryDetailModal(${originalIndex})">👁️ View</button>
+          <button class="btn-lihat" data-index="${originalIndex}" onclick="showHistoryDetailModal(${originalIndex})">View</button>
         </td>
       </tr>
     `;
@@ -4611,7 +4617,7 @@
     // 🔧 Isi info - Model Name
     const modelNameEl = document.getElementById("detail-model-name");
     if (modelNameEl) {
-      modelNameEl.innerText = data.model_name || "-";
+      modelNameEl.innerText = data.model_name || (data.parameter && data.parameter.model_name) || "-";
     }
 
     // 🔧 Isi info - Split Ratio
@@ -4682,7 +4688,10 @@
           const isBest = r.epoch === bestEpoch;
           return `
         <tr class="${isBest ? "best-row" : ""}" style="${isBest ? "background: rgba(200,169,110,0.3); font-weight: 600;" : ""}">
-          <td>${isBest ? "Best " : ""}${r.epoch}</td>
+          <td style="${isBest ? "position: relative;" : ""}">
+            ${isBest ? `<img src="../../assets/icon/best-model.svg" alt="Best" title="Best Epoch" style="width: 16px; height: 16px; position: absolute; left: 16px; top: 50%; transform: translateY(-50%);">` : ""}
+            ${r.epoch}
+          </td>
           <td>${r.accuracy.toFixed(2)}%</td>
           <td>${r.precision.toFixed(2)}%</td>
           <td>${r.recall.toFixed(2)}%</td>

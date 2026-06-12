@@ -643,11 +643,8 @@ function initAlgorithmModelSelect() {
             showTestingError('No saved model for ' + getAlgorithmDisplayName(algorithmKey) + '. Train and save the model first from Processing.');
             showTestingInfo('');
         } else {
-            // Prioritas: model yang sudah punya hasil testing, lalu skor training tertinggi.
+            // Prioritas: skor training tertinggi (mengambil dari algoritma dengan accuracy model tertinggi).
             algoModels.sort(function(a, b) {
-                var testedA = a.latest_testing ? 1 : 0;
-                var testedB = b.latest_testing ? 1 : 0;
-                if (testedB !== testedA) return testedB - testedA;
                 var scoreA = Number(a.training_accuracy) || 0;
                 var scoreB = Number(b.training_accuracy) || 0;
                 return scoreB - scoreA;
@@ -682,19 +679,30 @@ function initAlgorithmModelSelect() {
                 if (!grouped[key]) {
                     grouped[key] = {
                         label: getAlgorithmDisplayName(key),
-                        models: []
+                        models: [],
+                        maxScore: 0
                     };
                 }
                 grouped[key].models.push({
                     value: String(model.id || ''),
                     label: model.nama_model
                 });
+                var score = Number(model.training_accuracy) || 0;
+                if (score > grouped[key].maxScore) {
+                    grouped[key].maxScore = score;
+                }
             }
 
             algorithmModelMap = {};
             algorithmSelect.innerHTML = '';
 
             var keys = Object.keys(grouped);
+            
+            // Sort algorithms by highest model accuracy within each algorithm
+            keys.sort(function(a, b) {
+                return grouped[b].maxScore - grouped[a].maxScore;
+            });
+
             keys.forEach(function(key, idx) {
                 algorithmModelMap[key] = grouped[key].models;
                 var option = document.createElement('option');

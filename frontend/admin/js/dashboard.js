@@ -13,7 +13,6 @@ if (!isLoggedIn) {
 // ==============================
 
 const buttons = document.querySelectorAll(".algo-btn");
-const info = document.getElementById("selectedInfo");
 const nextBtn = document.getElementById("nextBtn");
 
 // ==============================
@@ -43,7 +42,6 @@ function applySelection(algo) {
         }
     });
 
-    info.innerText = "Selected algorithm: " + labelMap[algo];
     nextBtn.disabled = false;
 }
 

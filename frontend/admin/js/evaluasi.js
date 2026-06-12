@@ -596,7 +596,7 @@ function renderEvaluationEpochMetrics(results, tbody, avgFoot, confusionSection,
         var isBest = r.epoch === bestEpoch;
         return (
             '<tr class="' + (isBest ? 'best-row' : '') + '">' +
-            '<td>' + escapeHtml(String(r.epoch == null ? '-' : r.epoch)) + '</td>' +
+            '<td style="' + (isBest ? 'position: relative;' : '') + '">' + (isBest ? '<img src="../../assets/icon/best-model.svg" alt="Best" title="Best Epoch" style="width: 16px; height: 16px; position: absolute; left: 16px; top: 50%; transform: translateY(-50%);">' : '') + escapeHtml(String(r.epoch == null ? '-' : r.epoch)) + '</td>' +
             '<td>' + formatFloatOrDash(r.accuracy, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.precision, 2) + '%</td>' +
             '<td>' + formatFloatOrDash(r.recall, 2) + '%</td>' +

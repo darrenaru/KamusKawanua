@@ -1008,9 +1008,7 @@ body::after {
     font-weight: 600;
 }
 
-#eval-model-detail-modal .results-table .best-row td:first-child::before {
-    content: "Best ";
-}
+
 
 #eval-model-detail-modal .confusion-matrix-table {
     width: 100%;

@@ -38,12 +38,26 @@
                     <span class="profile-role">System Administrator</span>
                 </div>
             </div>
+
+            <div class="sidebar-logout">
+                <button class="logout-btn" id="logoutBtn" type="button">
+                    <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </button>
+            </div>
             
             <script>
                 document.addEventListener("DOMContentLoaded", function() {
                     const uname = sessionStorage.getItem("username") || "Admin User";
                     const el = document.getElementById("sidebar-username");
                     if(el) el.innerText = uname;
+
+                    document.getElementById("logoutBtn").addEventListener("click", function() {
+                        if(confirm("Are you sure you want to logout?")) {
+                            sessionStorage.clear();
+                            window.location.href = "../../login/login.html";
+                        }
+                    });
                 });
             </script>
         </aside>
@@ -122,9 +136,12 @@
 
                         <div class="form-group">
                             <span class="input-label">Best Model (Auto-Selected)</span>
-                            <div style="padding: 10px; background: rgba(200, 169, 110, 0.1); border: 1px solid rgba(200, 169, 110, 0.3); border-radius: 6px;">
-                                <span id="bestModelName" style="font-weight: 600;">Loading best model...</span>
-                                <div id="bestModelScore" style="font-size: 0.85em; color: var(--text-muted); margin-top: 4px;"></div>
+                            <div style="padding: 14px 18px; background: #fff; border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 2px 8px rgba(44, 31, 14, 0.02); display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <span id="bestModelName" style="font-weight: 700; color: var(--accent); font-size: 15px;">Loading best model...</span>
+                                    <span style="background: var(--accent-glow); color: var(--accent); font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600;">Active</span>
+                                </div>
+                                <div id="bestModelScore" style="font-size: 13px; color: var(--text-secondary);"></div>
                             </div>
                             <input type="hidden" id="selModel">
                         </div>

@@ -274,3 +274,52 @@
   color: #8b7d6b !important;
   font-weight: 500 !important;
 }
+
+/* ===========================
+   LOGOUT BUTTON
+=========================== */
+.sidebar-logout {
+  margin-top: 12px !important;
+}
+
+.sidebar-logout .logout-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #8b7d6b !important;
+  background: transparent !important;
+  border: 1px solid rgba(44, 31, 14, 0.08) !important;
+  border-radius: 12px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  font-family: inherit !important;
+}
+
+.sidebar-logout .logout-btn:hover {
+  background: rgba(200, 60, 60, 0.06) !important;
+  border-color: rgba(200, 60, 60, 0.25) !important;
+  color: #c43c3c !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(200, 60, 60, 0.1) !important;
+}
+
+.sidebar-logout .logout-btn:active {
+  transform: translateY(0) !important;
+  box-shadow: none !important;
+}
+
+.sidebar-logout .logout-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  fill: none !important;
+  transition: all 0.25s ease !important;
+}

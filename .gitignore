@@ -20,3 +20,4 @@ scratch_*.py
 skills-lock.json
 *.rar
 *.zip
+node_modules/
