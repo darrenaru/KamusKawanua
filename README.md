@@ -1,4 +1,4 @@
-# 📖 KamusKawanua
+#  KamusKawanua
 
 <p align="center">
   <img src="frontend/assets/images/logo.png" alt="KamusKawanua Logo" width="400"/>
