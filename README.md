@@ -1,5 +1,9 @@
 # 📖 KamusKawanua
 
+<p align="center">
+  <img src="frontend/assets/images/logo.png" alt="KamusKawanua Logo" width="400"/>
+</p>
+
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
